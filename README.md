@@ -55,7 +55,7 @@ Image → CNN Encoder → Feature Vector → Transformer Decoder → Caption
 
 ## 🚀 Live Notebook (Kaggle)
 
-👉 https://kaggle.com/YOUR-NOTEBOOK-LINK
+👉 [https://kaggle.com/YOUR-NOTEBOOK-LINK](https://www.kaggle.com/code/apoorvujjwal/image-captioning-using-ai)
 
 - Full training pipeline  
 - GPU-enabled  
