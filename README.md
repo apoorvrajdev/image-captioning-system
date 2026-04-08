@@ -15,11 +15,11 @@ The system understands visual content and produces **context-aware captions**, b
 
 # 🚀 Live Demo
 
-[![Open Notebook](https://img.shields.io/badge/Open%20Kaggle%20Notebook-GPU-blue)](https://www.kaggle.com/code/apoorvujjwal/image-captioning-using-ai)
+[![Open Notebook](https://img.shields.io/badge/Open%20Kaggle%20Notebook-GPU-blue)](https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl)
 
 OR explore the full pipeline here:
 
-👉 https://www.kaggle.com/code/apoorvujjwal/image-captioning-using-ai
+👉 https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl
 
 The notebook includes:
 
