@@ -124,6 +124,8 @@ The project follows a complete deep learning workflow:
 
 # 📁 Project Structure
 
+```
+
 image-captioning-system
 │
 ├── image_captioning.ipynb
