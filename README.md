@@ -56,14 +56,18 @@ Image → CNN Encoder → Feature Embeddings → Transformer Decoder → Caption
 
 ### 🟢 Example 1
 **Generated Caption:**  
-`a skateboarder is performing a trick on a ramp`
+`a man is standing on a beach with a surfboard`
 
-*(Add your screenshot in /assets and link here)*
+*<img width="923" height="906" alt="image" src="https://github.com/user-attachments/assets/64e8412b-1d49-404c-a5b2-1da121b224e2" />
+*
 
 ---
 
 ### 🟢 Example 2
-*(Add another example here)*
+**Generated Caption:**  
+`a man riding a motorcycle on a street`
+*<img width="832" height="857" alt="image" src="https://github.com/user-attachments/assets/c802d420-a1c1-48be-8e79-599f193c72cd" />
+*
 
 ---
 
