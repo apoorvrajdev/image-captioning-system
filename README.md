@@ -1,4 +1,5 @@
 # 🖼️ Image Captioning System (CNN + Transformer)
+📄 Backed by an IEEE publication (see below)
 
 ![Python](https://img.shields.io/badge/Python-3.10-blue)
 ![Deep Learning](https://img.shields.io/badge/Deep%20Learning-TensorFlow-orange)
@@ -19,7 +20,7 @@ The system understands visual content and produces **context-aware captions**, b
 
 OR explore the full pipeline here:
 
-👉 https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl
+👉 Run the full pipeline on Kaggle: https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl
 
 The notebook includes:
 
@@ -30,7 +31,7 @@ The notebook includes:
 
 ---
 
-# 📄 Research Paper (IEEE Publication)
+# 📄 IEEE Research Publication
 
 This project is backed by an **IEEE published research paper**:
 
@@ -50,11 +51,11 @@ This project is backed by an **IEEE published research paper**:
 
 ---
 
-### 🚀 Why This Matters
+### 🚀 Practical Impact
 
-- Demonstrates **research-level understanding of deep learning systems**  
-- Shows ability to **design and evaluate AI architectures**  
-- Validated on **real-world benchmark dataset (COCO)**  
+- Combines **computer vision and NLP** for real-world multimodal applications  
+- Demonstrates ability to build **end-to-end deep learning pipelines**  
+- Trained and evaluated on **COCO benchmark dataset** used in industry research   
 
 # 🧠 Model Overview
 
