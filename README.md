@@ -30,6 +30,32 @@ The notebook includes:
 
 ---
 
+# 📄 Research Paper (IEEE Publication)
+
+This project is backed by an **IEEE published research paper**:
+
+[![IEEE Paper](https://img.shields.io/badge/View%20Research%20Paper-IEEE-blue)](https://ieeexplore.ieee.org/document/10675203)
+
+📄 **Title:** AI Narratives: Bridging Visual Content and Linguistic Expression  
+
+---
+
+### 🧠 Key Contributions
+
+- Designed a hybrid **CNN + Transformer architecture** for image captioning  
+- Leveraged **InceptionV3** for visual feature extraction  
+- Implemented **attention-based sequence generation**  
+- Achieved improved caption quality using **BLEU evaluation**  
+- Compared multiple CNN backbones (VGG, ResNet, Inception)  
+
+---
+
+### 🚀 Why This Matters
+
+- Demonstrates **research-level understanding of deep learning systems**  
+- Shows ability to **design and evaluate AI architectures**  
+- Validated on **real-world benchmark dataset (COCO)**  
+
 # 🧠 Model Overview
 
 The system uses a **two-stage architecture**:
