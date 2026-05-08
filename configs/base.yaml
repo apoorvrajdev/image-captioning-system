@@ -1,0 +1,43 @@
+# =============================================================================
+# configs/base.yaml — single canonical config for training and inference.
+# -----------------------------------------------------------------------------
+# Every value here mirrors the IEEE notebook (cell 6 hyperparams + cell 21
+# layer wiring) so behaviour is identical to the published research. Override
+# any field on the CLI or via env var (CAPTIONING__TRAIN__BATCH_SIZE=32) — see
+# src/captioning/config/schema.py for the full validated schema.
+# =============================================================================
+
+data:
+  # Local path; scripts/prepare_data.py downloads COCO into this directory.
+  base_path: data/coco2017
+  annotations_filename: captions_train2017.json
+  images_subdir: train2017
+  sample_size: 120000           # Notebook: captions.sample(120000)
+  train_val_split: 0.8          # Notebook cell 11: int(len(img_keys) * 0.8)
+
+model:
+  embedding_dim: 512            # Notebook: EMBEDDING_DIM = 512
+  units: 512                    # Notebook: UNITS = 512
+  max_length: 40                # Notebook: MAX_LENGTH = 40
+  vocabulary_size: 15000        # Notebook: VOCABULARY_SIZE = 15000
+  encoder_num_heads: 1          # Notebook cell 21: TransformerEncoderLayer(EMBEDDING_DIM, 1)
+  decoder_num_heads: 8          # Notebook cell 21: TransformerDecoderLayer(..., 8)
+  decoder_dropout_inner: 0.3    # Notebook cell 19: dropout_1 = Dropout(0.3)
+  decoder_dropout_outer: 0.5    # Notebook cell 19: dropout_2 = Dropout(0.5)
+  decoder_attention_dropout: 0.1  # Notebook cell 19: MultiHeadAttention(dropout=0.1)
+
+train:
+  epochs: 10                    # Notebook: EPOCHS = 10
+  batch_size: 64                # Notebook: BATCH_SIZE = 64
+  buffer_size: 1000             # Notebook: BUFFER_SIZE = 1000
+  early_stopping_patience: 3    # Notebook cell 22: EarlyStopping(patience=3, ...)
+  seed: 42                      # NEW: pin RNGs (notebook didn't seed; results varied)
+  learning_rate: 0.001          # Keras Adam default — what the notebook uses implicitly
+  weights_filename: model.h5    # Notebook cell 30: caption_model.save_weights('model.h5')
+
+serve:
+  max_upload_bytes: 10485760    # 10 MB — guard at the API edge
+  decode_strategy: greedy       # Phase 1b: "beam"
+  beam_width: 3
+  cors_allowed_origins:
+    - http://localhost:3000

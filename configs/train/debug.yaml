@@ -1,0 +1,18 @@
+# =============================================================================
+# configs/train/debug.yaml — fast end-to-end smoke run.
+# -----------------------------------------------------------------------------
+# Used by CI to verify the training pipeline imports and steps once without
+# OOMing or producing NaNs. Loads on top of base.yaml so only the changed
+# fields need to be listed.
+#
+#   python -m scripts.train --config configs/base.yaml --override configs/train/debug.yaml
+# =============================================================================
+
+data:
+  sample_size: 64               # Just enough captions to fill one batch
+
+train:
+  epochs: 1
+  batch_size: 8
+  buffer_size: 16
+  seed: 0
