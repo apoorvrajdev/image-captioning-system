@@ -1,0 +1,98 @@
+# =============================================================================
+# .pre-commit-config.yaml — automated checks that run on `git commit`.
+# -----------------------------------------------------------------------------
+# Why pre-commit hooks?
+#   They make broken commits *physically impossible* — failed checks abort the
+#   commit. This catches lint/type/secret issues at the lowest-cost moment
+#   (before they enter history) and is what serious teams expect.
+#
+# Setup (one-time, per developer):
+#   pip install pre-commit
+#   pre-commit install                # registers the hooks in .git/hooks/
+#   pre-commit run --all-files        # run once over the whole repo
+#
+# After setup, hooks run automatically on every `git commit`. To bypass them
+# in an emergency: `git commit --no-verify` (do not commit this habit).
+# =============================================================================
+
+# Run hooks against staged files only by default (faster). The CI workflow
+# runs `pre-commit run --all-files` to catch anything missed locally.
+default_install_hook_types: [pre-commit]
+default_stages: [pre-commit]
+fail_fast: false                              # Show ALL failures, not just first
+
+repos:
+  # ---------------------------------------------------------------------------
+  # General hygiene: whitespace, line endings, accidentally-committed binaries.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]                      # Force LF; CRLF is a Windows trap
+      - id: check-yaml
+        exclude: ^(\.github/workflows/.*\.yml)$  # Some YAML uses GHA syntax
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=5000]                  # Reject >5MB blobs (use HF Hub)
+      - id: check-case-conflict
+      - id: detect-private-key
+
+  # ---------------------------------------------------------------------------
+  # Ruff: Python lint + format. Replaces black + isort + flake8 with one tool.
+  # Reads config from pyproject.toml so behaviour is identical here and in CI.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.5.0
+    hooks:
+      - id: ruff
+        args: [--fix]                         # Auto-fix what's safely fixable
+      - id: ruff-format
+
+  # ---------------------------------------------------------------------------
+  # mypy: static type checking. Limited to package code so notebooks/scripts
+  # don't gate commits.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.10.1
+    hooks:
+      - id: mypy
+        files: ^(src/captioning|backend/app)/
+        additional_dependencies:
+          - pydantic>=2.7
+          - pydantic-settings>=2.3
+          - types-PyYAML
+          - types-requests
+
+  # ---------------------------------------------------------------------------
+  # nbstripout: strips outputs from .ipynb files on commit.
+  # Why: notebook outputs include large base64-encoded images and run state,
+  # which makes diffs unreadable and can leak data. Outputs are a *render*
+  # of the code, not source — they belong in CI artefacts, not Git history.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/kynan/nbstripout
+    rev: 0.7.1
+    hooks:
+      - id: nbstripout
+
+  # ---------------------------------------------------------------------------
+  # Prettier: format frontend (.ts, .tsx, .json, .md, .css). Limited to the
+  # frontend/ subtree to avoid stepping on Markdown owned by docs writers.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: v4.0.0-alpha.8
+    hooks:
+      - id: prettier
+        files: ^frontend/.*\.(ts|tsx|js|jsx|json|md|css)$
+
+  # ---------------------------------------------------------------------------
+  # gitleaks: scans for accidentally committed credentials (API keys, tokens,
+  # private keys). Catches mistakes BEFORE they hit a public remote.
+  # ---------------------------------------------------------------------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.4
+    hooks:
+      - id: gitleaks

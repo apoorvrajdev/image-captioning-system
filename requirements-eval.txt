@@ -1,0 +1,18 @@
+# =============================================================================
+# requirements-eval.txt — caption-quality metrics. Used by `scripts/evaluate.py`
+# and by the `model-eval.yml` GitHub Action; NOT bundled into the serving image.
+# -----------------------------------------------------------------------------
+# pycocoevalcap drags Java for METEOR; we keep it in a separate file so the
+# slim production image stays Java-free.
+# =============================================================================
+
+-r requirements.txt
+
+# ---- Metrics -----------------------------------------------------------------
+sacrebleu==2.4.2                 # BLEU-1..4, corpus + sentence level
+nltk==3.8.1                      # BLEU + tokenisation utilities
+rouge-score==0.1.2               # ROUGE-L for caption quality
+pycocoevalcap==1.2               # CIDEr + METEOR (the COCO standard)
+
+# ---- Plotting / reports ------------------------------------------------------
+matplotlib==3.9.0

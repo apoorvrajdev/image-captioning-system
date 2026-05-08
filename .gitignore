@@ -1,30 +1,120 @@
-# Python
+# =============================================================================
+# .gitignore — what NOT to commit
+# -----------------------------------------------------------------------------
+# Each block below is grouped by *why* the files are excluded so future readers
+# (and recruiters) understand the engineering rationale, not just the patterns.
+# =============================================================================
+
+# ---- Python bytecode / packaging ---------------------------------------------
+# Compiled artefacts. Regenerated automatically on every run.
 __pycache__/
 *.py[cod]
+*.egg-info/
+*.egg
+.eggs/
+build/
+dist/
+pip-wheel-metadata/
 
-# Virtual environments
+# ---- Virtual environments ----------------------------------------------------
+# Per-developer; pinning is done via requirements.txt + .python-version.
 venv/
 .venv/
+env/
+.env-tf/
 
-# Jupyter
+# ---- Python tooling caches ---------------------------------------------------
+# Speed up local runs; nothing portable. Caches are recreated by the tools.
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+.nox/
+.hypothesis/
+
+# ---- Jupyter / notebooks -----------------------------------------------------
+# Checkpoints are autosaves; outputs are stripped by `nbstripout` pre-commit
+# so notebook diffs stay reviewable.
 .ipynb_checkpoints/
+*.ipynb_checkpoints
 
-# Environment variables
-.env
+# ---- ML / experiment tracking ------------------------------------------------
+# MLflow's local store, model artefacts, training run dumps. These are large
+# and should live in a model registry (HuggingFace Hub) or experiment-tracking
+# server (DagsHub MLflow), not in Git.
+mlruns/
+mlartifacts/
+outputs/
+runs/
+wandb/
+lightning_logs/
 
-# ML Models
+# ---- Model weights / serialised artefacts ------------------------------------
+# Large binaries — published via HuggingFace Hub, not Git.
 *.h5
+*.keras
 *.pt
 *.pth
+*.ckpt
 *.onnx
+*.tflite
+*.pb
+*.savedmodel/
+*.safetensors
 
-# Node
+# ---- Tokenizer / vocabulary artefacts ----------------------------------------
+# Pickles can carry RCE risk if blindly loaded from untrusted sources.
+# Vocabularies are versioned alongside their model in models/<version>/.
+*.pkl
+vocab_*.file
+sentencepiece.model
+
+# ---- Datasets ----------------------------------------------------------------
+# COCO is downloaded by `scripts/prepare_data.py`; never committed.
+data/
+datasets/
+*.tfrecord
+*.tfrecords
+
+# ---- Environment / secrets ---------------------------------------------------
+# `.env.example` is committed as the schema; `.env` never is.
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ---- Node / frontend ---------------------------------------------------------
 node_modules/
+.next/
+.turbo/
+.vercel/
+out/
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build
-dist/
-build/
+# ---- Docker / build ----------------------------------------------------------
+.docker/
 
-# OS
+# ---- Editors / IDEs ----------------------------------------------------------
+# Per-developer settings. Workspace-shared settings should go in `.vscode/*.json`
+# explicitly committed; anything else stays local.
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS noise ----------------------------------------------------------------
 .DS_Store
 Thumbs.db
+desktop.ini
+
+# ---- Claude / AI tooling -----------------------------------------------------
+# Local Claude Code session state. Contains user-specific settings.
+.claude/

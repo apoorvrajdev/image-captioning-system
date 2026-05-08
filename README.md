@@ -24,10 +24,10 @@ OR explore the full pipeline here:
 
 The notebook includes:
 
-- End-to-end training pipeline  
-- COCO dataset integration  
-- Transformer-based caption generation  
-- GPU-enabled execution  
+- End-to-end training pipeline
+- COCO dataset integration
+- Transformer-based caption generation
+- GPU-enabled execution
 
 ---
 
@@ -37,25 +37,25 @@ This project is backed by an **IEEE published research paper**:
 
 [![IEEE Paper](https://img.shields.io/badge/View%20Research%20Paper-IEEE-blue)](https://ieeexplore.ieee.org/document/10675203)
 
-📄 **Title:** AI Narratives: Bridging Visual Content and Linguistic Expression  
+📄 **Title:** AI Narratives: Bridging Visual Content and Linguistic Expression
 
 ---
 
 ### 🧠 Key Contributions
 
-- Designed a hybrid **CNN + Transformer architecture** for image captioning  
-- Leveraged **InceptionV3** for visual feature extraction  
-- Implemented **attention-based sequence generation**  
-- Achieved improved caption quality using **BLEU evaluation**  
-- Compared multiple CNN backbones (VGG, ResNet, Inception)  
+- Designed a hybrid **CNN + Transformer architecture** for image captioning
+- Leveraged **InceptionV3** for visual feature extraction
+- Implemented **attention-based sequence generation**
+- Achieved improved caption quality using **BLEU evaluation**
+- Compared multiple CNN backbones (VGG, ResNet, Inception)
 
 ---
 
 ### 🚀 Practical Impact
 
-- Combines **computer vision and NLP** for real-world multimodal applications  
-- Demonstrates ability to build **end-to-end deep learning pipelines**  
-- Trained and evaluated on **COCO benchmark dataset** used in industry research   
+- Combines **computer vision and NLP** for real-world multimodal applications
+- Demonstrates ability to build **end-to-end deep learning pipelines**
+- Trained and evaluated on **COCO benchmark dataset** used in industry research
 
 # 🧠 Model Overview
 
@@ -82,7 +82,7 @@ Image → CNN Encoder → Feature Embeddings → Transformer Decoder → Caption
 # 📸 Sample Outputs
 
 ### 🟢 Example 1
-**Generated Caption:**  
+**Generated Caption:**
 `a man is standing on a beach with a surfboard`
 
 *<img width="923" height="906" alt="image" src="https://github.com/user-attachments/assets/64e8412b-1d49-404c-a5b2-1da121b224e2" />
@@ -91,7 +91,7 @@ Image → CNN Encoder → Feature Embeddings → Transformer Decoder → Caption
 ---
 
 ### 🟢 Example 2
-**Generated Caption:**  
+**Generated Caption:**
 `a man riding a motorcycle on a street`
 *<img width="832" height="857" alt="image" src="https://github.com/user-attachments/assets/c802d420-a1c1-48be-8e79-599f193c72cd" />
 *
@@ -119,10 +119,10 @@ The model is trained on the **COCO 2017 Dataset**, a large-scale benchmark datas
 
 Dataset characteristics:
 
-- 200,000+ images  
-- 80 object categories  
-- Multiple captions per image  
-- Rich annotations for training  
+- 200,000+ images
+- 80 object categories
+- Multiple captions per image
+- Rich annotations for training
 
 ---
 
@@ -143,13 +143,13 @@ The project follows a complete deep learning workflow:
 
 # 🧰 Technologies Used
 
-- Python  
-- TensorFlow / Keras  
-- CNN (InceptionV3)  
-- Transformer Architecture  
-- NumPy, Pandas  
-- Matplotlib  
-- Jupyter Notebook  
+- Python
+- TensorFlow / Keras
+- CNN (InceptionV3)
+- Transformer Architecture
+- NumPy, Pandas
+- Matplotlib
+- Jupyter Notebook
 
 ---
 
@@ -177,32 +177,32 @@ Key contributions:
 - Integration of **CNN + Transformer architecture**
 - Improved caption generation using **attention mechanisms**
 - Comparative analysis of CNN encoders (VGG, ResNet, Inception)
-- Enhanced tokenization strategies for better language modeling  
+- Enhanced tokenization strategies for better language modeling
 
 ---
 
 # ⚠️ Limitations
 
-- Struggles with highly complex or cluttered scenes  
-- May generate generic captions for rare objects  
-- Requires large datasets and compute for training  
+- Struggles with highly complex or cluttered scenes
+- May generate generic captions for rare objects
+- Requires large datasets and compute for training
 
 ---
 
 # 🚀 Future Improvements
 
-- Replace CNN with **Vision Transformer (ViT)**  
-- Use pretrained models like **BLIP / CLIP**  
-- Optimize inference using **TensorRT / ONNX**  
-- Deploy as **FastAPI-based real-time API**  
-- Multi-GPU distributed training  
+- Replace CNN with **Vision Transformer (ViT)**
+- Use pretrained models like **BLIP / CLIP**
+- Optimize inference using **TensorRT / ONNX**
+- Deploy as **FastAPI-based real-time API**
+- Multi-GPU distributed training
 
 ---
 
 # 👨‍💻 Author
 
-**Apoorv Raj**  
-AI Systems Engineer | Deep Learning | ML Infrastructure  
+**Apoorv Raj**
+AI Systems Engineer | Deep Learning | ML Infrastructure
 
 ---
 

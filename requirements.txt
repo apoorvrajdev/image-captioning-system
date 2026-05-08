@@ -1,0 +1,45 @@
+# =============================================================================
+# requirements.txt — runtime dependencies for the FastAPI backend (slim).
+# -----------------------------------------------------------------------------
+# This file mirrors `[project.dependencies]` in pyproject.toml so that
+# Docker builds and CI can `pip install -r requirements.txt` without needing
+# the package source available.
+#
+# To regenerate from pyproject.toml later (recommended after Phase 1):
+#   pip install pip-tools
+#   pip-compile --extra=hf pyproject.toml -o requirements.txt
+#
+# All versions are pinned. Floating versions across TF + transformers + torch
+# is the most common silent source of BLEU drift between runs and deploys.
+# =============================================================================
+
+# ---- Core ML framework -------------------------------------------------------
+# CPU-only TF: deploy target is CPU HuggingFace Spaces. Pinned at 2.15 because
+# 2.16+ ships Keras 3 by default, which breaks the IEEE notebook's
+# `tf.keras.layers.TextVectorization` save/load semantics.
+tensorflow-cpu==2.15.0
+
+# ---- Numerics / data ---------------------------------------------------------
+# NumPy <2.0 because TF 2.15 was built against the 1.x ABI.
+numpy==1.26.4
+pandas==2.2.2
+pillow==10.3.0
+pyyaml==6.0.1
+
+# ---- Config & validation -----------------------------------------------------
+pydantic==2.7.4
+pydantic-settings==2.3.4
+
+# ---- API server --------------------------------------------------------------
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+python-multipart==0.0.9
+
+# ---- Model artefact pull at startup ------------------------------------------
+huggingface-hub==0.23.4
+
+# ---- Logging / async / CLI ---------------------------------------------------
+structlog==24.2.0
+anyio==4.4.0
+tqdm==4.66.4
+click==8.1.7
