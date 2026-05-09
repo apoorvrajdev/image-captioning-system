@@ -154,12 +154,22 @@ class CaptionTokenizer:
 
         directory = Path(directory)
         pkl = directory / VOCAB_PICKLE_FILENAME
+        js = directory / VOCAB_JSON_FILENAME
         if pkl.is_file():
             with pkl.open("rb") as f:
                 vocab = pickle.load(f)
-        else:
-            with (directory / VOCAB_JSON_FILENAME).open(encoding="utf-8") as f:
+        elif js.is_file():
+            with js.open(encoding="utf-8") as f:
                 vocab = json.load(f)
+        else:
+            raise FileNotFoundError(
+                f"No tokenizer vocabulary found in {directory!s}. "
+                f"Expected '{VOCAB_PICKLE_FILENAME}' (preferred) or "
+                f"'{VOCAB_JSON_FILENAME}'. Train the model with "
+                "`python -m scripts.train --config configs/base.yaml` to "
+                "produce the artefacts, or point BACKEND_TOKENIZER_DIR at a "
+                "directory that contains them."
+            )
 
         tok = cls(vocab_size=vocab_size, max_length=max_length)
         layer = tf.keras.layers.TextVectorization(

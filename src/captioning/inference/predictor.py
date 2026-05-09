@@ -115,7 +115,19 @@ class CaptionPredictor:
 
     @staticmethod
     def _dummy_pass(model, config: AppConfig) -> None:
-        """Force-build the model so ``load_weights`` knows variable shapes."""
+        """Force-build the model so ``load_weights`` knows variable shapes.
+
+        ``ImageCaptioningModel`` has no top-level ``call()`` — it overrides
+        ``train_step``/``test_step`` instead. Keras therefore won't mark the
+        parent ``Model`` as ``built`` even after every sublayer has its
+        variables created, and the HDF5 ``load_weights`` path refuses to
+        proceed against an unbuilt subclassed model. We work around this by
+        (a) calling each sublayer once so its variables are real (shape-
+        matched to the saved checkpoint) and (b) flipping ``model.built``
+        so the loader walks the sublayer scopes inside the file. The actual
+        weights loaded are still those from the checkpoint — this is purely
+        a Keras bookkeeping flag.
+        """
         import tensorflow as tf
 
         dummy_img = tf.zeros((1, 299, 299, 3), dtype=tf.float32)
@@ -129,3 +141,13 @@ class CaptionPredictor:
             training=False,
             mask=tf.cast(dummy_caps[:, 1:] != 0, tf.int32),
         )
+        # Augmentation pipeline is tracked as a sublayer of the parent Model
+        # even though inference never invokes it; building it once keeps the
+        # variable tree identical to what `model.fit` produced when Phase 1
+        # weights were saved.
+        if getattr(model, "image_aug", None) is not None:
+            _ = model.image_aug(dummy_img, training=False)
+        # Sublayers are now built; mark the parent built so HDF5 load_weights
+        # accepts the file. Safe because every variable that the checkpoint
+        # references is already materialised on a tracked sublayer.
+        model.built = True
