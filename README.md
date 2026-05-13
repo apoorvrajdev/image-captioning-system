@@ -10,6 +10,13 @@
 </p>
 
 <p align="left">
+  <img alt="React 19"            src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
+  <img alt="Vite 8"              src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
+  <img alt="Frontend integrated" src="https://img.shields.io/badge/frontend-integrated-brightgreen">
+  <img alt="API connected"       src="https://img.shields.io/badge/API-connected-009688">
+</p>
+
+<p align="left">
   <img alt="Ruff"         src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white">
   <img alt="mypy"         src="https://img.shields.io/badge/typed-mypy-1F5082">
   <img alt="Tests"        src="https://img.shields.io/badge/tests-37%20passing-brightgreen">
@@ -21,7 +28,7 @@
   <img alt="License: MIT"   src="https://img.shields.io/badge/license-MIT-lightgrey">
   <img alt="Phase 1"        src="https://img.shields.io/badge/Phase%201-complete-brightgreen">
   <img alt="Phase 2A"       src="https://img.shields.io/badge/Phase%202A-complete-brightgreen">
-  <img alt="Phase 2B"       src="https://img.shields.io/badge/Phase%202B-planned-blue">
+  <img alt="Phase 2B"       src="https://img.shields.io/badge/Phase%202B-complete-brightgreen">
 </p>
 
 ---
@@ -30,6 +37,8 @@
 
 This repository implements an **end-to-end image-captioning pipeline** built around an InceptionV3 visual encoder and a custom multi-head Transformer decoder. The architecture is the basis of the IEEE-published paper *“AI Narratives: Bridging Visual Content and Linguistic Expression”*; this codebase lifts the original Kaggle research notebook into a typed, tested, configuration-driven Python package that can be reused from CLI, scripts, or a future serving layer.
 
+With Phase 2B complete, the system now runs as a **full-stack inference workflow**: a React/Vite frontend issues multipart uploads to the FastAPI `POST /v1/captions` endpoint, the backend predictor returns a typed response, and the end-to-end image-to-caption interaction is operational in the browser.
+
 The repository is structured in deliberate phases:
 
 | Phase | Focus | Status |
@@ -37,7 +46,7 @@ The repository is structured in deliberate phases:
 | 0 — Bootstrap | Tooling, packaging, freeze policy | ✅ complete |
 | 1 — Modularisation | Notebook → typed Python package, parity audit, unit tests | ✅ complete |
 | 2A — Backend Infrastructure | FastAPI inference API, structured logging, schemas, health checks, Swagger/OpenAPI, predictor lifecycle | ✅ complete |
-| 2B — Frontend UI | React/Vite frontend + upload UX + API integration | ⏳ planned |
+| 2B — Frontend UI | React/Vite frontend + upload UX + API integration | ✅ complete |
 | 3 — Multimodal baselines | BLIP / ViT-GPT2 / GIT side-by-side comparison | ⏳ planned |
 | 4 — Observability | Sentry, Prometheus metrics, ADRs | ⏳ planned |
 
@@ -136,6 +145,28 @@ image-captioning-system/
 │       ├── schemas/                             # Pydantic request/response schemas
 │       ├── services/                            # PredictorService — image bytes → caption + latency
 │       └── utils/                               # Image decoding + content-type guards
+│
+├── frontend/                                    # Phase 2B — React 19 + Vite 8 + Tailwind v4 SPA
+│   ├── index.html                               # Vite entry; mounts <App /> into #root
+│   ├── vite.config.js                           # Vite + @vitejs/plugin-react + Tailwind v4 plugin
+│   ├── eslint.config.js                         # Flat ESLint config (React + Hooks + React Refresh)
+│   ├── package.json                             # React 19, Vite 8, Tailwind v4
+│   ├── .env.example                             # VITE_API_BASE — env-driven backend origin
+│   ├── public/                                  # Static assets served verbatim (favicon, icons)
+│   └── src/
+│       ├── main.jsx                             # React root + StrictMode bootstrap
+│       ├── App.jsx                              # Page composition + upload → generate flow
+│       ├── index.css                            # Tailwind v4 entry (single @import)
+│       ├── services/
+│       │   └── api.js                           # checkHealth / captionImage — AbortController + typed ApiError
+│       └── components/
+│           ├── Header.jsx                       # Brand bar + StatusBadge slot
+│           ├── StatusBadge.jsx                  # /healthz poller (10 s) — checking/online/offline state machine
+│           ├── UploadZone.jsx                   # Drag/drop + click-to-browse + client-side validation
+│           ├── ImagePreview.jsx                 # Selected-file preview + size/format meta + clear
+│           ├── CaptionResult.jsx                # Caption + model_version / decode / latency / request_id
+│           ├── ErrorBanner.jsx                  # Dismissible error display (network / timeout / HTTP)
+│           └── Spinner.jsx                      # Shared loading indicator (sm / md / lg)
 │
 ├── configs/
 │   ├── base.yaml                                # IEEE hyperparameters (cell 6 mirror)
@@ -277,6 +308,20 @@ curl -X POST http://localhost:8000/v1/captions \
 
 Interactive Swagger UI is auto-generated at [`/docs`](http://localhost:8000/docs); the raw schema lives at [`/openapi.json`](http://localhost:8000/openapi.json).
 
+### Frontend (Phase 2B — operational)
+
+A React 19 + Vite 8 + Tailwind v4 single-page app under [`frontend/`](frontend/) drives the same endpoints from the browser. The SPA posts multipart `FormData` to `POST /v1/captions`, polls `GET /healthz` every 10 seconds for a live status badge, consumes the typed `CaptionResponse` schema, and renders caption + `model_version` + `decode_strategy` + `latency_ms` + `request_id` exactly as the backend returns them. Loading, error, and success states are surfaced through dedicated components; network failures, request timeouts (3 s health / 60 s caption), CORS rejections, and non-2xx responses are all classified into a single typed `ApiError` shape so the UI shows actionable copy instead of a raw `Failed to fetch`.
+
+```bash
+# Boot the frontend dev server
+cd frontend
+npm install
+npm run dev
+# Defaults to http://localhost:5173 (Vite picks the next free port if 5173 is busy)
+```
+
+`VITE_API_BASE` (see [`frontend/.env.example`](frontend/.env.example)) points the SPA at any backend origin; absent the env var, the client falls back to `http://127.0.0.1:8000`. The dev origins `localhost:5173/5174` and `127.0.0.1:5173/5174` are pre-allowed in [`configs/base.yaml`](configs/base.yaml) under `serve.cors_allowed_origins` so the browser accepts cross-origin responses end-to-end.
+
 ---
 
 ## FastAPI backend
@@ -310,6 +355,80 @@ Phase 2A delivers a production-style inference service rather than a thin demo w
 python -m scripts.bootstrap_dev_artifacts \
     --config configs/base.yaml \
     --output-dir models/v1.0.0
+```
+
+---
+
+## Frontend UI (Phase 2B)
+
+Phase 2B ships a single-page inference UI under [`frontend/`](frontend/), not a styled demo. The split mirrors the backend's separation between transport, service, and presentation:
+
+- **Application shell** — [`frontend/src/App.jsx`](frontend/src/App.jsx). Owns the request lifecycle (selected file → preview → generate → result). The preview `URL.createObjectURL` is `useMemo`-derived and revoked through an effect cleanup so previews never leak memory across uploads. Four `useState` slots (`file`, `result`, `error`, `loading`) cover every UI state — no Redux, no React Query, no context.
+- **API service layer** — [`frontend/src/services/api.js`](frontend/src/services/api.js). Single boundary for every backend call. Reads `import.meta.env.VITE_API_BASE` once at module load (falls back to `http://127.0.0.1:8000`), wraps `fetch` with `AbortController`-driven timeouts (3 s for `/healthz`, 60 s for `/v1/captions`), and classifies failures into `timeout` / `network` / `http` / `unknown` kinds on a typed `ApiError` so components never see a raw `TypeError`.
+- **Upload zone** — [`frontend/src/components/UploadZone.jsx`](frontend/src/components/UploadZone.jsx). Drag/drop + click-to-browse + keyboard activation (`Enter` / `Space`). Validates content-type (JPEG / PNG / WebP) and size (10 MB) before the file ever touches the network — invalid uploads are rejected client-side with the same wording the backend would have returned, so the user experience is consistent whether validation fires locally or remotely.
+- **Image preview** — [`frontend/src/components/ImagePreview.jsx`](frontend/src/components/ImagePreview.jsx). Renders the selected file via its object URL with size/format metadata and a clear button. Disabled while a request is in flight so re-drops cannot race the POST.
+- **Caption result** — [`frontend/src/components/CaptionResult.jsx`](frontend/src/components/CaptionResult.jsx). Consumes the backend's typed `CaptionResponse` directly: caption text plus model version, decode strategy, latency in milliseconds, and the request ID echoed from the `x-request-id` header. Copy-to-clipboard is built in for log correlation during debugging.
+- **Status badge** — [`frontend/src/components/StatusBadge.jsx`](frontend/src/components/StatusBadge.jsx). Polls `/healthz` every 10 seconds and on window focus, runs a three-state machine (`checking` / `online` / `offline`), and recovers automatically when the backend comes back — no page reload required.
+- **Error banner** — [`frontend/src/components/ErrorBanner.jsx`](frontend/src/components/ErrorBanner.jsx). Single surface for every failure class. Reads `ApiError.message` so the user sees "Cannot reach backend" or "Request timed out" instead of a raw browser error.
+- **Spinner / Header** — [`frontend/src/components/Spinner.jsx`](frontend/src/components/Spinner.jsx) and [`frontend/src/components/Header.jsx`](frontend/src/components/Header.jsx). Shared loading indicator and the sticky brand bar that hosts the status badge.
+
+### Upload flow
+
+```
+┌──────────────┐  drag/drop   ┌─────────────┐  validate   ┌──────────────┐
+│ UploadZone   │ ───────────▶ │  App state  │ ──────────▶ │ ImagePreview │
+└──────────────┘              └─────────────┘             └──────────────┘
+                                     │ click "Generate"
+                                     ▼
+                            ┌─────────────────┐  multipart   POST /v1/captions
+                            │ services/api.js │ ───────────▶ FastAPI backend
+                            └─────────────────┘
+                                     │   typed CaptionResponse / ApiError
+                                     ▼
+                         ┌──────────────────────┐
+                         │ CaptionResult  /     │
+                         │ ErrorBanner          │
+                         └──────────────────────┘
+```
+
+### State, transport, and frontend/backend separation
+
+State management is intentionally local: four `useState` slots in `App.jsx` (`file`, `result`, `error`, `loading`) plus a `useMemo`-derived preview URL. The data flow is shallow enough that an extra abstraction would obscure rather than help. All cross-cutting concerns — timeouts, error classification, env-driven base URL — live in the API service layer so components stay declarative and lift no transport details into JSX.
+
+Frontend and backend are deployed independently. The SPA only knows the backend's origin via `VITE_API_BASE`; the backend only trusts SPAs whose origin appears in `serve.cors_allowed_origins`. Dev origins (`localhost:5173/5174`, `127.0.0.1:5173/5174`) are pre-allowed in [`configs/base.yaml`](configs/base.yaml); production origins join the same list at deploy time. No shared build, no shared runtime, no shared state — only the typed Pydantic schemas defined in [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py) cross the wire.
+
+### UX, error handling, and loading states
+
+- **Loading** — the Generate button shows the shared [`Spinner`](frontend/src/components/Spinner.jsx) and disables itself for the entire request; the upload zone is locked in parallel so a re-drop cannot race the in-flight POST.
+- **Errors** — every failure surfaces through `ErrorBanner` with copy specific to its `ApiError.kind`. Network/CORS failures, request timeouts, and `4xx` / `5xx` payloads each map to a distinct, actionable message.
+- **Status awareness** — when the backend is down, `StatusBadge` flips to red within one poll cycle; when it comes back, the badge recovers automatically without a page reload, and a fresh `/healthz` is also fired on window focus.
+- **Responsive layout** — Tailwind v4's grid (`lg:grid-cols-5`) drops to a single column under the `lg` breakpoint, preserving the upload → preview → result flow on tablet and phone widths. The sticky header keeps the live status badge visible while scrolling.
+
+### Environment configuration
+
+```bash
+# frontend/.env (gitignored) — overrides the default backend origin
+VITE_API_BASE=http://127.0.0.1:8000
+```
+
+The variable is read once at module load and stripped of any trailing slash. Absent the variable, the client falls back to `http://127.0.0.1:8000`; production builds set the variable at build time so the SPA can ship as static assets to Vercel, Cloudflare Pages, HuggingFace Spaces, or any CDN.
+
+### Production deployment readiness
+
+- **Static-asset build** — `npm run build` emits a hash-named bundle under `frontend/dist/` that any static host can serve; no runtime Node process is required.
+- **Origin pinning** — the CORS allow-list in `configs/base.yaml` plus `VITE_API_BASE` at build time tie a given SPA build to a specific backend origin without a runtime config endpoint.
+- **No secrets in the client** — the SPA carries no API keys; the only network surface it depends on is `/healthz` and `/v1/captions` on the configured backend.
+- **Lint-clean** — `npm run lint` (flat ESLint config with `eslint-plugin-react-hooks` and `eslint-plugin-react-refresh`) runs alongside the Python tooling.
+
+```bash
+# Development server (Vite + HMR on :5173)
+cd frontend
+npm install
+npm run dev
+
+# Production build + local preview of the built bundle
+npm run build
+npm run preview
 ```
 
 ---
@@ -406,7 +525,8 @@ These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOT
 
 - **Phase 1b** — beam search, CIDEr / METEOR / ROUGE-L, masked accuracy parity-fix, label smoothing, warmup + cosine LR schedule.
 - **Phase 2A** ✅ — FastAPI backend, lifespan-managed predictor singleton, multipart inference endpoint, structured logging + request IDs, Pydantic schemas, Swagger/OpenAPI docs, health/readiness probe.
-- **Phase 2B** — React/Vite frontend with Tailwind UI, drag/drop image uploads, live API integration against `POST /v1/captions`, deployment integration (HuggingFace Spaces backend + Vercel-hosted frontend), GitHub Actions CI/CD.
+- **Phase 2B** ✅ — React 19 + Vite 8 + Tailwind v4 SPA, drag/drop upload UX, live API integration against `POST /v1/captions`, env-driven `VITE_API_BASE`, `AbortController` timeouts, typed `ApiError` classification, polled health badge with auto-recovery, CORS allow-list wired through the backend YAML config.
+- **Phase 2C** — Deployment integration: HuggingFace Spaces backend, Vercel-hosted frontend, production CORS allow-list, GitHub Actions CI/CD across both packages.
 - **Phase 3** — Tier-1 multimodal upgrades: BLIP-base / ViT-GPT2 / GIT-base-coco side-by-side comparison demo with per-model BLEU + latency.
 - **Phase 4** — Sentry, Prometheus, DagsHub-hosted MLflow link, Architecture Decision Records (`docs/adr/`).
 - **Future work** — ViT + Transformer fine-tune on COCO; VLM API integration (Anthropic Claude vision) behind a feature flag; VQA endpoint.
@@ -421,6 +541,13 @@ Detailed plan: [`docs/restructure-plan.md`](docs/restructure-plan.md).
 - Swagger/OpenAPI testing — interactive `/docs` UI for hand-testing every endpoint, raw `/openapi.json` for client codegen.
 - Structured logging — JSON in production, pretty in dev; per-request UUIDs threaded through every log line.
 - End-to-end image upload → caption flow — multipart upload → content-type guard → image decode → predictor → typed response with latency + request ID.
+- End-to-end browser inference workflow — React 19 + Vite 8 SPA under [`frontend/`](frontend/) wired to `POST /v1/captions`; drag/drop or click-to-browse upload, live caption + latency + request ID display.
+- Drag/drop upload UI — JPEG / PNG / WebP, 10 MB cap, keyboard-activatable (`Enter` / `Space`), client-side validation mirrored from the backend so error wording stays consistent.
+- Live frontend-backend integration — typed `ApiError` boundary, `AbortController` timeouts (3 s health / 60 s caption), CORS allow-list aligned with `serve.cors_allowed_origins`.
+- Polled health surface — `StatusBadge` reads `/healthz` every 10 s plus on window focus; recovers automatically without page reload when the backend comes back.
+- Responsive Tailwind v4 inference interface — single-column layout under the `lg` breakpoint, sticky header with live status, modular component split under [`frontend/src/components/`](frontend/src/components/).
+- Typed API communication — SPA consumes the same Pydantic `CaptionResponse` shape the backend emits; caption, `model_version`, `decode_strategy`, `latency_ms`, and `request_id` render directly from the wire payload.
+- Production-style frontend architecture — dedicated [`services/api.js`](frontend/src/services/api.js) boundary, env-driven `VITE_API_BASE` with safe fallback, lint-clean flat ESLint config, static-asset build via `npm run build`.
 
 ---
 
