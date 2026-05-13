@@ -19,7 +19,9 @@
 <p align="left">
   <img alt="IEEE Published" src="https://img.shields.io/badge/IEEE-published-00629B?logo=ieee&logoColor=white">
   <img alt="License: MIT"   src="https://img.shields.io/badge/license-MIT-lightgrey">
-  <img alt="Status"         src="https://img.shields.io/badge/status-Phase%201%20complete-blue">
+  <img alt="Phase 1"        src="https://img.shields.io/badge/Phase%201-complete-brightgreen">
+  <img alt="Phase 2A"       src="https://img.shields.io/badge/Phase%202A-complete-brightgreen">
+  <img alt="Phase 2B"       src="https://img.shields.io/badge/Phase%202B-planned-blue">
 </p>
 
 ---
@@ -34,7 +36,8 @@ The repository is structured in deliberate phases:
 |---|---|---|
 | 0 — Bootstrap | Tooling, packaging, freeze policy | ✅ complete |
 | 1 — Modularisation | Notebook → typed Python package, parity audit, unit tests | ✅ complete |
-| 2 — Serving | FastAPI inference API + HuggingFace Spaces deploy | ⏳ planned |
+| 2A — Backend Infrastructure | FastAPI inference API, structured logging, schemas, health checks, Swagger/OpenAPI, predictor lifecycle | ✅ complete |
+| 2B — Frontend UI | React/Vite frontend + upload UX + API integration | ⏳ planned |
 | 3 — Multimodal baselines | BLIP / ViT-GPT2 / GIT side-by-side comparison | ⏳ planned |
 | 4 — Observability | Sentry, Prometheus metrics, ADRs | ⏳ planned |
 
@@ -125,12 +128,22 @@ image-captioning-system/
 │   ├── evaluation/     bleu.py
 │   └── utils/          logging.py · seed.py · hashing.py
 │
+├── backend/                                     # Phase 2A — FastAPI inference service
+│   └── app/
+│       ├── main.py                              # App factory + lifespan-managed predictor singleton
+│       ├── api/                                 # Thin HTTP routes — /healthz, /v1/captions
+│       ├── core/                                # BackendSettings, structured logging, request IDs
+│       ├── schemas/                             # Pydantic request/response schemas
+│       ├── services/                            # PredictorService — image bytes → caption + latency
+│       └── utils/                               # Image decoding + content-type guards
+│
 ├── configs/
 │   ├── base.yaml                                # IEEE hyperparameters (cell 6 mirror)
 │   └── train/debug.yaml                         # CI smoke override
 │
 ├── scripts/
 │   ├── train.py · evaluate.py · predict.py
+│   ├── bootstrap_dev_artifacts.py               # Smoke-test artefacts so the API can boot pre-training
 │   └── notebook_module_audit.py                 # Parity gate vs. notebook
 │
 ├── tests/unit/
@@ -246,9 +259,58 @@ python -m scripts.predict \
     --image samples/photo.jpg
 ```
 
-### REST API (planned — Phase 2)
+### REST API (Phase 2A — operational)
 
-A FastAPI service in `backend/app/` will expose `POST /v1/captions` (multipart upload), `GET /v1/model/info`, and `GET /healthz`, deployed to HuggingFace Spaces with the trained checkpoint pulled from the HuggingFace Hub at boot. The `CaptionPredictor` interface is the seam — the FastAPI lifespan instantiates one and reuses it across every request.
+A FastAPI service under [`backend/app/`](backend/app/) is now live. The lifespan instantiates a single `CaptionPredictor`, runs `warmup()` once, and reuses it across every request — no per-request TF graph builds, no first-request latency cliff. The service currently boots against development bootstrap artefacts (see below); real Phase 1 weights drop in by replacing the files under `models/v1.0.0/`, no code changes required.
+
+```bash
+# Boot the API
+uvicorn --app-dir backend app.main:app --host 0.0.0.0 --port 8000
+
+# Liveness + readiness (returns model_loaded + model_version + api_version)
+curl http://localhost:8000/healthz
+
+# Generate a caption from a multipart upload
+curl -X POST http://localhost:8000/v1/captions \
+    -F "image=@samples/photo.jpg"
+```
+
+Interactive Swagger UI is auto-generated at [`/docs`](http://localhost:8000/docs); the raw schema lives at [`/openapi.json`](http://localhost:8000/openapi.json).
+
+---
+
+## FastAPI backend
+
+Phase 2A delivers a production-style inference service rather than a thin demo wrapper. The split mirrors how a real serving stack is laid out:
+
+- **App factory + lifespan** — [`backend/app/main.py`](backend/app/main.py). `create_app()` builds the FastAPI instance; the lifespan loads the YAML `AppConfig`, instantiates a `CaptionPredictor`, calls `warmup()`, and stashes a `PredictorService` singleton on `app.state` so every request reuses one warm model.
+- **Routes** — [`backend/app/api/routes.py`](backend/app/api/routes.py). Intentionally thin: validate inputs, delegate, shape the response. No TF imports leak into the HTTP layer.
+- **Service layer** — [`backend/app/services/predictor_service.py`](backend/app/services/predictor_service.py). Wraps the predictor, decodes uploaded bytes, measures per-request latency, and returns `(caption, latency_ms)`.
+- **Schemas** — [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py). Pydantic v2 request/response models (`CaptionResponse`, `HealthResponse`, `ErrorResponse`) — every payload that crosses the wire is typed and OpenAPI-documented.
+- **Backend settings** — [`backend/app/core/config.py`](backend/app/core/config.py). Separate `BackendSettings` (env-overridable: weights path, tokenizer dir, model version, warmup toggle) layered on top of the research-side `AppConfig`. The two are deliberately distinct: research hyperparameters and serving knobs change on different cadences.
+- **Structured logging + request IDs** — [`backend/app/core/logging.py`](backend/app/core/logging.py). `RequestContextMiddleware` stamps each request with a UUID; `structlog` carries it through every log line so a single failed caption can be traced end-to-end.
+- **Image safety** — [`backend/app/utils/image.py`](backend/app/utils/image.py). Content-type allow-list (JPEG / PNG / WebP / BMP), explicit `ImageDecodeError` so malformed bytes produce a clean `422` rather than a 500.
+
+### Endpoints
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET`  | `/healthz`      | Liveness + readiness — reports `model_loaded`, `model_version`, `api_version`. Always 200; readiness is conveyed in the body. |
+| `POST` | `/v1/captions`  | Multipart image upload → generated caption + decode strategy + latency + request ID. |
+| `GET`  | `/docs`         | Interactive Swagger UI, auto-generated from the Pydantic schemas. |
+| `GET`  | `/openapi.json` | Raw OpenAPI 3.1 spec for client codegen. |
+
+`POST /v1/captions` enforces input validation at the boundary: 415 on disallowed content types, 413 on oversized uploads (`serve.max_upload_bytes`), 422 on undecodable image bytes, 400 on empty uploads, 503 while the predictor is still loading during a rolling restart.
+
+### Bootstrap dev artifacts
+
+[`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py) generates a *valid but untrained* set of weights + tokenizer under `models/v1.0.0/` so the entire serving stack — lifespan, routes, multipart upload, predictor wiring — can be exercised end-to-end before Phase 1 training has been run on COCO. **The captions it produces are gibberish by design**: every weight is randomly initialised. The point is architectural smoke-testing, not prediction quality. Drop real Phase 1 outputs into the same directory and the backend serves them with zero code changes.
+
+```bash
+python -m scripts.bootstrap_dev_artifacts \
+    --config configs/base.yaml \
+    --output-dir models/v1.0.0
+```
 
 ---
 
@@ -343,12 +405,22 @@ These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOT
 ## Roadmap
 
 - **Phase 1b** — beam search, CIDEr / METEOR / ROUGE-L, masked accuracy parity-fix, label smoothing, warmup + cosine LR schedule.
-- **Phase 2** — FastAPI backend, HuggingFace Hub model upload, HuggingFace Spaces deploy, Vercel-hosted frontend (Next.js 14), GitHub Actions CI/CD.
+- **Phase 2A** ✅ — FastAPI backend, lifespan-managed predictor singleton, multipart inference endpoint, structured logging + request IDs, Pydantic schemas, Swagger/OpenAPI docs, health/readiness probe.
+- **Phase 2B** — React/Vite frontend with Tailwind UI, drag/drop image uploads, live API integration against `POST /v1/captions`, deployment integration (HuggingFace Spaces backend + Vercel-hosted frontend), GitHub Actions CI/CD.
 - **Phase 3** — Tier-1 multimodal upgrades: BLIP-base / ViT-GPT2 / GIT-base-coco side-by-side comparison demo with per-model BLEU + latency.
 - **Phase 4** — Sentry, Prometheus, DagsHub-hosted MLflow link, Architecture Decision Records (`docs/adr/`).
 - **Future work** — ViT + Transformer fine-tune on COCO; VLM API integration (Anthropic Claude vision) behind a feature flag; VQA endpoint.
 
 Detailed plan: [`docs/restructure-plan.md`](docs/restructure-plan.md).
+
+### Current capabilities
+
+- Notebook parity preserved — IEEE artefact frozen by SHA-256, four-stage parity audit gates every behavioural change.
+- Typed modular ML package — Pydantic v2 configs, mypy-strict, 37 unit tests passing.
+- Production-style inference API — FastAPI app factory, lifespan-managed `CaptionPredictor` singleton, warmup on boot.
+- Swagger/OpenAPI testing — interactive `/docs` UI for hand-testing every endpoint, raw `/openapi.json` for client codegen.
+- Structured logging — JSON in production, pretty in dev; per-request UUIDs threaded through every log line.
+- End-to-end image upload → caption flow — multipart upload → content-type guard → image decode → predictor → typed response with latency + request ID.
 
 ---
 
