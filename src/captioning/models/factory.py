@@ -63,4 +63,20 @@ def build_caption_model(
     )
     cnn = build_cnn_encoder()
     aug = default_image_augmentation() if use_augmentation else None
-    return ImageCaptioningModel(cnn_model=cnn, encoder=encoder, decoder=decoder, image_aug=aug)
+
+    # ``honour_training_flag_in_test_step`` and ``correct_masked_accuracy``
+    # default to False so this factory keeps producing notebook-parity models
+    # unless the user opts in by flipping the corresponding YAML flag.
+    honour_flag = bool(config.train.honour_training_flag_in_test_step)
+    # The masked-accuracy correction is harmless under parity (it's a
+    # better-weighted average of the same per-batch numbers), so we tie it to
+    # the same opt-in flag rather than adding a separate one — keeps the
+    # YAML surface minimal.
+    return ImageCaptioningModel(
+        cnn_model=cnn,
+        encoder=encoder,
+        decoder=decoder,
+        image_aug=aug,
+        honour_training_flag_in_test_step=honour_flag,
+        correct_masked_accuracy=honour_flag,
+    )

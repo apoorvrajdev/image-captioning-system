@@ -116,6 +116,16 @@ class CaptionTokenizer:
         word = self._idx2word(idx)
         return word.numpy().decode("utf-8")
 
+    def word_to_id(self, word: str) -> int:
+        """Look up a single word's integer id, returning 1 (the OOV id) if absent.
+
+        Used by beam search to seed beams with the ``[start]`` token without
+        going through ``TextVectorization``'s padded-string path.
+        """
+        self._require_fit()
+        assert self._word2idx is not None
+        return int(self._word2idx(word).numpy())
+
     # ---------------------------------------------------------- persistence ---
 
     def save(self, directory: str | Path) -> None:

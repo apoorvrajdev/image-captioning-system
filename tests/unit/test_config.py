@@ -87,3 +87,44 @@ def test_modelconfig_independent_of_other_sections() -> None:
     assert m.vocabulary_size == 500
     # Defaults preserved
     assert m.max_length == 40
+
+
+# ---- Opt-in stability flags ------------------------------------------------
+
+
+def test_train_stability_defaults_preserve_notebook_parity() -> None:
+    t = TrainConfig()
+    assert t.label_smoothing == 0.0
+    assert t.lr_schedule == "constant"
+    assert t.warmup_steps == 0
+    assert t.honour_training_flag_in_test_step is False
+
+
+def test_label_smoothing_rejects_out_of_range() -> None:
+    with pytest.raises(ValidationError):
+        TrainConfig(label_smoothing=1.0)
+    with pytest.raises(ValidationError):
+        TrainConfig(label_smoothing=-0.1)
+
+
+def test_lr_schedule_rejects_unknown() -> None:
+    with pytest.raises(ValidationError):
+        TrainConfig(lr_schedule="square_wave")
+
+
+def test_decode_strategy_validates() -> None:
+    from captioning.config.schema import ServeConfig
+
+    with pytest.raises(ValidationError):
+        ServeConfig(decode_strategy="nucleus")
+    s = ServeConfig(decode_strategy="beam", beam_width=4)
+    assert s.beam_width == 4
+
+
+def test_beam_width_and_repetition_penalty_rejected_out_of_range() -> None:
+    from captioning.config.schema import ServeConfig
+
+    with pytest.raises(ValidationError):
+        ServeConfig(beam_width=0)
+    with pytest.raises(ValidationError):
+        ServeConfig(repetition_penalty=0.5)

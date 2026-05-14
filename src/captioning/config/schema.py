@@ -92,7 +92,15 @@ class ModelConfig(_StrictModel):
 
 
 class TrainConfig(_StrictModel):
-    """Optimisation hyperparameters."""
+    """Optimisation hyperparameters.
+
+    The Phase 1 baseline mirrors the IEEE notebook: constant LR, no label
+    smoothing, dropout-active validation (a notebook quirk preserved for
+    parity). The fields below the comment line are *opt-in* training-
+    stability knobs added during the caption-quality stabilisation phase.
+    Defaults keep every existing run byte-for-byte identical to the
+    notebook; flipping the flag in YAML opts a run into the modern recipe.
+    """
 
     epochs: int = 10
     batch_size: int = 64
@@ -102,15 +110,80 @@ class TrainConfig(_StrictModel):
     learning_rate: float = 1e-3  # Notebook uses Keras Adam default == 1e-3
     weights_filename: str = "model.h5"
 
+    # ---- opt-in stability flags (default values preserve notebook parity) ----
+    label_smoothing: float = 0.0
+    lr_schedule: str = "constant"  # "constant" | "cosine"
+    warmup_steps: int = 0
+    cosine_decay_steps: int | None = None  # If None, derived from epochs * steps_per_epoch
+    min_learning_rate: float = 0.0
+    honour_training_flag_in_test_step: bool = False  # parity-quirk override
+
+    @field_validator("label_smoothing")
+    @classmethod
+    def _validate_label_smoothing(cls, v: float) -> float:
+        if not 0.0 <= v < 1.0:
+            raise ValueError(f"label_smoothing must be in [0, 1), got {v}")
+        return v
+
+    @field_validator("lr_schedule")
+    @classmethod
+    def _validate_lr_schedule(cls, v: str) -> str:
+        if v not in {"constant", "cosine"}:
+            raise ValueError(f"lr_schedule must be 'constant' or 'cosine', got {v!r}")
+        return v
+
+    @field_validator("warmup_steps")
+    @classmethod
+    def _validate_warmup_steps(cls, v: int) -> int:
+        if v < 0:
+            raise ValueError(f"warmup_steps must be >= 0, got {v}")
+        return v
+
 
 class ServeConfig(_StrictModel):
     """Settings for the FastAPI backend (Phase 2). Defined here so the schema
-    is complete and tests don't have to mock a sub-config's existence."""
+    is complete and tests don't have to mock a sub-config's existence.
+
+    Decoding-related defaults are deliberately conservative: ``greedy`` stays
+    the default for byte-for-byte parity with the IEEE notebook. Switching to
+    beam at deploy time is a one-line YAML override:
+
+        serve:
+          decode_strategy: beam
+          beam_width: 4
+          length_penalty: 0.7
+          repetition_penalty: 1.1
+          no_repeat_ngram_size: 3
+    """
 
     max_upload_bytes: int = 10 * 1024 * 1024  # 10 MB
-    decode_strategy: str = "greedy"  # Phase 1b adds "beam"
+    decode_strategy: str = "greedy"
     beam_width: int = 3
+    length_penalty: float = 1.0
+    repetition_penalty: float = 1.0
+    no_repeat_ngram_size: int = 0
     cors_allowed_origins: list[str] = Field(default_factory=lambda: ["http://localhost:3000"])
+
+    @field_validator("decode_strategy")
+    @classmethod
+    def _validate_decode_strategy(cls, v: str) -> str:
+        if v not in {"greedy", "beam"}:
+            raise ValueError(f"decode_strategy must be 'greedy' or 'beam', got {v!r}")
+        return v
+
+    @field_validator("beam_width")
+    @classmethod
+    def _validate_beam_width(cls, v: int) -> int:
+        if v < 1:
+            raise ValueError(f"beam_width must be >= 1, got {v}")
+        return v
+
+    @field_validator("repetition_penalty")
+    @classmethod
+    def _validate_repetition_penalty(cls, v: float) -> float:
+        if v < 1.0:
+            raise ValueError(f"repetition_penalty must be >= 1.0 (1.0 disables it), got {v}")
+        return v
 
 
 class AppConfig(BaseSettings):

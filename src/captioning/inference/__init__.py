@@ -10,12 +10,14 @@ explicitly so it works inside a long-lived process (FastAPI lifespan).
     predictor.py      ``CaptionPredictor`` — singleton wrapper for the API
 """
 
+from captioning.inference.beam import generate_caption_beam
 from captioning.inference.greedy import generate_caption_greedy
 from captioning.inference.image_loader import load_image_from_path
 from captioning.inference.predictor import CaptionPredictor
 
 __all__ = [
     "CaptionPredictor",
+    "generate_caption_beam",
     "generate_caption_greedy",
     "load_image_from_path",
 ]

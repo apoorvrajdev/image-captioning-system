@@ -1,0 +1,84 @@
+# =============================================================================
+# configs/train/stabilized.yaml — first experimental run with the opt-in
+# training-stability primitives turned on.
+# -----------------------------------------------------------------------------
+# Identical to configs/base.yaml except for the four flags called out in the
+# `train:` section below. Every other field mirrors the IEEE notebook verbatim
+# so this run is comparable to the baseline at the same seed and architecture.
+#
+# Why a complete config (not a thin override)?
+#   scripts/train.py only accepts --config; there is no --override merge mode
+#   in the CLI (the README mentions one but it's aspirational, not implemented).
+#   Duplicating the values here is the smallest correct change that keeps
+#   base.yaml itself untouched — which was the explicit requirement for this
+#   experiment phase.
+#
+# Usage:
+#   python -m scripts.train --config configs/train/stabilized.yaml \
+#       --output-dir outputs/runs/stabilized
+#
+# Compare against the baseline by training the same code twice — once with
+# configs/base.yaml, once with this file — and diffing the resulting
+# results/<run_id>/metrics.json files.
+# =============================================================================
+
+data:
+  base_path: data/coco2017
+  annotations_filename: captions_train2017.json
+  images_subdir: train2017
+  sample_size: 120000           # Same sample as base.yaml — comparability matters
+  train_val_split: 0.8
+
+model:
+  embedding_dim: 512
+  units: 512
+  max_length: 40
+  vocabulary_size: 15000
+  encoder_num_heads: 1
+  decoder_num_heads: 8
+  decoder_dropout_inner: 0.3
+  decoder_dropout_outer: 0.5
+  decoder_attention_dropout: 0.1
+
+train:
+  epochs: 10
+  batch_size: 64
+  buffer_size: 1000
+  early_stopping_patience: 3
+  seed: 42
+  learning_rate: 0.001
+  weights_filename: model.h5
+
+  # ---- the four flags this experiment is actually testing -------------------
+  # Label smoothing 0.1 softens the cross-entropy target so the decoder
+  # cannot collapse onto a handful of high-frequency tokens. Standard
+  # transformer captioning recipe (BLIP, ViT-GPT2, GIT all use it).
+  label_smoothing: 0.1
+
+  # Warmup + cosine decay replaces the bare constant Adam LR. Transformers
+  # trained from scratch with no warmup tend to settle into a "safe captions"
+  # basin where every output looks like "a man standing ...". Cosine decay
+  # then anneals smoothly toward min_learning_rate.
+  lr_schedule: cosine
+  warmup_steps: 500             # ~1/3 of an epoch at batch 64, sample 120k
+  cosine_decay_steps: null      # null -> trainer derives from steps_per_epoch * epochs
+  min_learning_rate: 0.0
+
+  # Restore conventional behaviour: dropout OFF during validation, accuracy
+  # tracker weighted by token count. This gives a clean val_loss signal so
+  # EarlyStopping fires on a real plateau rather than on dropout noise.
+  honour_training_flag_in_test_step: true
+
+serve:
+  max_upload_bytes: 10485760
+  decode_strategy: greedy       # Decode strategy is selected at evaluate time
+  beam_width: 4                 # Stored defaults for `scripts.evaluate --decode-strategy beam`
+  length_penalty: 0.7
+  repetition_penalty: 1.0
+  no_repeat_ngram_size: 3
+  cors_allowed_origins:
+    - http://localhost:3000
+    - http://localhost:5173
+    - http://localhost:5174
+    - http://127.0.0.1:5173
+    - http://127.0.0.1:5174

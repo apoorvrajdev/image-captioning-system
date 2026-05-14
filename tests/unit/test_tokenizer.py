@@ -65,3 +65,15 @@ def test_max_length_is_respected(tiny_caption_corpus: list[str]) -> None:
     long_caption = " ".join(["[start]"] + ["word"] * 30 + ["[end]"])
     ids = tok.encode([long_caption])
     assert ids.shape == (1, 10)
+
+
+def test_word_to_id_round_trips_with_decode(tiny_caption_corpus: list[str]) -> None:
+    """``word_to_id`` is the inverse of ``decode_id`` for in-vocabulary tokens."""
+    tok = CaptionTokenizer(vocab_size=200, max_length=20)
+    tok.fit(tiny_caption_corpus)
+    start_id = tok.word_to_id("[start]")
+    end_id = tok.word_to_id("[end]")
+    assert isinstance(start_id, int)
+    assert start_id != end_id
+    assert tok.decode_id(start_id) == "[start]"
+    assert tok.decode_id(end_id) == "[end]"

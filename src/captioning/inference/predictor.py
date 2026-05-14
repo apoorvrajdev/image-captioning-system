@@ -5,8 +5,9 @@ Why a class around the existing functions:
       model across every request. A predictor object is the natural home for
       "loaded model + loaded tokenizer + decoded config".
     * Tests can construct one with stub objects without monkey-patching globals.
-    * Phase 1b adds beam search; Phase 3 adds a model registry. Both extend
-      this class, not the functional callsites.
+    * Multiple decode strategies (greedy, beam) live behind the same
+      ``predict_tensor`` / ``predict_path`` API — callers do not need to know
+      which one is active.
 
 Construction is *not* the same as readiness: ``CaptionPredictor.warmup()``
 runs one inference on a dummy tensor so the first real request doesn't pay
@@ -19,12 +20,15 @@ from pathlib import Path
 from typing import Literal
 
 from captioning.config.schema import AppConfig
+from captioning.inference.beam import generate_caption_beam
 from captioning.inference.greedy import generate_caption_greedy
 from captioning.inference.image_loader import load_image_from_path
 from captioning.preprocessing.tokenizer import CaptionTokenizer
 from captioning.utils.logging import get_logger
 
 log = get_logger(__name__)
+
+DecodeStrategy = Literal["greedy", "beam"]
 
 
 class CaptionPredictor:
@@ -36,24 +40,41 @@ class CaptionPredictor:
         tokenizer: CaptionTokenizer,
         config: AppConfig,
         *,
-        decode_strategy: Literal["greedy"] = "greedy",
+        decode_strategy: DecodeStrategy = "greedy",
+        beam_width: int = 3,
+        length_penalty: float = 1.0,
+        repetition_penalty: float = 1.0,
+        no_repeat_ngram_size: int = 0,
     ) -> None:
         """Args:
         model: Loaded ``ImageCaptioningModel``. Caller is responsible for
             having called ``model.load_weights(...)`` already.
         tokenizer: Fitted ``CaptionTokenizer``.
         config: Validated ``AppConfig`` — ``model.max_length`` is consumed.
-        decode_strategy: Phase 1 supports only ``"greedy"``. Phase 1b adds
-            ``"beam"``; this argument is here so the signature is stable.
+        decode_strategy: ``"greedy"`` (argmax per step, byte-for-byte parity
+            with the IEEE notebook) or ``"beam"`` (beam search with length
+            and repetition controls).
+        beam_width: Beam width when ``decode_strategy == "beam"``. Ignored
+            for greedy.
+        length_penalty: GNMT length penalty; ``0.0`` disables, ``0.6-1.0`` is
+            the common range.
+        repetition_penalty: HF-style multiplicative penalty on already-seen
+            tokens; ``1.0`` disables.
+        no_repeat_ngram_size: If > 0, blocks any token that would repeat an
+            n-gram already in the partial caption.
         """
-        if decode_strategy != "greedy":
-            raise NotImplementedError(
-                f"Phase 1 supports decode_strategy='greedy' only, got {decode_strategy!r}"
-            )
+        if decode_strategy not in {"greedy", "beam"}:
+            raise ValueError(f"decode_strategy must be 'greedy' or 'beam', got {decode_strategy!r}")
+        if beam_width < 1:
+            raise ValueError(f"beam_width must be >= 1, got {beam_width}")
         self.model = model
         self.tokenizer = tokenizer
         self.config = config
-        self.decode_strategy = decode_strategy
+        self.decode_strategy: DecodeStrategy = decode_strategy
+        self.beam_width = beam_width
+        self.length_penalty = length_penalty
+        self.repetition_penalty = repetition_penalty
+        self.no_repeat_ngram_size = no_repeat_ngram_size
 
     @classmethod
     def from_artifacts(
@@ -61,17 +82,18 @@ class CaptionPredictor:
         weights_path: str | Path,
         tokenizer_dir: str | Path,
         config: AppConfig,
+        *,
+        decode_strategy: DecodeStrategy | None = None,
+        beam_width: int | None = None,
+        length_penalty: float | None = None,
+        repetition_penalty: float | None = None,
+        no_repeat_ngram_size: int | None = None,
     ) -> CaptionPredictor:
         """Load weights and tokenizer from disk and return a ready predictor.
 
-        Args:
-            weights_path: Path to ``model.h5`` (notebook cell 30 saved this).
-            tokenizer_dir: Directory containing ``vocab.pkl`` (and ``vocab.json``).
-            config: Validated ``AppConfig``. ``model.max_length`` and
-                ``model.vocabulary_size`` must match the trained weights.
-
-        Returns:
-            A ``CaptionPredictor`` ready for inference.
+        Decoding knobs fall back to :class:`ServeConfig` defaults when not
+        passed explicitly — keeping CLI flags overridable while still letting
+        deploy-time YAML drive the production behaviour.
         """
         from captioning.models.factory import build_caption_model
 
@@ -86,19 +108,56 @@ class CaptionPredictor:
         cls._dummy_pass(model, config)
         model.load_weights(str(weights_path))
 
-        log.info("predictor_loaded", weights=str(weights_path))
-        return cls(model=model, tokenizer=tokenizer, config=config)
+        resolved_strategy: DecodeStrategy = (
+            decode_strategy or config.serve.decode_strategy  # type: ignore[assignment]
+        )
+        log.info(
+            "predictor_loaded",
+            weights=str(weights_path),
+            decode_strategy=resolved_strategy,
+        )
+        return cls(
+            model=model,
+            tokenizer=tokenizer,
+            config=config,
+            decode_strategy=resolved_strategy,
+            beam_width=beam_width if beam_width is not None else config.serve.beam_width,
+            length_penalty=(
+                length_penalty if length_penalty is not None else config.serve.length_penalty
+            ),
+            repetition_penalty=(
+                repetition_penalty
+                if repetition_penalty is not None
+                else config.serve.repetition_penalty
+            ),
+            no_repeat_ngram_size=(
+                no_repeat_ngram_size
+                if no_repeat_ngram_size is not None
+                else config.serve.no_repeat_ngram_size
+            ),
+        )
 
     def warmup(self) -> None:
         """Run one dummy inference so the first real request is fast."""
         import tensorflow as tf
 
         dummy = tf.zeros((299, 299, 3), dtype=tf.float32)
-        _ = generate_caption_greedy(self.model, self.tokenizer, dummy, self.config.model.max_length)
-        log.info("predictor_warmed_up")
+        _ = self.predict_tensor(dummy)
+        log.info("predictor_warmed_up", decode_strategy=self.decode_strategy)
 
     def predict_tensor(self, image_tensor) -> str:
         """Generate a caption from an already-preprocessed image tensor."""
+        if self.decode_strategy == "beam":
+            return generate_caption_beam(
+                self.model,
+                self.tokenizer,
+                image_tensor,
+                self.config.model.max_length,
+                beam_width=self.beam_width,
+                length_penalty=self.length_penalty,
+                repetition_penalty=self.repetition_penalty,
+                no_repeat_ngram_size=self.no_repeat_ngram_size,
+            )
         return generate_caption_greedy(
             self.model,
             self.tokenizer,
