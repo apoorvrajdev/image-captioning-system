@@ -118,6 +118,39 @@ Outputs above are from the IEEE notebook; the modular pipeline reproduces these 
 
 ---
 
+## Current model quality status
+
+The frontend, backend, and inference pipeline are operational end-to-end against the modular package, but **caption quality from the current modular pipeline is still below expectations**. The IEEE notebook reported BLEU-4 ~24; a freshly trained checkpoint produced by the modular trainer has not yet reproduced that figure on COCO. The serving stack is production-style and ready for a real checkpoint — what is missing is the checkpoint itself.
+
+Current engineering effort is focused on:
+
+- **Training stability** — diagnosing why early modular training runs collapse onto a small set of high-frequency captions instead of generalising.
+- **Evaluation correctness** — moving from a single BLEU score to a full corpus-level metric suite with deterministic tokenisation, so two runs against the same slice are mechanically comparable.
+- **Decoding improvements** — replacing greedy-only generation with beam search, repetition controls, and length normalisation.
+- **Reproducible benchmarking** — emitting one consistent artefact set per evaluation run so any two runs (or any two models) can be diffed without bespoke parsing per checkpoint.
+
+The weights currently committed under [`models/v1.0.0/`](models/v1.0.0/) are the **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py): the architecture is wired correctly, but every weight is randomly initialised. They exist to exercise the serving stack — lifespan, predictor wiring, multipart upload, frontend integration — before a real COCO-trained checkpoint is dropped in. Captions returned by the live API today will therefore look like noise; that is the *intended* state of the bootstrap path, not a regression. Poor caption quality at this stage is expected until a properly COCO-trained checkpoint replaces those files.
+
+This gap is being addressed through the **stabilized training workflow** introduced at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml), which gates the convergence-stability primitives behind explicit, ablatable flags rather than rewriting the baseline.
+
+### Accuracy investigation (ongoing)
+
+The shift from "notebook reproduction" to "modular pipeline that *also* trains well" surfaced several concrete findings, each addressed in code rather than in commentary:
+
+- **Greedy decoding limited caption quality and diversity.** Argmax-per-step decoding routinely picked the locally-most-probable token regardless of how that affected the overall sequence likelihood, biasing outputs toward a small "safe captions" basin. Beam-search infrastructure now lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) and dispatches through `CaptionPredictor` alongside the existing greedy path; decode strategy is selectable per inference call and per evaluation run.
+- **BLEU-only evaluation hid behaviour the score did not reflect.** CIDEr, METEOR, and ROUGE-L are implemented under [`src/captioning/evaluation/`](src/captioning/evaluation/) (`cider.py`, `meteor.py`, `rouge.py`) and run through the same corpus-level runner that already produces BLEU-1..4. Every evaluation now emits the full metric set in a single `metrics.json`.
+- **Validation-time dropout parity quirks** inherited from the notebook (`compute_loss_and_acc` ignoring its `training` argument, so dropout stayed active during validation) were identified during the parity audit. They are now gated behind an explicit config flag (`train.honour_training_flag_in_test_step`) so notebook parity is preserved by default and the conventional dropout-free validation path is opt-in via [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml).
+- **Training stabilization experiments** were introduced as opt-in flags so they can be ablated cleanly rather than entangled with the baseline:
+  - label smoothing (`train.label_smoothing`),
+  - cosine LR schedule (`train.lr_schedule: cosine`),
+  - warmup steps (`train.warmup_steps`),
+  - dropout-free validation path (`train.honour_training_flag_in_test_step`).
+- A complete experimental training config — not a thin override — lives at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml). It is byte-for-byte identical to [`configs/base.yaml`](configs/base.yaml) except for the four flags above, so any quality delta between the two runs is attributable to those flags alone.
+
+These changes are aimed at convergence stability and caption generalisation **before** Phase 3 model upgrades. Comparing the original CNN + Transformer against modern multimodal baselines is only meaningful once the original is trained to the strongest version of itself the architecture can support.
+
+---
+
 ## Project structure
 
 ```
@@ -133,8 +166,9 @@ image-captioning-system/
 │   ├── models/         encoder_cnn.py · transformer_encoder.py · embeddings.py
 │   │                   transformer_decoder.py · captioning_model.py · factory.py
 │   ├── training/       losses.py · callbacks.py · trainer.py
-│   ├── inference/      image_loader.py · greedy.py · predictor.py
-│   ├── evaluation/     bleu.py
+│   ├── inference/      image_loader.py · greedy.py · beam.py · predictor.py
+│   ├── evaluation/     bleu.py · cider.py · meteor.py · rouge.py
+│   │                   runner.py · benchmark.py · inspection.py · tokenization.py
 │   └── utils/          logging.py · seed.py · hashing.py
 │
 ├── backend/                                     # Phase 2A — FastAPI inference service
@@ -170,10 +204,13 @@ image-captioning-system/
 │
 ├── configs/
 │   ├── base.yaml                                # IEEE hyperparameters (cell 6 mirror)
-│   └── train/debug.yaml                         # CI smoke override
+│   └── train/
+│       ├── debug.yaml                           # CI smoke override
+│       └── stabilized.yaml                      # Phase 1b stability experiment (label smoothing, cosine LR, warmup)
 │
 ├── scripts/
 │   ├── train.py · evaluate.py · predict.py
+│   ├── inspect_predictions.py                   # Per-sample diagnostics + diagnostics.jsonl writer
 │   ├── bootstrap_dev_artifacts.py               # Smoke-test artefacts so the API can boot pre-training
 │   └── notebook_module_audit.py                 # Parity gate vs. notebook
 │
@@ -513,17 +550,40 @@ This is what separates this repository from a notebook conversion:
 ## Limitations
 
 - The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines (BLIP, ViT-GPT2, GIT) for side-by-side comparison.
-- Greedy decoding only; beam search is a Phase 1b addition.
+- The modular pipeline has not yet reproduced the IEEE notebook's BLEU-4 ~24 on a freshly trained checkpoint; see [Current model quality status](#current-model-quality-status). The bootstrap weights shipped under [`models/v1.0.0/`](models/v1.0.0/) are intentionally random and exist only for architectural smoke testing.
+- Beam search is implemented ([`inference/beam.py`](src/captioning/inference/beam.py)) and selectable per call/run, but a head-to-head benchmark against greedy on a real checkpoint is part of the in-progress Phase 1b validation, not a published result yet.
+- CIDEr / METEOR / ROUGE-L are implemented ([`evaluation/`](src/captioning/evaluation/)) and emitted into `metrics.json` per run; finalised numbers from the modular pipeline are pending a stabilized COCO-trained checkpoint.
 - Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless, removed in Phase 1b).
-- BLEU is the only metric in v1; CIDEr / METEOR / ROUGE-L slot into the same runner interface in Phase 1b.
 
 These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOTES.md` § Technical debt](docs/PHASE_1_NOTES.md#technical-debt-remaining).
 
 ---
 
+## Experimental evaluation pipeline
+
+The repository is evolving from a "research notebook reproduction" into a reproducible experimentation platform. Evaluation is no longer a single BLEU number printed at the end of training — it is a structured set of artefacts that any future run, including the Phase 3 multimodal baselines, can be diffed against.
+
+The pieces:
+
+- **[`scripts/evaluate.py`](scripts/evaluate.py)** — single entrypoint for full corpus evaluation. Loads a checkpoint + tokenizer, runs decoding (greedy or beam) over the COCO validation slice, computes BLEU-1..4 / CIDEr / METEOR / ROUGE-L, and writes a versioned artefact set under `results/<run_id>/`.
+- **[`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)** — per-sample diagnostic view. Prints N random predictions vs. references with sentence-level BLEU-4 / ROUGE-L, prediction length, longest repeated-token run, and a set of failure flags (`empty` / `very_short` / `repetitive` / `under_length`). Used when the aggregate metric moves but the qualitative behaviour does not.
+- **Benchmark runner utilities** — [`src/captioning/evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py) defines `RunMeta` and `write_run_artifacts(...)`, the contract every evaluation run honours. Phase 3 cross-model comparison code joins multiple `results/<run_id>/` directories without bespoke parsers per model.
+- **Greedy vs. beam evaluation support** — the same evaluator accepts `--decode-strategy greedy|beam` plus beam-search controls (`--beam-width`, `--length-penalty`, `--no-repeat-ngram-size`), so a single command-line difference produces directly comparable artefact sets for the same checkpoint. Beam-search implementation lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py).
+- **`metrics.json` outputs** — every evaluation writes a typed metric report (BLEU-1..4, ROUGE-L, METEOR, CIDEr) plus run metadata in machine-readable form. The Phase 3 comparison plots will read these files directly; no per-run hand-typing of numbers into spreadsheets.
+- **`diagnostics.jsonl` inspection flow** — the same per-sample diagnostic rows that `scripts/inspect_predictions.py` prints to stdout are emitted as JSONL alongside the metrics. The downstream loader is whatever pandas / DuckDB query happens to be useful that day, instead of a bespoke parser per investigation.
+
+### Current limitations
+
+- **No fresh fully-trained stabilized checkpoint is committed yet.** The stabilized training workflow exists in code; the resulting weights file does not yet sit under [`models/v1.0.0/`](models/v1.0.0/).
+- **Current repo weights are bootstrap/dev artefacts** — see [Current model quality status](#current-model-quality-status). They exist for serving-stack smoke tests, not for producing usable captions.
+- **Benchmark numbers from the modular pipeline are not yet finalized.** The metric harness is in place; the matching checkpoint to publish numbers from is not.
+- **Phase 3 multimodal baselines (BLIP / ViT-GPT2 / GIT) are planned** specifically because the original CNN + Transformer architecture has a quality ceiling that no amount of decoding tuning or schedule tweaking will lift past modern foundation-model baselines. Stabilization here is the floor; Phase 3 is the path past it.
+
+---
+
 ## Roadmap
 
-- **Phase 1b** — beam search, CIDEr / METEOR / ROUGE-L, masked accuracy parity-fix, label smoothing, warmup + cosine LR schedule.
+- **Phase 1b** (in progress) — beam search ✅, CIDEr / METEOR / ROUGE-L ✅ ([`evaluation/cider.py`](src/captioning/evaluation/cider.py), [`meteor.py`](src/captioning/evaluation/meteor.py), [`rouge.py`](src/captioning/evaluation/rouge.py)), stabilized training workflow ✅ ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)), evaluation benchmark runner ✅ ([`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py)), prediction inspection tooling ✅ ([`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)). Full retraining + benchmark validation on COCO is still in progress — the metric harness is in place, the matching checkpoint is not yet committed.
 - **Phase 2A** ✅ — FastAPI backend, lifespan-managed predictor singleton, multipart inference endpoint, structured logging + request IDs, Pydantic schemas, Swagger/OpenAPI docs, health/readiness probe.
 - **Phase 2B** ✅ — React 19 + Vite 8 + Tailwind v4 SPA, drag/drop upload UX, live API integration against `POST /v1/captions`, env-driven `VITE_API_BASE`, `AbortController` timeouts, typed `ApiError` classification, polled health badge with auto-recovery, CORS allow-list wired through the backend YAML config.
 - **Phase 2C** — Deployment integration: HuggingFace Spaces backend, Vercel-hosted frontend, production CORS allow-list, GitHub Actions CI/CD across both packages.
@@ -548,6 +608,12 @@ Detailed plan: [`docs/restructure-plan.md`](docs/restructure-plan.md).
 - Responsive Tailwind v4 inference interface — single-column layout under the `lg` breakpoint, sticky header with live status, modular component split under [`frontend/src/components/`](frontend/src/components/).
 - Typed API communication — SPA consumes the same Pydantic `CaptionResponse` shape the backend emits; caption, `model_version`, `decode_strategy`, `latency_ms`, and `request_id` render directly from the wire payload.
 - Production-style frontend architecture — dedicated [`services/api.js`](frontend/src/services/api.js) boundary, env-driven `VITE_API_BASE` with safe fallback, lint-clean flat ESLint config, static-asset build via `npm run build`.
+- Beam-search decoding — [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) dispatched through `CaptionPredictor` alongside greedy, with length penalty, repetition penalty, and no-repeat n-gram blocking.
+- Multi-metric evaluation — corpus BLEU-1..4 plus CIDEr / METEOR / ROUGE-L under a single runner ([`src/captioning/evaluation/`](src/captioning/evaluation/)), emitted as `metrics.json` per run.
+- Benchmark runner — versioned `results/<run_id>/` artefact contract via [`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py), designed so Phase 3 cross-model comparison can join runs without bespoke parsers.
+- Prediction inspection tooling — [`scripts/inspect_predictions.py`](scripts/inspect_predictions.py) for per-sample sentence-level BLEU / ROUGE-L, length and repetition diagnostics, and failure-flag breakdown.
+- Stabilized training configs — opt-in label smoothing, cosine LR schedule, warmup steps, and dropout-free validation behind explicit flags in [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml).
+- Reproducible evaluation pipeline — `metrics.json` + `predictions.jsonl` + `diagnostics.jsonl` + `run_meta.json` + `report.md` per run, so any two runs can be diffed mechanically rather than re-typed into a spreadsheet.
 
 ---
 
