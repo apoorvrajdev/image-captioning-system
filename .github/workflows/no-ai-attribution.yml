@@ -1,0 +1,100 @@
+name: no-ai-attribution
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  scan-commits:
+    name: Scan commit messages for AI attribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine commit range
+        id: range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+            echo "range=${base}..${head}" >>"$GITHUB_OUTPUT"
+          elif [ -n "${{ github.event.before }}" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
+            echo "range=${{ github.event.before }}..${{ github.sha }}" >>"$GITHUB_OUTPUT"
+          else
+            echo "range=${{ github.sha }}~1..${{ github.sha }}" >>"$GITHUB_OUTPUT"
+          fi
+
+      - name: Scan commit messages
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: |
+          set -eu
+
+          # Patterns indicating AI co-authorship / Anthropic-tooling metadata.
+          # Bare "Claude" / "Anthropic" are intentionally NOT blocked so that
+          # legitimate product/roadmap references (e.g. "Anthropic Claude
+          # vision API integration") remain commitable.
+          patterns='
+          co-authored-by:
+          noreply@anthropic\.com
+          @anthropic\.com
+          generated[[:space:]]+with[[:space:]]+\[?claude
+          claude[[:space:]]+code
+          \[claude[[:space:]]+code\]
+          🤖[[:space:]]*generated
+          🤖.*claude
+          '
+
+          echo "Scanning range: ${RANGE}"
+          commits=$(git log --pretty=format:%H "${RANGE}" || true)
+          if [ -z "${commits}" ]; then
+            echo "No new commits in range — nothing to scan."
+            exit 0
+          fi
+
+          fail=0
+          for sha in ${commits}; do
+            msg=$(git log -1 --pretty=%B "${sha}")
+            for pat in ${patterns}; do
+              if printf '%s' "${msg}" | grep -qiE "${pat}"; then
+                echo "::error::Commit ${sha} matches forbidden pattern: ${pat}"
+                echo "----- offending commit message -----"
+                printf '%s\n' "${msg}"
+                echo "------------------------------------"
+                fail=1
+                break
+              fi
+            done
+          done
+
+          if [ "${fail}" -ne 0 ]; then
+            echo
+            echo "AI attribution detected in one or more commit messages."
+            echo "This repository is intentionally solo-authored."
+            exit 1
+          fi
+          echo "✓ No AI attribution detected."
+
+      - name: Scan author/committer identity
+        env:
+          RANGE: ${{ steps.range.outputs.range }}
+        run: |
+          set -eu
+          # Reject any commit authored or committed by an *@anthropic.com
+          # identity. Plain author-name matching ("Claude") is too broad —
+          # email is the reliable signal.
+          bad=$(git log --pretty=format:'%H %ae %ce' "${RANGE}" \
+                  | grep -iE '@anthropic\.com' || true)
+          if [ -n "${bad}" ]; then
+            echo "::error::Commits with Anthropic-tooling identity detected:"
+            printf '%s\n' "${bad}"
+            exit 1
+          fi
+          echo "✓ No Anthropic-domain author/committer identities found."
