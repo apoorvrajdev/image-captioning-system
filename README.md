@@ -550,9 +550,9 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 - [ ] **WS-E** — Frontend deploy to Vercel (static SPA, `VITE_API_BASE` baked at build time, SPA rewrites)
 - [ ] **WS-F** — Production CORS: add the deployed Vercel origin to `serve.cors_allowed_origins`
 - [ ] **WS-G** — GitHub Actions CI/CD:
-  - `ci.yml` — Python quality matrix (ruff, mypy, pytest on 3.10/3.11/3.12), notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
-  - `deploy-backend.yml` — gated on `needs: ci`, pushes to the HF Space
-  - `deploy-frontend.yml` *(optional)* — Vercel-native GitHub integration is the recommended path
+  - [x] `ci.yml` — Python quality (ruff lint + format check, mypy), pytest matrix on 3.10/3.11/3.12, notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
+  - [ ] `deploy-backend.yml` — gated on `needs: ci`, pushes to the HF Space
+  - [ ] `deploy-frontend.yml` *(optional)* — Vercel-native GitHub integration is the recommended path
 - [ ] **WS-H** — README "Live Demo" section (badges swapped to live HF Space + Vercel URLs) + `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` + `docs/CI.md`
 
 ### Phase 3 — Multimodal baselines ⏳ (planned)
