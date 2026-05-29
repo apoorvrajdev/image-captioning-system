@@ -211,6 +211,7 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests", "backend/app/tests"]
+pythonpath = ["backend"]         # Lets `from app.* import ...` resolve in tests
 addopts = [
     "-ra",                       # Show short summary for non-passing tests
     "--strict-markers",
