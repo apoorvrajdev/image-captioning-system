@@ -1,124 +1,183 @@
-# Image Captioning System
+<h1 align="center">Image Captioning System</h1>
 
-> CNN + Transformer architecture for visual-to-language generation, restructured from an IEEE-published research notebook into a production-style multimodal AI codebase.
-
-<p align="left">
-  <img alt="Python 3.10+"   src="https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white">
-  <img alt="TensorFlow 2.15" src="https://img.shields.io/badge/TensorFlow-2.15-FF6F00?logo=tensorflow&logoColor=white">
-  <img alt="Pydantic v2"    src="https://img.shields.io/badge/Pydantic-v2-E92063?logo=pydantic&logoColor=white">
-  <img alt="FastAPI ready"  src="https://img.shields.io/badge/FastAPI-ready-009688?logo=fastapi&logoColor=white">
+<p align="center">
+  <strong>CNN + Transformer image-to-language pipeline, lifted from an IEEE-published research notebook into a typed, tested, full-stack production codebase.</strong>
 </p>
 
-<p align="left">
-  <img alt="React 19"            src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black">
-  <img alt="Vite 8"              src="https://img.shields.io/badge/Vite-8-646CFF?logo=vite&logoColor=white">
-  <img alt="Frontend integrated" src="https://img.shields.io/badge/frontend-integrated-brightgreen">
-  <img alt="API connected"       src="https://img.shields.io/badge/API-connected-009688">
+<p align="center">
+  <img alt="Python 3.10+"     src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
+  <img alt="TensorFlow 2.15"  src="https://img.shields.io/badge/TensorFlow-2.15-FF6F00?style=flat-square&logo=tensorflow&logoColor=white">
+  <img alt="FastAPI"          src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="Pydantic v2"      src="https://img.shields.io/badge/Pydantic-v2-E92063?style=flat-square&logo=pydantic&logoColor=white">
+  <img alt="React 19"         src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
+  <img alt="Vite 8"           src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white">
 </p>
 
-<p align="left">
-  <img alt="Ruff"         src="https://img.shields.io/badge/lint-ruff-261230?logo=ruff&logoColor=white">
-  <img alt="mypy"         src="https://img.shields.io/badge/typed-mypy-1F5082">
-  <img alt="Tests"        src="https://img.shields.io/badge/tests-37%20passing-brightgreen">
-  <img alt="Pre-commit"   src="https://img.shields.io/badge/pre--commit-enabled-FAB040?logo=pre-commit&logoColor=white">
+<p align="center">
+  <img alt="Ruff"             src="https://img.shields.io/badge/lint-ruff-261230?style=flat-square&logo=ruff&logoColor=white">
+  <img alt="mypy strict"      src="https://img.shields.io/badge/typed-mypy%20strict-1F5082?style=flat-square">
+  <img alt="Tests"            src="https://img.shields.io/badge/tests-90%20passing-brightgreen?style=flat-square">
+  <img alt="Pre-commit"       src="https://img.shields.io/badge/pre--commit-enabled-FAB040?style=flat-square&logo=pre-commit&logoColor=white">
+  <img alt="IEEE Published"   src="https://img.shields.io/badge/IEEE-published-00629B?style=flat-square&logo=ieee&logoColor=white">
+  <img alt="License: MIT"     src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
 </p>
 
-<p align="left">
-  <img alt="IEEE Published" src="https://img.shields.io/badge/IEEE-published-00629B?logo=ieee&logoColor=white">
-  <img alt="License: MIT"   src="https://img.shields.io/badge/license-MIT-lightgrey">
-  <img alt="Phase 1"        src="https://img.shields.io/badge/Phase%201-complete-brightgreen">
-  <img alt="Phase 2A"       src="https://img.shields.io/badge/Phase%202A-complete-brightgreen">
-  <img alt="Phase 2B"       src="https://img.shields.io/badge/Phase%202B-complete-brightgreen">
+<p align="center">
+  A deliberately scoped multimodal-AI showcase that takes a published research notebook and turns it into the kind of codebase a serving team would actually maintain — typed configuration, a structured FastAPI inference service, a polished React SPA, a parity-audit gate against the original notebook, and an honest roadmap that names what is shipped and what is not.
 </p>
 
 ---
 
-## Overview
+## Status
 
-This repository implements an **end-to-end image-captioning pipeline** built around an InceptionV3 visual encoder and a custom multi-head Transformer decoder. The architecture is the basis of the IEEE-published paper *“AI Narratives: Bridging Visual Content and Linguistic Expression”*; this codebase lifts the original Kaggle research notebook into a typed, tested, configuration-driven Python package that can be reused from CLI, scripts, or a future serving layer.
+> 🚧 **Active build.** The research → modular conversion (Phase 1) is complete and the full inference stack (Phase 2A backend + 2B frontend) is operational end-to-end: a React 19 / Vite 8 SPA posts multipart uploads to `POST /v1/captions`, the FastAPI service returns a typed `CaptionResponse`, and the lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check. A four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C (public deployment) is now in flight — workstream **D (backend test suite)** is complete: 12 new FastAPI route tests use a duck-typed fake predictor service to cover the full 200 / 400 / 413 / 415 / 422 / 503 contract end-to-end without loading TensorFlow, dropping the backend slice from a cold-start liability to a 0.3-second suite. The remaining workstreams (Dockerfile, HuggingFace Hub weights hosting, HF Spaces deploy, Vercel deploy, production CORS, GitHub Actions CI/CD, runbook) are sequenced in the [Roadmap](#-roadmap) below.
 
-With Phase 2B complete, the system now runs as a **full-stack inference workflow**: a React/Vite frontend issues multipart uploads to the FastAPI `POST /v1/captions` endpoint, the backend predictor returns a typed response, and the end-to-end image-to-caption interaction is operational in the browser.
-
-The repository is structured in deliberate phases:
-
-| Phase | Focus | Status |
-|---|---|---|
-| 0 — Bootstrap | Tooling, packaging, freeze policy | ✅ complete |
-| 1 — Modularisation | Notebook → typed Python package, parity audit, unit tests | ✅ complete |
-| 2A — Backend Infrastructure | FastAPI inference API, structured logging, schemas, health checks, Swagger/OpenAPI, predictor lifecycle | ✅ complete |
-| 2B — Frontend UI | React/Vite frontend + upload UX + API integration | ✅ complete |
-| 3 — Multimodal baselines | BLIP / ViT-GPT2 / GIT side-by-side comparison | ⏳ planned |
-| 4 — Observability | Sentry, Prometheus metrics, ADRs | ⏳ planned |
-
-Phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md).
+> ⚠️ **Caption quality disclaimer.** The weights committed under [`models/v1.0.0/`](models/v1.0.0/) are **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py): the architecture is wired correctly but every weight is randomly initialised. They exist to exercise the serving stack (lifespan, predictor wiring, multipart upload, frontend integration) before a real COCO-trained checkpoint is dropped in. Live captions therefore look like noise today — that is the *intended* state of the bootstrap path, not a regression. See [Current model quality status](#-current-model-quality-status) for what is being done about it.
 
 ---
 
-## Research backing
+## 📌 What Is This Project?
 
-The model architecture and the BLEU-4 ~24 baseline below come from the IEEE paper and its accompanying notebook:
+Image Captioning System is a research-to-production conversion of the IEEE paper *"AI Narratives: Bridging Visual Content and Linguistic Expression"*. The original work — a Kaggle notebook training an InceptionV3-encoder + multi-head Transformer-decoder on MS COCO — is preserved verbatim as the canonical research artefact. Around it sits a typed Python package, a FastAPI inference service, and a React SPA that together turn the published model into something a serving team could actually run, version, and reason about.
 
-- **Paper:** [AI Narratives: Bridging Visual Content and Linguistic Expression](https://ieeexplore.ieee.org/document/10675203) (IEEE)
-- **Original notebook:** [Kaggle — image-captioning-using-dl](https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl)
-- **Frozen artefact in this repo:** [`notebooks/01_ieee_inceptionv3_transformer.ipynb`](notebooks/01_ieee_inceptionv3_transformer.ipynb) — byte-stable; CI enforces its SHA-256.
-
-The notebook is preserved verbatim as the canonical research artefact. Improvements happen in the modular package; the notebook does not.
+It is **not** a hosted product (yet — Phase 2C is shipping that), and it is **not** a thin Streamlit wrapper around `model.predict`. What this project *is* is a deliberate engineering showcase aimed at hiring teams evaluating ML, multimodal-AI, and backend skills, and at anyone who has ever wondered what it actually takes to lift a research notebook into a codebase the rest of an engineering org can build on. Every architectural decision in this repository is one I can defend in an interview.
 
 ---
 
-## Architecture
+## 🎯 Why It Matters
+
+Research notebooks and production ML systems are different artefacts with different audiences. A notebook proves an idea works. A production system has to **survive being maintained** — by people who did not write it, on schedules nobody planned, against inputs the original author never anticipated. The hardest part of an ML career is not getting a model to converge once; it is making the resulting pipeline *legible, typed, testable, deployable, and replaceable* without losing the behaviour the paper claimed.
+
+This project demonstrates that conversion end-to-end at a scale one engineer can build and reason about:
+
+- **Parity-gated refactor** — the notebook stays byte-stable and a four-stage audit script asserts the modular package reproduces the notebook's behaviour at every behavioural seam.
+- **Strict typed configuration** — Pydantic v2 with `extra="forbid"` so a typo in a hyperparameter is a load-time error, not a silent training run that produces wrong numbers.
+- **Lifespan-managed inference** — one warm `CaptionPredictor` shared across every HTTP request, not a graph rebuilt per call.
+- **Train/serve shared preprocessing** — the same `preprocess_image_tensor` runs in `tf.data` pipelines and at inference, so the bytes that enter the model in training are byte-identical to the bytes that enter it at serve time.
+- **Stabilized training experiments behind ablatable flags** — every quality intervention is opt-in, so any delta between two runs is attributable to one named change rather than a tangled rewrite.
+- **Reproducible benchmarking** — every evaluation writes a machine-readable `metrics.json` + `diagnostics.jsonl` set, so two checkpoints (or one checkpoint with two decoders) can be diffed without bespoke parsers.
+
+---
+
+## 💡 What This Project Demonstrates
+
+- Lifting a research notebook into an **installable, typed Python package** (`src/` layout) without breaking the published architecture.
+- A production-style **FastAPI** inference service with lifespan-managed model loading, structured logging, request-ID propagation, and a typed Pydantic schema for every payload.
+- A polished **React 19 + Vite 8 + Tailwind v4** SPA with drag-and-drop upload, client-side validation, `AbortController` timeouts, typed `ApiError` classification, and a polled health badge.
+- **Pydantic v2 strict configuration** with YAML + env-var overrides and `extra="forbid"` to eliminate the silent-defaults failure mode.
+- **Custom multi-head Transformer decoder** with masked sparse-categorical cross-entropy, masked accuracy, learned (not sinusoidal) positional embeddings, and the IEEE paper's exact dropout / head configuration.
+- **Beam search decoder** with length normalisation and n-gram repetition suppression alongside greedy, selectable per inference call and per evaluation run.
+- **Corpus-level metric suite** — BLEU-1..4 (sacrebleu), CIDEr, METEOR, ROUGE-L — emitted as one typed artefact per run.
+- **Notebook freeze + parity audit** — SHA-256 lock on the IEEE notebook plus a four-stage inline re-implementation that fails CI if the modular path drifts.
+- **Pre-commit governance** — Ruff, mypy (strict), `nbstripout`, `gitleaks`, line-ending and TOML/YAML hygiene, all enforced before commits land.
+- **Clean Git workflow** with Conventional Commits and small, reviewable changesets ([`CLAUDE.md`](CLAUDE.md) codifies the contribution rules).
+
+---
+
+## 🏗️ Architecture
 
 ```
-┌──────────────┐   ┌─────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌────────────┐
-│  Input image │──▶│  InceptionV3    │──▶│  Transformer     │──▶│  Transformer     │──▶│  Caption   │
-│  299x299x3   │   │  encoder        │   │  encoder         │   │  decoder         │   │  string    │
-└──────────────┘   │  (ImageNet,     │   │  (1 layer,       │   │  (2 layers,      │   └────────────┘
-                   │   frozen)       │   │   1 head)        │   │   8 heads)       │
-                   └─────────────────┘   └──────────────────┘   └──────────────────┘
+                       ┌───────────────────────────────────────┐
+                       │     React 19 + Vite 8 SPA             │
+                       │   Tailwind v4 · AbortController · ApiError │
+                       └──────────────────┬────────────────────┘
+                                          │ multipart/form-data
+                       ┌──────────────────▼────────────────────┐
+                       │      FastAPI 0.111 (Pydantic v2)      │
+                       │  RequestContextMiddleware · /healthz · /v1/captions  │
+                       └──────────────────┬────────────────────┘
+                                          │
+                       ┌──────────────────▼────────────────────┐
+                       │       PredictorService (anyio thread) │
+                       │   bytes → tensor → predict → caption  │
+                       └──────────────────┬────────────────────┘
+                                          │ singleton, warmed in lifespan
+                       ┌──────────────────▼────────────────────┐
+                       │       CaptionPredictor (TensorFlow)   │
+                       │   InceptionV3 → TF encoder → TF decoder → tokenizer │
+                       └──────────────────┬────────────────────┘
+                                          │
+                       ┌──────────────────▼────────────────────┐
+                       │       models/vX.Y.Z/ artefacts        │
+                       │   model.h5 · vocab.json (versioned)   │
+                       └───────────────────────────────────────┘
+
+                 ┌───────────────────────────────────────────────┐
+                 │  configs/*.yaml (Pydantic v2, extra="forbid") │
+                 │  drives training, evaluation, AND serving     │
+                 └───────────────────────────────────────────────┘
+```
+
+### Model topology
+
+```
+┌──────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌──────────────────┐   ┌────────────┐
+│  Input image │──▶│  InceptionV3     │──▶│  Transformer     │──▶│  Transformer     │──▶│  Caption   │
+│  299×299×3   │   │  encoder         │   │  encoder         │   │  decoder         │   │  string    │
+└──────────────┘   │  (ImageNet,      │   │  (1 layer,       │   │  (2 layers,      │   └────────────┘
+                   │   frozen)        │   │   1 head)        │   │   8 heads)       │
+                   └──────────────────┘   └──────────────────┘   └──────────────────┘
                           ▼                       ▼                       ▼
-                    [B, 64, 2048]          [B, 64, 512]            [B, T, vocab]
-                    patch features         projected features      softmax over 15k tokens
+                    [B, 64, 2048]          [B, 64, 512]            [B, T, vocab=15000]
 ```
 
 ### Components
 
-- **CNN encoder** — [`models/encoder_cnn.py`](src/captioning/models/encoder_cnn.py). Pretrained InceptionV3 with the classification head removed; output reshaped to a sequence of 64 spatial positions × 2048 channels. Weights are frozen during training.
-- **Transformer encoder** — [`models/transformer_encoder.py`](src/captioning/models/transformer_encoder.py). Single layer with one attention head. Projects InceptionV3 features into the decoder’s embedding dimension and lets the decoder attend across spatial positions.
-- **Embeddings** — [`models/embeddings.py`](src/captioning/models/embeddings.py). Sum of token and *learned* positional embeddings (not sinusoidal — preserved from the published architecture).
-- **Transformer decoder** — [`models/transformer_decoder.py`](src/captioning/models/transformer_decoder.py). Causal self-attention over partial captions, cross-attention over image features, and a feed-forward sub-block. 8 heads, ``embedding_dim=512``, dropouts (0.1 / 0.3 / 0.5) preserved from the IEEE configuration.
+- **CNN encoder** — [`models/encoder_cnn.py`](src/captioning/models/encoder_cnn.py). Pretrained InceptionV3 with the classification head removed; output reshaped to 64 spatial positions × 2048 channels. Weights frozen during training.
+- **Transformer encoder** — [`models/transformer_encoder.py`](src/captioning/models/transformer_encoder.py). Single layer, one attention head. Projects InceptionV3 features into the decoder's embedding dimension.
+- **Embeddings** — [`models/embeddings.py`](src/captioning/models/embeddings.py). Sum of token + *learned* positional embeddings, preserved verbatim from the published architecture.
+- **Transformer decoder** — [`models/transformer_decoder.py`](src/captioning/models/transformer_decoder.py). Causal self-attention over partial captions, cross-attention over image features, feed-forward sub-block. 8 heads, `embedding_dim=512`, dropouts (0.1 / 0.3 / 0.5) preserved from the IEEE configuration.
 - **Captioning model** — [`models/captioning_model.py`](src/captioning/models/captioning_model.py). Custom `train_step` / `test_step` with masked sparse-categorical cross-entropy and masked accuracy.
-- **Tokenizer** — [`preprocessing/tokenizer.py`](src/captioning/preprocessing/tokenizer.py). `CaptionTokenizer` wraps `tf.keras.layers.TextVectorization`; persists the vocabulary as both pickle (notebook-compatible) and JSON sidecar.
-- **Inference** — [`inference/predictor.py`](src/captioning/inference/predictor.py). `CaptionPredictor.from_artifacts(weights, vocab, config)` loads everything once at boot, exposes `predict_path(...)` and `predict_tensor(...)` for stateless calls, and `warmup()` for first-request latency.
-- **Configuration** — [`config/schema.py`](src/captioning/config/schema.py). Pydantic v2 schemas (`AppConfig` / `ModelConfig` / `TrainConfig` / `DataConfig` / `ServeConfig`); strict (`extra="forbid"`) so typos in YAML or env vars become load-time errors instead of silent drift.
+- **Tokenizer** — [`preprocessing/tokenizer.py`](src/captioning/preprocessing/tokenizer.py). `CaptionTokenizer` wraps `tf.keras.layers.TextVectorization`; persists vocabulary as both pickle (notebook-compatible) and JSON sidecar.
+- **Inference** — [`inference/predictor.py`](src/captioning/inference/predictor.py). `CaptionPredictor.from_artifacts(weights, vocab, config)` loads everything once at boot, exposes `predict_path(...)` and `predict_tensor(...)` for stateless calls, and `warmup()` to amortise first-request latency.
+- **Configuration** — [`config/schema.py`](src/captioning/config/schema.py). Pydantic v2 (`AppConfig` / `ModelConfig` / `TrainConfig` / `DataConfig` / `ServeConfig`); strict so typos in YAML or env vars become load-time errors.
+
+**Why a monolith on a single process?** Splitting training, evaluation, and serving across services would burn the project's budget on Kubernetes manifests instead of the things a reviewer can actually click. A layered package + one FastAPI app captures the same separation-of-concerns thinking with a tenth of the operational surface area, and the seams are placed so pulling serving into its own container (Phase 2C) is a deployment change, not a refactor.
+
+**Why TensorFlow 2.15 specifically?** TF 2.16 ships Keras 3 by default and silently breaks `TextVectorization` save/load — the project's `tensorflow-cpu==2.15.0` pin is deliberate. Documented in [`requirements.txt`](requirements.txt) and in the engineering-decisions section below.
 
 ---
 
-## Sample outputs
+## 🖼️ Sample outputs
 
 | Image | Generated caption |
 |---|---|
 | ![](https://github.com/user-attachments/assets/64e8412b-1d49-404c-a5b2-1da121b224e2) | *a man is standing on a beach with a surfboard* |
 | ![](https://github.com/user-attachments/assets/c802d420-a1c1-48be-8e79-599f193c72cd) | *a man riding a motorcycle on a street* |
 
-Outputs above are from the IEEE notebook; the modular pipeline reproduces these via the parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)).
+Outputs above are from the IEEE notebook; the modular pipeline reproduces these via the parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)). Live captions from the current bootstrap weights will *not* match — see [Current model quality status](#-current-model-quality-status).
 
 ---
 
-## Performance
+## 📚 Research backing
+
+The model architecture and the BLEU-4 ~24 baseline below come from the IEEE paper and its accompanying notebook:
+
+- **Paper:** [AI Narratives: Bridging Visual Content and Linguistic Expression](https://ieeexplore.ieee.org/document/10675203) (IEEE)
+- **Original notebook:** [Kaggle — image-captioning-using-dl](https://www.kaggle.com/code/apoorvujjwal/image-captionin-using-dl)
+- **Frozen artefact in this repo:** [`notebooks/01_ieee_inceptionv3_transformer.ipynb`](notebooks/01_ieee_inceptionv3_transformer.ipynb) — byte-stable; pre-commit + CI enforce its SHA-256.
+
+The notebook is preserved verbatim as the canonical research artefact. Improvements happen in the modular package; the notebook does not.
+
+---
+
+## 📊 Performance
 
 | Metric | Value | Source |
 |---|---|---|
-| BLEU-4 | ~24 | Reported in the IEEE paper / Kaggle notebook |
-| Vocabulary size | 15,000 tokens | TextVectorization adapt over preprocessed COCO captions |
+| BLEU-4 (IEEE baseline) | ~24 | Reported in the IEEE paper / Kaggle notebook |
+| Vocabulary size | 15,000 tokens | `TextVectorization` adapt over preprocessed COCO captions |
 | Training set | ~120k captions sampled from COCO 2017 | `data.sample_size` in [`configs/base.yaml`](configs/base.yaml) |
 | Image resolution | 299 × 299 (InceptionV3) | [`preprocessing/image.py`](src/captioning/preprocessing/image.py) |
 | Max caption length | 40 tokens | `model.max_length` in [`configs/base.yaml`](configs/base.yaml) |
+| Backend test suite | 12 tests · 0.3 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
+| Full suite | **90 tests passing** | `pytest` (unit + backend + parity) |
 
-> Re-training on the modular pipeline is a Phase 2 deliverable; once a fresh checkpoint exists, this table will be expanded with corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L (already implemented in [`evaluation/`](src/captioning/evaluation/)).
+> Re-training on the modular pipeline is a Phase 1b deliverable; once a fresh checkpoint exists, this table will publish corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L (the harnesses already exist under [`evaluation/`](src/captioning/evaluation/)).
 
 ---
 
-## Current model quality status
+## ⚠️ Current model quality status
 
 The frontend, backend, and inference pipeline are operational end-to-end against the modular package, but **caption quality from the current modular pipeline is still below expectations**. The IEEE notebook reported BLEU-4 ~24; a freshly trained checkpoint produced by the modular trainer has not yet reproduced that figure on COCO. The serving stack is production-style and ready for a real checkpoint — what is missing is the checkpoint itself.
 
@@ -129,29 +188,40 @@ Current engineering effort is focused on:
 - **Decoding improvements** — replacing greedy-only generation with beam search, repetition controls, and length normalisation.
 - **Reproducible benchmarking** — emitting one consistent artefact set per evaluation run so any two runs (or any two models) can be diffed without bespoke parsing per checkpoint.
 
-The weights currently committed under [`models/v1.0.0/`](models/v1.0.0/) are the **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py): the architecture is wired correctly, but every weight is randomly initialised. They exist to exercise the serving stack — lifespan, predictor wiring, multipart upload, frontend integration — before a real COCO-trained checkpoint is dropped in. Captions returned by the live API today will therefore look like noise; that is the *intended* state of the bootstrap path, not a regression. Poor caption quality at this stage is expected until a properly COCO-trained checkpoint replaces those files.
+The weights currently committed under [`models/v1.0.0/`](models/v1.0.0/) are the **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py). Captions returned by the live API today will look like noise; that is the *intended* state of the bootstrap path, not a regression. Poor caption quality at this stage is expected until a properly COCO-trained checkpoint replaces those files.
 
-This gap is being addressed through the **stabilized training workflow** introduced at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml), which gates the convergence-stability primitives behind explicit, ablatable flags rather than rewriting the baseline.
+This gap is being addressed through the **stabilized training workflow** at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml), which gates convergence-stability primitives behind explicit, ablatable flags rather than rewriting the baseline.
 
 ### Accuracy investigation (ongoing)
 
-The shift from "notebook reproduction" to "modular pipeline that *also* trains well" surfaced several concrete findings, each addressed in code rather than in commentary:
-
-- **Greedy decoding limited caption quality and diversity.** Argmax-per-step decoding routinely picked the locally-most-probable token regardless of how that affected the overall sequence likelihood, biasing outputs toward a small "safe captions" basin. Beam-search infrastructure now lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) and dispatches through `CaptionPredictor` alongside the existing greedy path; decode strategy is selectable per inference call and per evaluation run.
-- **BLEU-only evaluation hid behaviour the score did not reflect.** CIDEr, METEOR, and ROUGE-L are implemented under [`src/captioning/evaluation/`](src/captioning/evaluation/) (`cider.py`, `meteor.py`, `rouge.py`) and run through the same corpus-level runner that already produces BLEU-1..4. Every evaluation now emits the full metric set in a single `metrics.json`.
+- **Greedy decoding limited caption quality and diversity.** Argmax-per-step routinely picked the locally-most-probable token regardless of how that affected the overall sequence likelihood, biasing outputs toward a small "safe captions" basin. Beam-search infrastructure now lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) and dispatches through `CaptionPredictor` alongside the existing greedy path; decode strategy is selectable per inference call and per evaluation run.
+- **BLEU-only evaluation hid behaviour the score did not reflect.** CIDEr, METEOR, and ROUGE-L are implemented under [`src/captioning/evaluation/`](src/captioning/evaluation/) and run through the same corpus-level runner that already produces BLEU-1..4. Every evaluation now emits the full metric set in a single `metrics.json`.
 - **Validation-time dropout parity quirks** inherited from the notebook (`compute_loss_and_acc` ignoring its `training` argument, so dropout stayed active during validation) were identified during the parity audit. They are now gated behind an explicit config flag (`train.honour_training_flag_in_test_step`) so notebook parity is preserved by default and the conventional dropout-free validation path is opt-in via [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml).
-- **Training stabilization experiments** were introduced as opt-in flags so they can be ablated cleanly rather than entangled with the baseline:
+- **Training stabilization experiments** are introduced as opt-in flags so they can be ablated cleanly rather than entangled with the baseline:
   - label smoothing (`train.label_smoothing`),
   - cosine LR schedule (`train.lr_schedule: cosine`),
   - warmup steps (`train.warmup_steps`),
   - dropout-free validation path (`train.honour_training_flag_in_test_step`).
-- A complete experimental training config — not a thin override — lives at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml). It is byte-for-byte identical to [`configs/base.yaml`](configs/base.yaml) except for the four flags above, so any quality delta between the two runs is attributable to those flags alone.
 
-These changes are aimed at convergence stability and caption generalisation **before** Phase 3 model upgrades. Comparing the original CNN + Transformer against modern multimodal baselines is only meaningful once the original is trained to the strongest version of itself the architecture can support.
+A complete experimental training config — not a thin override — lives at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml). It is byte-for-byte identical to [`configs/base.yaml`](configs/base.yaml) except for those four flags, so any quality delta between the two runs is attributable to those flags alone.
 
 ---
 
-## Project structure
+## 🛠️ Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Core ML** | Python 3.10–3.12, TensorFlow-CPU 2.15.0 (pinned), NumPy, Pillow |
+| **Model** | InceptionV3 encoder (frozen) + custom multi-head Transformer decoder |
+| **Backend** | FastAPI 0.111, Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
+| **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config |
+| **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations |
+| **Tooling** | Ruff (lint + format), mypy (strict), pytest 8, pre-commit, nbstripout, gitleaks |
+| **Infra (planned, Phase 2C)** | HuggingFace Hub (weights), HuggingFace Spaces (backend), Vercel (frontend), GitHub Actions (CI/CD) |
+
+---
+
+## 📁 Repository Structure
 
 ```
 image-captioning-system/
@@ -174,70 +244,58 @@ image-captioning-system/
 ├── backend/                                     # Phase 2A — FastAPI inference service
 │   └── app/
 │       ├── main.py                              # App factory + lifespan-managed predictor singleton
-│       ├── api/                                 # Thin HTTP routes — /healthz, /v1/captions
-│       ├── core/                                # BackendSettings, structured logging, request IDs
-│       ├── schemas/                             # Pydantic request/response schemas
-│       ├── services/                            # PredictorService — image bytes → caption + latency
-│       └── utils/                               # Image decoding + content-type guards
+│       ├── api/routes.py                        # Thin HTTP — /healthz, /v1/captions
+│       ├── core/                                # BackendSettings, structlog setup, RequestContextMiddleware
+│       ├── schemas/                             # Pydantic request/response models
+│       ├── services/predictor_service.py        # bytes → caption + latency (anyio thread offload)
+│       ├── utils/image.py                       # Content-type allow-list + ImageDecodeError
+│       └── tests/                               # Phase 2C WS-D — 12 route tests, no TF loaded
 │
 ├── frontend/                                    # Phase 2B — React 19 + Vite 8 + Tailwind v4 SPA
-│   ├── index.html                               # Vite entry; mounts <App /> into #root
-│   ├── vite.config.js                           # Vite + @vitejs/plugin-react + Tailwind v4 plugin
-│   ├── eslint.config.js                         # Flat ESLint config (React + Hooks + React Refresh)
-│   ├── package.json                             # React 19, Vite 8, Tailwind v4
-│   ├── .env.example                             # VITE_API_BASE — env-driven backend origin
-│   ├── public/                                  # Static assets served verbatim (favicon, icons)
+│   ├── vite.config.js · eslint.config.js · package.json · .env.example
 │   └── src/
-│       ├── main.jsx                             # React root + StrictMode bootstrap
-│       ├── App.jsx                              # Page composition + upload → generate flow
-│       ├── index.css                            # Tailwind v4 entry (single @import)
-│       ├── services/
-│       │   └── api.js                           # checkHealth / captionImage — AbortController + typed ApiError
+│       ├── main.jsx · App.jsx · index.css
+│       ├── services/api.js                      # checkHealth / captionImage — AbortController + typed ApiError
 │       └── components/
-│           ├── Header.jsx                       # Brand bar + StatusBadge slot
-│           ├── StatusBadge.jsx                  # /healthz poller (10 s) — checking/online/offline state machine
-│           ├── UploadZone.jsx                   # Drag/drop + click-to-browse + client-side validation
-│           ├── ImagePreview.jsx                 # Selected-file preview + size/format meta + clear
-│           ├── CaptionResult.jsx                # Caption + model_version / decode / latency / request_id
-│           ├── ErrorBanner.jsx                  # Dismissible error display (network / timeout / HTTP)
-│           └── Spinner.jsx                      # Shared loading indicator (sm / md / lg)
+│           ├── Header.jsx · StatusBadge.jsx     # Sticky brand bar + 10s health poller
+│           ├── UploadZone.jsx · ImagePreview.jsx
+│           ├── CaptionResult.jsx · ErrorBanner.jsx · Spinner.jsx
 │
 ├── configs/
-│   ├── base.yaml                                # IEEE hyperparameters (cell 6 mirror)
+│   ├── base.yaml                                # IEEE hyperparameters (notebook cell 6 mirror)
 │   └── train/
-│       ├── debug.yaml                           # CI smoke override
-│       └── stabilized.yaml                      # Phase 1b stability experiment (label smoothing, cosine LR, warmup)
+│       ├── debug.yaml                           # CI smoke override (1 epoch, 64 captions)
+│       └── stabilized.yaml                      # Phase 1b stability experiment (4 ablatable flags)
 │
 ├── scripts/
 │   ├── train.py · evaluate.py · predict.py
-│   ├── inspect_predictions.py                   # Per-sample diagnostics + diagnostics.jsonl writer
+│   ├── inspect_predictions.py                   # Per-sample diagnostics + diagnostics.jsonl
 │   ├── bootstrap_dev_artifacts.py               # Smoke-test artefacts so the API can boot pre-training
-│   └── notebook_module_audit.py                 # Parity gate vs. notebook
+│   └── notebook_module_audit.py                 # 4-stage parity gate vs. notebook
 │
-├── tests/unit/
-│   ├── test_caption_preprocessing.py · test_config.py · test_splits.py
-│   ├── test_tokenizer.py · test_image_preprocessing.py
-│   ├── test_evaluation.py · test_hashing.py
-│   └── conftest.py
-│
-├── docs/
-│   ├── restructure-plan.md · PHASE_0_NOTES.md · PHASE_1_NOTES.md
-│
+├── tests/unit/                                  # 78 unit tests (parity, tokenizer, eval, splits, …)
+├── docs/                                        # restructure-plan · PHASE_0_NOTES · PHASE_1_NOTES · STABILIZED_TRAINING_RUNBOOK
 ├── pyproject.toml · requirements*.txt · Makefile
 ├── .pre-commit-config.yaml · .python-version · .env.example
-├── .paper-notebook.sha256                       # Locked notebook hash for CI freeze check
+├── .paper-notebook.sha256                       # Locked notebook hash for the freeze check
+├── CLAUDE.md                                    # Contribution + commit governance
 └── README.md
 ```
 
 ---
 
-## Setup
+## 🚀 Quick Start
 
-Requires **Python 3.10–3.12** (TensorFlow 2.15 has no 3.13 wheels).
+### Prerequisites
 
-### PowerShell (Windows)
+- Python **3.10 – 3.12** (TensorFlow 2.15 has no 3.13 wheels)
+- Node **20+**
+- Git
+
+### Backend
 
 ```powershell
+# PowerShell (Windows)
 py -3.10 -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements-dev.txt -r requirements-eval.txt
@@ -245,9 +303,8 @@ pip install -e ".[hf,mlflow]"
 pre-commit install
 ```
 
-### bash (Linux / macOS)
-
 ```bash
+# bash (Linux / macOS)
 python3.10 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements-dev.txt -r requirements-eval.txt
@@ -255,69 +312,33 @@ pip install -e ".[hf,mlflow]"
 pre-commit install
 ```
 
-`make help` lists every available command (lint, format, type-check, test, train, serve, evaluate, predict, Docker, freeze-paper-notebook, …).
-
----
-
-## Training
-
-The training script consumes a YAML config validated by Pydantic:
+Boot the API:
 
 ```bash
-python -m scripts.train --config configs/base.yaml
+uvicorn --app-dir backend app.main:app --host 0.0.0.0 --port 8000
 ```
 
-Override fields without editing YAML:
+Interactive Swagger UI is live at **http://localhost:8000/docs**; raw OpenAPI 3.1 at **http://localhost:8000/openapi.json**.
+
+### Frontend
 
 ```bash
-# CLI smoke run on a 64-caption subset (1 epoch, batch 8)
-python -m scripts.train --config configs/base.yaml --override configs/train/debug.yaml
-
-# Env-var override (double-underscore = nesting delimiter)
-CAPTIONING__TRAIN__BATCH_SIZE=32 python -m scripts.train --config configs/base.yaml
+cd frontend
+npm install
+npm run dev
 ```
 
-Outputs (`weights.h5`, `vocab.pkl` + `vocab.json` sidecar, `history.json`, `training_log.csv`) land under `outputs/runs/latest/` by default.
+The SPA is live at **http://localhost:5173** (Vite picks the next free port if 5173 is busy). `VITE_API_BASE` (see [`frontend/.env.example`](frontend/.env.example)) points it at any backend origin; absent the env var, it falls back to `http://127.0.0.1:8000`.
 
-The `Trainer` ([`training/trainer.py`](src/captioning/training/trainer.py)) wraps `model.compile + model.fit` with structured logging and history serialisation; everything else (loss, callbacks, optimizer choice) sits in dedicated modules so each piece can be unit-tested in isolation.
-
----
-
-## Evaluation
+### Tests
 
 ```bash
-python -m scripts.evaluate \
-    --config configs/base.yaml \
-    --weights models/v1.0.0/model.h5 \
-    --tokenizer-dir models/v1.0.0 \
-    --report docs/results/v1.0.0.md \
-    --max-samples 500
+pytest -q                          # All 90 tests (unit + backend + parity)
+pytest backend/app/tests/ -v       # Backend route tests only (0.3 s, no TF loaded)
+make freeze-paper-notebook         # Asserts the IEEE notebook SHA-256 has not changed
 ```
 
-Phase 1 ships **corpus BLEU-4 via sacrebleu** (deterministic, reproducible). CIDEr / METEOR / ROUGE-L slot into [`src/captioning/evaluation/`](src/captioning/evaluation/) in Phase 1b under the same runner interface.
-
----
-
-## Inference
-
-### Python API
-
-```python
-from captioning.config import load_config
-from captioning.inference import CaptionPredictor
-
-config    = load_config("configs/base.yaml")
-predictor = CaptionPredictor.from_artifacts(
-    weights_path="models/v1.0.0/model.h5",
-    tokenizer_dir="models/v1.0.0",
-    config=config,
-)
-predictor.warmup()                       # one dummy forward pass — kills first-request latency
-caption = predictor.predict_path("photo.jpg")
-print(caption)
-```
-
-### CLI
+### One-shot caption (CLI)
 
 ```bash
 python -m scripts.predict \
@@ -327,53 +348,39 @@ python -m scripts.predict \
     --image samples/photo.jpg
 ```
 
-### REST API (Phase 2A — operational)
-
-A FastAPI service under [`backend/app/`](backend/app/) is now live. The lifespan instantiates a single `CaptionPredictor`, runs `warmup()` once, and reuses it across every request — no per-request TF graph builds, no first-request latency cliff. The service currently boots against development bootstrap artefacts (see below); real Phase 1 weights drop in by replacing the files under `models/v1.0.0/`, no code changes required.
+### One-shot caption (HTTP)
 
 ```bash
-# Boot the API
-uvicorn --app-dir backend app.main:app --host 0.0.0.0 --port 8000
-
-# Liveness + readiness (returns model_loaded + model_version + api_version)
-curl http://localhost:8000/healthz
-
-# Generate a caption from a multipart upload
-curl -X POST http://localhost:8000/v1/captions \
-    -F "image=@samples/photo.jpg"
+curl -X POST http://localhost:8000/v1/captions -F "image=@samples/photo.jpg"
 ```
 
-Interactive Swagger UI is auto-generated at [`/docs`](http://localhost:8000/docs); the raw schema lives at [`/openapi.json`](http://localhost:8000/openapi.json).
-
-### Frontend (Phase 2B — operational)
-
-A React 19 + Vite 8 + Tailwind v4 single-page app under [`frontend/`](frontend/) drives the same endpoints from the browser. The SPA posts multipart `FormData` to `POST /v1/captions`, polls `GET /healthz` every 10 seconds for a live status badge, consumes the typed `CaptionResponse` schema, and renders caption + `model_version` + `decode_strategy` + `latency_ms` + `request_id` exactly as the backend returns them. Loading, error, and success states are surfaced through dedicated components; network failures, request timeouts (3 s health / 60 s caption), CORS rejections, and non-2xx responses are all classified into a single typed `ApiError` shape so the UI shows actionable copy instead of a raw `Failed to fetch`.
+### Reproduce training
 
 ```bash
-# Boot the frontend dev server
-cd frontend
-npm install
-npm run dev
-# Defaults to http://localhost:5173 (Vite picks the next free port if 5173 is busy)
+python -m scripts.train --config configs/base.yaml
+# Or with the stabilization experiment flags enabled:
+python -m scripts.train --config configs/base.yaml --override configs/train/stabilized.yaml
+# Or a 64-caption CI smoke run:
+python -m scripts.train --config configs/base.yaml --override configs/train/debug.yaml
 ```
 
-`VITE_API_BASE` (see [`frontend/.env.example`](frontend/.env.example)) points the SPA at any backend origin; absent the env var, the client falls back to `http://127.0.0.1:8000`. The dev origins `localhost:5173/5174` and `127.0.0.1:5173/5174` are pre-allowed in [`configs/base.yaml`](configs/base.yaml) under `serve.cors_allowed_origins` so the browser accepts cross-origin responses end-to-end.
+Outputs (`weights.h5`, `vocab.pkl` + `vocab.json` sidecar, `history.json`, `training_log.csv`) land under `outputs/runs/latest/` by default.
+
+`make help` lists every available command (lint, format, type-check, test, train, serve, evaluate, predict, Docker, freeze-paper-notebook, …).
 
 ---
 
-## FastAPI backend
+## 🌐 FastAPI backend (Phase 2A)
 
-Phase 2A delivers a production-style inference service rather than a thin demo wrapper. The split mirrors how a real serving stack is laid out:
+Phase 2A delivers a production-style inference service rather than a thin demo wrapper:
 
 - **App factory + lifespan** — [`backend/app/main.py`](backend/app/main.py). `create_app()` builds the FastAPI instance; the lifespan loads the YAML `AppConfig`, instantiates a `CaptionPredictor`, calls `warmup()`, and stashes a `PredictorService` singleton on `app.state` so every request reuses one warm model.
 - **Routes** — [`backend/app/api/routes.py`](backend/app/api/routes.py). Intentionally thin: validate inputs, delegate, shape the response. No TF imports leak into the HTTP layer.
-- **Service layer** — [`backend/app/services/predictor_service.py`](backend/app/services/predictor_service.py). Wraps the predictor, decodes uploaded bytes, measures per-request latency, and returns `(caption, latency_ms)`.
-- **Schemas** — [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py). Pydantic v2 request/response models (`CaptionResponse`, `HealthResponse`, `ErrorResponse`) — every payload that crosses the wire is typed and OpenAPI-documented.
-- **Backend settings** — [`backend/app/core/config.py`](backend/app/core/config.py). Separate `BackendSettings` (env-overridable: weights path, tokenizer dir, model version, warmup toggle) layered on top of the research-side `AppConfig`. The two are deliberately distinct: research hyperparameters and serving knobs change on different cadences.
+- **Service layer** — [`backend/app/services/predictor_service.py`](backend/app/services/predictor_service.py). Wraps the predictor, decodes uploaded bytes off the event loop via `anyio.to_thread.run_sync`, measures per-request latency, returns `(caption, latency_ms)`.
+- **Schemas** — [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py). Pydantic v2 (`CaptionResponse`, `HealthResponse`, `ErrorResponse`); every payload that crosses the wire is typed and OpenAPI-documented.
+- **Backend settings** — [`backend/app/core/config.py`](backend/app/core/config.py). Separate `BackendSettings` (env-overridable: weights path, tokenizer dir, model version, warmup toggle) layered on top of the research-side `AppConfig`. Research hyperparameters and serving knobs change on different cadences and live in different settings objects.
 - **Structured logging + request IDs** — [`backend/app/core/logging.py`](backend/app/core/logging.py). `RequestContextMiddleware` stamps each request with a UUID; `structlog` carries it through every log line so a single failed caption can be traced end-to-end.
-- **Image safety** — [`backend/app/utils/image.py`](backend/app/utils/image.py). Content-type allow-list (JPEG / PNG / WebP / BMP), explicit `ImageDecodeError` so malformed bytes produce a clean `422` rather than a 500.
-
-### Endpoints
+- **Image safety** — [`backend/app/utils/image.py`](backend/app/utils/image.py). Content-type allow-list (JPEG / PNG / WebP / BMP), explicit `ImageDecodeError` so malformed bytes produce a clean 422 rather than a 500.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -382,34 +389,20 @@ Phase 2A delivers a production-style inference service rather than a thin demo w
 | `GET`  | `/docs`         | Interactive Swagger UI, auto-generated from the Pydantic schemas. |
 | `GET`  | `/openapi.json` | Raw OpenAPI 3.1 spec for client codegen. |
 
-`POST /v1/captions` enforces input validation at the boundary: 415 on disallowed content types, 413 on oversized uploads (`serve.max_upload_bytes`), 422 on undecodable image bytes, 400 on empty uploads, 503 while the predictor is still loading during a rolling restart.
-
-### Bootstrap dev artifacts
-
-[`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py) generates a *valid but untrained* set of weights + tokenizer under `models/v1.0.0/` so the entire serving stack — lifespan, routes, multipart upload, predictor wiring — can be exercised end-to-end before Phase 1 training has been run on COCO. **The captions it produces are gibberish by design**: every weight is randomly initialised. The point is architectural smoke-testing, not prediction quality. Drop real Phase 1 outputs into the same directory and the backend serves them with zero code changes.
-
-```bash
-python -m scripts.bootstrap_dev_artifacts \
-    --config configs/base.yaml \
-    --output-dir models/v1.0.0
-```
+`POST /v1/captions` enforces input validation at the boundary: **415** on disallowed content types, **413** on oversized uploads (`serve.max_upload_bytes`), **422** on undecodable image bytes, **400** on empty uploads, **503** while the predictor is still loading during a rolling restart. All six status codes are covered by the [`backend/app/tests/`](backend/app/tests/) suite added in Phase 2C WS-D.
 
 ---
 
-## Frontend UI (Phase 2B)
+## 🎨 Frontend UI (Phase 2B)
 
-Phase 2B ships a single-page inference UI under [`frontend/`](frontend/), not a styled demo. The split mirrors the backend's separation between transport, service, and presentation:
+Phase 2B ships a single-page inference UI under [`frontend/`](frontend/) — not a styled demo. The split mirrors the backend's separation between transport, service, and presentation:
 
-- **Application shell** — [`frontend/src/App.jsx`](frontend/src/App.jsx). Owns the request lifecycle (selected file → preview → generate → result). The preview `URL.createObjectURL` is `useMemo`-derived and revoked through an effect cleanup so previews never leak memory across uploads. Four `useState` slots (`file`, `result`, `error`, `loading`) cover every UI state — no Redux, no React Query, no context.
-- **API service layer** — [`frontend/src/services/api.js`](frontend/src/services/api.js). Single boundary for every backend call. Reads `import.meta.env.VITE_API_BASE` once at module load (falls back to `http://127.0.0.1:8000`), wraps `fetch` with `AbortController`-driven timeouts (3 s for `/healthz`, 60 s for `/v1/captions`), and classifies failures into `timeout` / `network` / `http` / `unknown` kinds on a typed `ApiError` so components never see a raw `TypeError`.
-- **Upload zone** — [`frontend/src/components/UploadZone.jsx`](frontend/src/components/UploadZone.jsx). Drag/drop + click-to-browse + keyboard activation (`Enter` / `Space`). Validates content-type (JPEG / PNG / WebP) and size (10 MB) before the file ever touches the network — invalid uploads are rejected client-side with the same wording the backend would have returned, so the user experience is consistent whether validation fires locally or remotely.
-- **Image preview** — [`frontend/src/components/ImagePreview.jsx`](frontend/src/components/ImagePreview.jsx). Renders the selected file via its object URL with size/format metadata and a clear button. Disabled while a request is in flight so re-drops cannot race the POST.
-- **Caption result** — [`frontend/src/components/CaptionResult.jsx`](frontend/src/components/CaptionResult.jsx). Consumes the backend's typed `CaptionResponse` directly: caption text plus model version, decode strategy, latency in milliseconds, and the request ID echoed from the `x-request-id` header. Copy-to-clipboard is built in for log correlation during debugging.
-- **Status badge** — [`frontend/src/components/StatusBadge.jsx`](frontend/src/components/StatusBadge.jsx). Polls `/healthz` every 10 seconds and on window focus, runs a three-state machine (`checking` / `online` / `offline`), and recovers automatically when the backend comes back — no page reload required.
+- **Application shell** — [`frontend/src/App.jsx`](frontend/src/App.jsx). Owns the request lifecycle (selected file → preview → generate → result). The preview `URL.createObjectURL` is `useMemo`-derived and revoked through an effect cleanup so previews never leak across uploads. Four `useState` slots (`file`, `result`, `error`, `loading`) cover every UI state — no Redux, no React Query, no context.
+- **API service layer** — [`frontend/src/services/api.js`](frontend/src/services/api.js). Single boundary for every backend call. Reads `import.meta.env.VITE_API_BASE` once at module load (falls back to `http://127.0.0.1:8000`), wraps `fetch` with `AbortController`-driven timeouts (3 s for `/healthz`, 60 s for `/v1/captions`), and classifies failures into `timeout` / `network` / `http` / `unknown` kinds on a typed `ApiError`.
+- **Upload zone** — [`frontend/src/components/UploadZone.jsx`](frontend/src/components/UploadZone.jsx). Drag/drop + click-to-browse + keyboard activation. Validates content-type (JPEG / PNG / WebP) and size (10 MB) before the file ever touches the network — invalid uploads are rejected client-side with the same wording the backend would have returned.
+- **Status badge** — [`frontend/src/components/StatusBadge.jsx`](frontend/src/components/StatusBadge.jsx). Polls `/healthz` every 10 seconds and on window focus, runs a three-state machine (`checking` / `online` / `offline`), recovers automatically when the backend comes back.
 - **Error banner** — [`frontend/src/components/ErrorBanner.jsx`](frontend/src/components/ErrorBanner.jsx). Single surface for every failure class. Reads `ApiError.message` so the user sees "Cannot reach backend" or "Request timed out" instead of a raw browser error.
-- **Spinner / Header** — [`frontend/src/components/Spinner.jsx`](frontend/src/components/Spinner.jsx) and [`frontend/src/components/Header.jsx`](frontend/src/components/Header.jsx). Shared loading indicator and the sticky brand bar that hosts the status badge.
-
-### Upload flow
+- **Caption result** — [`frontend/src/components/CaptionResult.jsx`](frontend/src/components/CaptionResult.jsx). Consumes the backend's typed `CaptionResponse` directly: caption text plus model version, decode strategy, latency, and the request ID echoed from the `x-request-id` header.
 
 ```
 ┌──────────────┐  drag/drop   ┌─────────────┐  validate   ┌──────────────┐
@@ -423,56 +416,18 @@ Phase 2B ships a single-page inference UI under [`frontend/`](frontend/), not a 
                                      │   typed CaptionResponse / ApiError
                                      ▼
                          ┌──────────────────────┐
-                         │ CaptionResult  /     │
+                         │ CaptionResult /      │
                          │ ErrorBanner          │
                          └──────────────────────┘
 ```
 
-### State, transport, and frontend/backend separation
-
-State management is intentionally local: four `useState` slots in `App.jsx` (`file`, `result`, `error`, `loading`) plus a `useMemo`-derived preview URL. The data flow is shallow enough that an extra abstraction would obscure rather than help. All cross-cutting concerns — timeouts, error classification, env-driven base URL — live in the API service layer so components stay declarative and lift no transport details into JSX.
-
-Frontend and backend are deployed independently. The SPA only knows the backend's origin via `VITE_API_BASE`; the backend only trusts SPAs whose origin appears in `serve.cors_allowed_origins`. Dev origins (`localhost:5173/5174`, `127.0.0.1:5173/5174`) are pre-allowed in [`configs/base.yaml`](configs/base.yaml); production origins join the same list at deploy time. No shared build, no shared runtime, no shared state — only the typed Pydantic schemas defined in [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py) cross the wire.
-
-### UX, error handling, and loading states
-
-- **Loading** — the Generate button shows the shared [`Spinner`](frontend/src/components/Spinner.jsx) and disables itself for the entire request; the upload zone is locked in parallel so a re-drop cannot race the in-flight POST.
-- **Errors** — every failure surfaces through `ErrorBanner` with copy specific to its `ApiError.kind`. Network/CORS failures, request timeouts, and `4xx` / `5xx` payloads each map to a distinct, actionable message.
-- **Status awareness** — when the backend is down, `StatusBadge` flips to red within one poll cycle; when it comes back, the badge recovers automatically without a page reload, and a fresh `/healthz` is also fired on window focus.
-- **Responsive layout** — Tailwind v4's grid (`lg:grid-cols-5`) drops to a single column under the `lg` breakpoint, preserving the upload → preview → result flow on tablet and phone widths. The sticky header keeps the live status badge visible while scrolling.
-
-### Environment configuration
-
-```bash
-# frontend/.env (gitignored) — overrides the default backend origin
-VITE_API_BASE=http://127.0.0.1:8000
-```
-
-The variable is read once at module load and stripped of any trailing slash. Absent the variable, the client falls back to `http://127.0.0.1:8000`; production builds set the variable at build time so the SPA can ship as static assets to Vercel, Cloudflare Pages, HuggingFace Spaces, or any CDN.
-
-### Production deployment readiness
-
-- **Static-asset build** — `npm run build` emits a hash-named bundle under `frontend/dist/` that any static host can serve; no runtime Node process is required.
-- **Origin pinning** — the CORS allow-list in `configs/base.yaml` plus `VITE_API_BASE` at build time tie a given SPA build to a specific backend origin without a runtime config endpoint.
-- **No secrets in the client** — the SPA carries no API keys; the only network surface it depends on is `/healthz` and `/v1/captions` on the configured backend.
-- **Lint-clean** — `npm run lint` (flat ESLint config with `eslint-plugin-react-hooks` and `eslint-plugin-react-refresh`) runs alongside the Python tooling.
-
-```bash
-# Development server (Vite + HMR on :5173)
-cd frontend
-npm install
-npm run dev
-
-# Production build + local preview of the built bundle
-npm run build
-npm run preview
-```
+Frontend and backend are deployed independently. The SPA only knows the backend's origin via `VITE_API_BASE`; the backend only trusts SPAs whose origin appears in `serve.cors_allowed_origins`. Dev origins are pre-allowed in [`configs/base.yaml`](configs/base.yaml); production origins join the same list at deploy time (Phase 2C WS-F). No shared build, no shared runtime — only the typed Pydantic schemas in [`backend/app/schemas/caption.py`](backend/app/schemas/caption.py) cross the wire.
 
 ---
 
-## Configuration system
+## ⚙️ Configuration system
 
-Hyperparameters are not globals. They live in YAML files validated by Pydantic v2 `BaseSettings`:
+Hyperparameters are not globals. They live in YAML validated by Pydantic v2:
 
 ```yaml
 # configs/base.yaml — mirrors the IEEE notebook cell 6 verbatim
@@ -498,17 +453,17 @@ data:
 Three load-time guarantees:
 
 1. **Type validation.** `batch_size: "64"` (string instead of int) raises a `ValidationError` pointing at the field, not a downstream tensor-shape error.
-2. **No silent typos.** `extra="forbid"` rejects unknown keys (e.g. `vocabularsy_size`) — typos in ML hyperparameters silently using defaults is the worst possible failure mode, and `extra="forbid"` eliminates it.
+2. **No silent typos.** `extra="forbid"` rejects unknown keys — typos in ML hyperparameters silently using defaults is the worst failure mode, and `extra="forbid"` eliminates it.
 3. **Env overrides.** `CAPTIONING__TRAIN__BATCH_SIZE=32` overrides at any nesting depth — useful for CI smoke tests, ablations, and serve-time tuning without rebuilding images.
 
-Schema lives in [`src/captioning/config/schema.py`](src/captioning/config/schema.py); loader in [`config/loader.py`](src/captioning/config/loader.py).
+Schema in [`src/captioning/config/schema.py`](src/captioning/config/schema.py); loader in [`src/captioning/config/loader.py`](src/captioning/config/loader.py).
 
 ---
 
-## Testing & code quality
+## 🧪 Testing & code quality
 
 ```bash
-make test            # pytest 37/37 (unit + integration)
+make test            # pytest — 90/90 (unit + backend route tests + parity)
 make lint            # Ruff lint + format check
 make typecheck       # mypy strict on src/captioning + scripts
 make pre-commit      # All hooks across all files
@@ -518,136 +473,190 @@ make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 | Layer | Tool | Status |
 |---|---|---|
 | Lint + format | [Ruff](https://docs.astral.sh/ruff/) (replaces black + isort + flake8) | ✅ clean |
-| Type-check | [mypy](https://mypy.readthedocs.io/) with `pandas-stubs`, `types-PyYAML`, `types-requests` | ✅ 0 errors / 34 files |
-| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 37 passing |
+| Type-check | [mypy](https://mypy.readthedocs.io/) with `pandas-stubs`, `types-PyYAML`, `types-requests` | ✅ 0 errors |
+| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 90 passing |
 | Notebook hygiene | [`nbstripout`](https://github.com/kynan/nbstripout) (pre-commit) | ✅ outputs stripped on commit |
 | Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) (pre-commit) | ✅ enabled |
-| Notebook integrity | SHA-256 freeze check via [`make freeze-paper-notebook`](Makefile) | ✅ locked |
+| Notebook integrity | SHA-256 freeze via [`make freeze-paper-notebook`](Makefile) | ✅ locked |
 | Parity audit | [`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py) — 4 stages | ✅ all passing |
 
 The parity audit re-implements four notebook stages inline (caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, decoder forward pass) and asserts the modular path produces byte-identical (or `tf.allclose`-identical) output. It is the contract that gates any behavioural improvement.
 
----
-
-## Key engineering improvements
-
-This is what separates this repository from a notebook conversion:
-
-- **Modular package** with the `src/` layout — every test exercises the *installed* package the same way users will.
-- **Strict Pydantic v2 configuration** — typed, validated, env-overridable, refuses unknown keys.
-- **`CaptionTokenizer` wrapper** — stable interface for the model and inference; Phase 5 can swap it for HuggingFace `tokenizers` without touching the encoder, decoder, or generation loop.
-- **Singleton-friendly inference** — `CaptionPredictor.from_artifacts(...)` + `warmup()` are designed for FastAPI lifespans, not just CLI calls.
-- **Shared train/serve preprocessing** — the same `preprocess_image_tensor` runs in `tf.data` pipelines and at inference time, eliminating train/serve skew by construction.
-- **Reproducibility** — seeded sampling, seeded splits, seeded RNGs (`utils.seed.set_global_seed`), pinned `tensorflow-cpu==2.15.0` (TF 2.16+ ships Keras 3 by default and silently breaks `TextVectorization` save/load).
-- **Notebook freeze** — IEEE artefact protected by a SHA-256 check; published BLEU stays reproducible across the project's lifetime.
-- **Optional dependency groups** (`[hf]`, `[eval]`, `[mlflow]`, `[dev]`) — slim production image stays lean; HF baselines and metric tooling are opt-in extras.
-- **Decoupled experiment artefacts** — model weights live in HuggingFace Hub (planned), MLflow tracking on DagsHub free tier (planned). Git stays small.
-- **Structured logging** — `structlog` emits JSON in production, pretty colourised logs in dev, switched by `APP_ENV`.
-- **No silent rewrites** — every notebook → module move is documented with a cell mapping in [`docs/PHASE_1_NOTES.md`](docs/PHASE_1_NOTES.md); behavioural quirks (e.g. `compute_loss_and_acc` ignoring its `training` argument) are preserved verbatim with code comments referencing the doc.
+The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced in Phase 2C WS-D uses a duck-typed `FakePredictorService` to exercise every status code in the `/v1/captions` contract — 200 / 400 / 413 / 415 / 422 / 503 — plus the `/healthz` readiness flip and `x-request-id` propagation, all without loading TensorFlow. The full backend slice runs in **0.3 seconds**.
 
 ---
 
-## Limitations
+## 🗺️ Roadmap
 
-- The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines (BLIP, ViT-GPT2, GIT) for side-by-side comparison.
-- The modular pipeline has not yet reproduced the IEEE notebook's BLEU-4 ~24 on a freshly trained checkpoint; see [Current model quality status](#current-model-quality-status). The bootstrap weights shipped under [`models/v1.0.0/`](models/v1.0.0/) are intentionally random and exist only for architectural smoke testing.
-- Beam search is implemented ([`inference/beam.py`](src/captioning/inference/beam.py)) and selectable per call/run, but a head-to-head benchmark against greedy on a real checkpoint is part of the in-progress Phase 1b validation, not a published result yet.
-- CIDEr / METEOR / ROUGE-L are implemented ([`evaluation/`](src/captioning/evaluation/)) and emitted into `metrics.json` per run; finalised numbers from the modular pipeline are pending a stabilized COCO-trained checkpoint.
+### Phase 0 — Bootstrap ✅
+
+- [x] **0A** — Repo scaffolding, `pyproject.toml`, Makefile, Conventional Commits
+- [x] **0B** — Pre-commit hooks (Ruff, mypy, nbstripout, gitleaks, line-ending + TOML/YAML hygiene)
+- [x] **0C** — Notebook freeze policy + `.paper-notebook.sha256` SHA-256 lock
+- [x] **0D** — Pinned dependency surface (`requirements*.txt` + `pyproject.toml` extras: `hf`, `eval`, `mlflow`, `dev`)
+
+### Phase 1 — Modularisation ✅
+
+- [x] **1A** — Notebook → installable `captioning` package (`src/` layout)
+- [x] **1B** — Pydantic v2 strict config (`AppConfig` / `ModelConfig` / `TrainConfig` / `DataConfig` / `ServeConfig`) with YAML loader + env-var overrides
+- [x] **1C** — Preprocessing modules (`caption.py`, `image.py`, `tokenizer.py`, `augmentation.py`) — shared train/serve preprocessing
+- [x] **1D** — Data pipeline (`coco.py`, `splits.py`, `pipeline.py`) with seeded sampling
+- [x] **1E** — Model factory (`encoder_cnn.py`, `transformer_encoder.py`, `embeddings.py`, `transformer_decoder.py`, `captioning_model.py`, `factory.py`)
+- [x] **1F** — Training loop (`losses.py`, `callbacks.py`, `trainer.py`) with structured logging + history serialisation
+- [x] **1G** — Greedy inference (`predictor.py`, `image_loader.py`, `greedy.py`) with lifespan-friendly `from_artifacts(...)` + `warmup()`
+- [x] **1H** — Notebook parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) — 4 stages, byte/tensor-identical
+- [x] **1I** — Unit test suite (parity, tokenizer, evaluation, splits, hashing, image preprocessing, caption preprocessing)
+
+### Phase 1b — Training stabilization ✅ (training validation in progress)
+
+- [x] **1b-A** — Beam-search decoder ([`inference/beam.py`](src/captioning/inference/beam.py)) with length normalisation + n-gram repetition suppression, selectable per call/run
+- [x] **1b-B** — CIDEr implementation ([`evaluation/cider.py`](src/captioning/evaluation/cider.py))
+- [x] **1b-C** — METEOR implementation ([`evaluation/meteor.py`](src/captioning/evaluation/meteor.py))
+- [x] **1b-D** — ROUGE-L implementation ([`evaluation/rouge.py`](src/captioning/evaluation/rouge.py))
+- [x] **1b-E** — Benchmark runner ([`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py)) emitting one `metrics.json` + `diagnostics.jsonl` per run
+- [x] **1b-F** — Per-sample inspection tool ([`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)) — sentence-level BLEU/ROUGE, length, longest repeated-token run, failure flags
+- [x] **1b-G** — Stabilization config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) — label smoothing, cosine LR, warmup, dropout-free validation, all ablatable
+- [x] **1b-H** — Stabilized training runbook ([`docs/STABILIZED_TRAINING_RUNBOOK.md`](docs/STABILIZED_TRAINING_RUNBOOK.md))
+- [ ] **1b-I** — Fresh stabilized COCO-trained checkpoint committed to [`models/`](models/) (under a bumped `vX.Y.Z/`)
+- [ ] **1b-J** — Headline numbers (BLEU-1..4, CIDEr, METEOR, ROUGE-L) published in [Performance](#-performance)
+
+### Phase 2A — FastAPI inference service ✅
+
+- [x] **2A-1** — App factory + lifespan-managed `CaptionPredictor` singleton with `warmup()` on boot
+- [x] **2A-2** — Thin `/healthz` and `POST /v1/captions` routes with full status-code contract (200 / 400 / 413 / 415 / 422 / 503)
+- [x] **2A-3** — Pydantic v2 schemas (`CaptionResponse`, `HealthResponse`, `ErrorResponse`) with auto-generated Swagger + OpenAPI 3.1
+- [x] **2A-4** — `PredictorService` with `anyio.to_thread.run_sync` offload so TF inference never blocks the event loop
+- [x] **2A-5** — Structured logging (`structlog`) + `RequestContextMiddleware` propagating `x-request-id` across log lines
+- [x] **2A-6** — `BackendSettings` separated from research `AppConfig` (different change cadences, different env prefixes)
+- [x] **2A-7** — Bootstrap dev artefacts script so the API boots before training has produced real weights
+
+### Phase 2B — Frontend SPA ✅
+
+- [x] **2B-1** — React 19 + Vite 8 + Tailwind v4 scaffolding, flat ESLint config with `eslint-plugin-react-hooks` + `eslint-plugin-react-refresh`
+- [x] **2B-2** — Drag/drop + click-to-browse upload zone with keyboard activation and client-side content-type + size validation
+- [x] **2B-3** — `services/api.js` boundary: `VITE_API_BASE` env, `AbortController` timeouts (3 s health / 60 s caption), typed `ApiError` classification
+- [x] **2B-4** — Polled `/healthz` status badge with three-state machine, window-focus refetch, and automatic recovery
+- [x] **2B-5** — Typed `CaptionResponse` rendering — caption, model version, decode strategy, latency, request ID — with copy-to-clipboard
+- [x] **2B-6** — Single `ErrorBanner` surface mapping every `ApiError.kind` to actionable copy
+- [x] **2B-7** — CORS allow-list wired through backend YAML (`serve.cors_allowed_origins`), dev origins pre-allowed
+
+### Phase 2C — Public deployment 🚧 (in progress)
+
+- [ ] **WS-A** — Backend containerisation: multi-stage `Dockerfile` (python:3.11-slim, non-root, EXPOSE 7860, HEALTHCHECK) + `.dockerignore` + `.env.example`
+- [ ] **WS-A4** — Lifespan integration with HuggingFace Hub: extend `BackendSettings` with `weights_hub_repo` / `weights_hub_revision`, call `huggingface_hub.snapshot_download` on startup when set
+- [ ] **WS-B** — Upload trained weights + tokenizer to a HuggingFace Hub model repo
+- [ ] **WS-C** — First manual deploy to a HuggingFace Space (Docker SDK, cpu-basic, port 7860, single worker)
+- [x] **WS-D** — **Backend test suite** ([`backend/app/tests/`](backend/app/tests/)): 12 route tests covering the full `/healthz` + `/v1/captions` contract (200 / 400 / 413 / 415 / 422 / 503) with a duck-typed `FakePredictorService` — no TF loaded, full slice runs in 0.3 s
+- [ ] **WS-E** — Frontend deploy to Vercel (static SPA, `VITE_API_BASE` baked at build time, SPA rewrites)
+- [ ] **WS-F** — Production CORS: add the deployed Vercel origin to `serve.cors_allowed_origins`
+- [ ] **WS-G** — GitHub Actions CI/CD:
+  - `ci.yml` — Python quality matrix (ruff, mypy, pytest on 3.10/3.11/3.12), notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
+  - `deploy-backend.yml` — gated on `needs: ci`, pushes to the HF Space
+  - `deploy-frontend.yml` *(optional)* — Vercel-native GitHub integration is the recommended path
+- [ ] **WS-H** — README "Live Demo" section (badges swapped to live HF Space + Vercel URLs) + `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` + `docs/CI.md`
+
+### Phase 3 — Multimodal baselines ⏳ (planned)
+
+- [ ] **3A** — Side-by-side comparison harness: original CNN + Transformer vs. BLIP-base vs. ViT-GPT2 vs. GIT-base-coco
+- [ ] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation
+- [ ] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs. GPU)
+- [ ] **3D** — Comparison-result dashboard exposed through the existing SPA
+
+### Phase 4 — Observability ⏳ (planned)
+
+- [ ] **4A** — Sentry error tracking on backend + frontend
+- [ ] **4B** — Prometheus metrics (per-route latency histograms, predictor cache hits, lifespan boot duration)
+- [ ] **4C** — DagsHub-hosted MLflow tracking link surfaced in the README
+- [ ] **4D** — Architecture Decision Records (`docs/adr/`) — every non-trivial choice (TF version pin, anyio offload, env-var prefix separation, etc.) gets a one-page ADR
+
+Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md) · [Stabilized training runbook](docs/STABILIZED_TRAINING_RUNBOOK.md).
+
+---
+
+## 🎯 Engineering Decisions
+
+> **Why preserve the notebook verbatim instead of refactoring it in place?**
+> The notebook is the published research artefact and the only thing that can credibly produce the BLEU-4 ~24 baseline the IEEE paper claims. Editing it would silently destroy that reproducibility. The freeze + parity-audit pattern keeps the published result anchored while the modular package evolves; if the audit ever fails, the modular path has drifted from the paper and the diff is exactly where to start debugging.
+
+> **Why pin `tensorflow-cpu==2.15.0`?**
+> TF 2.16 ships Keras 3 as the default backend, and Keras 3 silently breaks `TextVectorization` save/load — the tokenizer round-trip the entire serving stack depends on. The pin is documented in [`requirements.txt`](requirements.txt) and protected by the env setup commands above. Phase 3's foundation-model baselines will live in optional dependency groups so they can install on a newer TF without unpinning the research pipeline.
+
+> **Why two separate settings objects (`AppConfig` + `BackendSettings`)?**
+> Research hyperparameters (`model.*`, `train.*`, `data.*`) and serving knobs (weights path, model version, warmup toggle, request-id header) change on different cadences and have different audiences. Folding them into one object would mean every backend env var lived in a research YAML, and every research-side schema change risked breaking a deploy. Two objects with two prefixes (`CAPTIONING__*` vs `BACKEND_*`) gives each surface its own change schedule.
+
+> **Why `anyio.to_thread.run_sync` for inference instead of `async def predict`?**
+> TensorFlow's `predict` call is synchronous and CPU-bound. Calling it directly from an async route handler would block the event loop and starve every other request. Offloading via `anyio.to_thread.run_sync` lets the event loop keep serving health checks and concurrent uploads while the model runs.
+
+> **Why is the bootstrap-weights script committed?**
+> The serving stack (lifespan, predictor wiring, multipart upload, frontend integration) has to be verifiable before a real COCO-trained checkpoint exists. The bootstrap script makes the entire path runnable from a fresh clone, which is what lets reviewers actually evaluate the architectural work independently of the model-quality work. The captions are gibberish — by design — and the README states that prominently to keep expectations honest.
+
+> **Why `extra="forbid"` on every config schema?**
+> ML projects fail catastrophically when a typo in a hyperparameter silently uses a default. `vocabularsy_size: 30000` should be a load-time error, not a quiet retraining run on the wrong vocabulary size. Strict configs are the cheapest possible insurance against the most expensive class of bug in this domain.
+
+> **Why ship the metric suite and beam search *before* publishing new numbers?**
+> Without deterministic tokenisation + a corpus-level runner + a non-greedy decoder, any "improved" number is unfalsifiable — it could be a real gain, a decoding artefact, or a tokenisation difference. The harness is the prerequisite to making the next training run mean something. Publishing the bar before the harness exists is how research projects accumulate numbers nobody can reproduce.
+
+---
+
+## 🔬 Experimental evaluation pipeline
+
+The repository is evolving from a "research notebook reproduction" into a reproducible experimentation platform. Evaluation is no longer a single BLEU number printed at the end of training — it is a structured set of artefacts any future run, including the Phase 3 multimodal baselines, can be diffed against.
+
+- **[`scripts/evaluate.py`](scripts/evaluate.py)** — single entrypoint for full corpus evaluation. Loads a checkpoint + tokenizer, runs decoding (greedy or beam) over the COCO validation slice, computes BLEU-1..4 / CIDEr / METEOR / ROUGE-L, and writes a versioned artefact set under `results/<run_id>/`.
+- **[`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)** — per-sample diagnostic view. Prints N random predictions vs. references with sentence-level BLEU-4 / ROUGE-L, prediction length, longest repeated-token run, and failure flags (`empty` / `very_short` / `repetitive` / `under_length`). Used when the aggregate metric moves but the qualitative behaviour does not.
+- **[`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py)** — `RunMeta` and `write_run_artifacts(...)`, the contract every evaluation run honours. Phase 3 cross-model comparison code joins multiple `results/<run_id>/` directories without bespoke parsers per model.
+- **Greedy vs. beam evaluation support** — the same evaluator accepts `--decode-strategy greedy|beam` plus beam-search controls (`--beam-width`, `--length-penalty`, `--no-repeat-ngram-size`), so a single command-line difference produces directly comparable artefact sets for the same checkpoint.
+
+---
+
+## ⚖️ Limitations
+
+- The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines for side-by-side comparison.
+- The modular pipeline has not yet reproduced the IEEE notebook's BLEU-4 ~24 on a freshly trained checkpoint; see [Current model quality status](#-current-model-quality-status). The bootstrap weights shipped under [`models/v1.0.0/`](models/v1.0.0/) are intentionally random and exist only for architectural smoke testing.
+- Beam search is implemented and selectable, but a head-to-head benchmark against greedy on a real checkpoint is part of in-progress Phase 1b validation, not a published result yet.
+- CIDEr / METEOR / ROUGE-L are implemented and emitted into `metrics.json` per run; finalised numbers from the modular pipeline are pending a stabilized COCO-trained checkpoint.
 - Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless, removed in Phase 1b).
 
 These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOTES.md` § Technical debt](docs/PHASE_1_NOTES.md#technical-debt-remaining).
 
 ---
 
-## Experimental evaluation pipeline
+## 🧭 What I'd Build Next
 
-The repository is evolving from a "research notebook reproduction" into a reproducible experimentation platform. Evaluation is no longer a single BLEU number printed at the end of training — it is a structured set of artefacts that any future run, including the Phase 3 multimodal baselines, can be diffed against.
+Clear extension paths beyond the current scope, ordered by how much I'd learn building them:
 
-The pieces:
-
-- **[`scripts/evaluate.py`](scripts/evaluate.py)** — single entrypoint for full corpus evaluation. Loads a checkpoint + tokenizer, runs decoding (greedy or beam) over the COCO validation slice, computes BLEU-1..4 / CIDEr / METEOR / ROUGE-L, and writes a versioned artefact set under `results/<run_id>/`.
-- **[`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)** — per-sample diagnostic view. Prints N random predictions vs. references with sentence-level BLEU-4 / ROUGE-L, prediction length, longest repeated-token run, and a set of failure flags (`empty` / `very_short` / `repetitive` / `under_length`). Used when the aggregate metric moves but the qualitative behaviour does not.
-- **Benchmark runner utilities** — [`src/captioning/evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py) defines `RunMeta` and `write_run_artifacts(...)`, the contract every evaluation run honours. Phase 3 cross-model comparison code joins multiple `results/<run_id>/` directories without bespoke parsers per model.
-- **Greedy vs. beam evaluation support** — the same evaluator accepts `--decode-strategy greedy|beam` plus beam-search controls (`--beam-width`, `--length-penalty`, `--no-repeat-ngram-size`), so a single command-line difference produces directly comparable artefact sets for the same checkpoint. Beam-search implementation lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py).
-- **`metrics.json` outputs** — every evaluation writes a typed metric report (BLEU-1..4, ROUGE-L, METEOR, CIDEr) plus run metadata in machine-readable form. The Phase 3 comparison plots will read these files directly; no per-run hand-typing of numbers into spreadsheets.
-- **`diagnostics.jsonl` inspection flow** — the same per-sample diagnostic rows that `scripts/inspect_predictions.py` prints to stdout are emitted as JSONL alongside the metrics. The downstream loader is whatever pandas / DuckDB query happens to be useful that day, instead of a bespoke parser per investigation.
-
-### Current limitations
-
-- **No fresh fully-trained stabilized checkpoint is committed yet.** The stabilized training workflow exists in code; the resulting weights file does not yet sit under [`models/v1.0.0/`](models/v1.0.0/).
-- **Current repo weights are bootstrap/dev artefacts** — see [Current model quality status](#current-model-quality-status). They exist for serving-stack smoke tests, not for producing usable captions.
-- **Benchmark numbers from the modular pipeline are not yet finalized.** The metric harness is in place; the matching checkpoint to publish numbers from is not.
-- **Phase 3 multimodal baselines (BLIP / ViT-GPT2 / GIT) are planned** specifically because the original CNN + Transformer architecture has a quality ceiling that no amount of decoding tuning or schedule tweaking will lift past modern foundation-model baselines. Stabilization here is the floor; Phase 3 is the path past it.
+- **Foundation-model fine-tuning** — fine-tune BLIP-2 or LLaVA on COCO and benchmark per-token cost vs. caption quality against the InceptionV3 + Transformer baseline.
+- **Streaming generation** — server-sent events from `/v1/captions` so the SPA renders tokens as the decoder produces them, instead of waiting for the full sequence.
+- **Batch inference endpoint** — a second route that accepts an array of images, runs them through one TF graph call, and amortises the per-request Python overhead — useful for any downstream pipeline that needs to caption a folder.
+- **Visual Question Answering** — extend the same encoder + decoder pattern to `POST /v1/vqa` taking image + question, sharing the warmed CNN encoder.
+- **VLM-backed comparison endpoint** — an opt-in route that runs the same image through Anthropic Claude vision or OpenAI Vision behind a feature flag, returns both captions, and surfaces a side-by-side card in the SPA. The framing is *"here's what a 2024 VLM does for the same input"*, not a replacement for the local model.
+- **Online evaluation** — a background job that periodically scores the latest checkpoint against a held-out COCO slice and pushes BLEU / CIDEr / latency to a Grafana dashboard, so model regressions surface without a human running `scripts/evaluate.py`.
+- **Active-learning loop** — surface low-confidence captions in the SPA, capture user corrections, and route them into a labelled corpus for the next training run.
 
 ---
 
-## Roadmap
+## 📚 Lessons Being Learned
 
-- **Phase 1b** (in progress) — beam search ✅, CIDEr / METEOR / ROUGE-L ✅ ([`evaluation/cider.py`](src/captioning/evaluation/cider.py), [`meteor.py`](src/captioning/evaluation/meteor.py), [`rouge.py`](src/captioning/evaluation/rouge.py)), stabilized training workflow ✅ ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)), evaluation benchmark runner ✅ ([`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py)), prediction inspection tooling ✅ ([`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)). Full retraining + benchmark validation on COCO is still in progress — the metric harness is in place, the matching checkpoint is not yet committed.
-- **Phase 2A** ✅ — FastAPI backend, lifespan-managed predictor singleton, multipart inference endpoint, structured logging + request IDs, Pydantic schemas, Swagger/OpenAPI docs, health/readiness probe.
-- **Phase 2B** ✅ — React 19 + Vite 8 + Tailwind v4 SPA, drag/drop upload UX, live API integration against `POST /v1/captions`, env-driven `VITE_API_BASE`, `AbortController` timeouts, typed `ApiError` classification, polled health badge with auto-recovery, CORS allow-list wired through the backend YAML config.
-- **Phase 2C** — Deployment integration: HuggingFace Spaces backend, Vercel-hosted frontend, production CORS allow-list, GitHub Actions CI/CD across both packages.
-- **Phase 3** — Tier-1 multimodal upgrades: BLIP-base / ViT-GPT2 / GIT-base-coco side-by-side comparison demo with per-model BLEU + latency.
-- **Phase 4** — Sentry, Prometheus, DagsHub-hosted MLflow link, Architecture Decision Records (`docs/adr/`).
-- **Future work** — ViT + Transformer fine-tune on COCO; VLM API integration (Anthropic Claude vision) behind a feature flag; VQA endpoint.
+> The hardest engineering skill on a research → production conversion is not the code — it is the discipline of *not improving the model* while you fix the codebase around it. Every quality intervention you fold in mid-refactor makes the parity audit ambiguous: when the numbers change, you cannot tell whether the new metric harness, the new tokenisation, the new decoder, or the new training schedule was responsible. The four ablatable flags in [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml) exist specifically so each change can be diffed in isolation.
 
-Detailed plan: [`docs/restructure-plan.md`](docs/restructure-plan.md).
+> Pydantic with `extra="forbid"` has caught more real bugs in this codebase than every other tool combined. A typo in a YAML key that silently uses a default is the single most expensive class of bug in ML, and the fix is one config option.
 
-### Current capabilities
+> The split between research config (`AppConfig`) and serving config (`BackendSettings`) felt over-engineered the day it was introduced and has paid for itself every week since. The two surfaces change on different cadences, ship on different schedules, and need different env-var prefixes for the deploy story to make sense. Conflating them would have meant every backend-only env var lived in a research YAML.
 
-- Notebook parity preserved — IEEE artefact frozen by SHA-256, four-stage parity audit gates every behavioural change.
-- Typed modular ML package — Pydantic v2 configs, mypy-strict, 37 unit tests passing.
-- Production-style inference API — FastAPI app factory, lifespan-managed `CaptionPredictor` singleton, warmup on boot.
-- Swagger/OpenAPI testing — interactive `/docs` UI for hand-testing every endpoint, raw `/openapi.json` for client codegen.
-- Structured logging — JSON in production, pretty in dev; per-request UUIDs threaded through every log line.
-- End-to-end image upload → caption flow — multipart upload → content-type guard → image decode → predictor → typed response with latency + request ID.
-- End-to-end browser inference workflow — React 19 + Vite 8 SPA under [`frontend/`](frontend/) wired to `POST /v1/captions`; drag/drop or click-to-browse upload, live caption + latency + request ID display.
-- Drag/drop upload UI — JPEG / PNG / WebP, 10 MB cap, keyboard-activatable (`Enter` / `Space`), client-side validation mirrored from the backend so error wording stays consistent.
-- Live frontend-backend integration — typed `ApiError` boundary, `AbortController` timeouts (3 s health / 60 s caption), CORS allow-list aligned with `serve.cors_allowed_origins`.
-- Polled health surface — `StatusBadge` reads `/healthz` every 10 s plus on window focus; recovers automatically without page reload when the backend comes back.
-- Responsive Tailwind v4 inference interface — single-column layout under the `lg` breakpoint, sticky header with live status, modular component split under [`frontend/src/components/`](frontend/src/components/).
-- Typed API communication — SPA consumes the same Pydantic `CaptionResponse` shape the backend emits; caption, `model_version`, `decode_strategy`, `latency_ms`, and `request_id` render directly from the wire payload.
-- Production-style frontend architecture — dedicated [`services/api.js`](frontend/src/services/api.js) boundary, env-driven `VITE_API_BASE` with safe fallback, lint-clean flat ESLint config, static-asset build via `npm run build`.
-- Beam-search decoding — [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) dispatched through `CaptionPredictor` alongside greedy, with length penalty, repetition penalty, and no-repeat n-gram blocking.
-- Multi-metric evaluation — corpus BLEU-1..4 plus CIDEr / METEOR / ROUGE-L under a single runner ([`src/captioning/evaluation/`](src/captioning/evaluation/)), emitted as `metrics.json` per run.
-- Benchmark runner — versioned `results/<run_id>/` artefact contract via [`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py), designed so Phase 3 cross-model comparison can join runs without bespoke parsers.
-- Prediction inspection tooling — [`scripts/inspect_predictions.py`](scripts/inspect_predictions.py) for per-sample sentence-level BLEU / ROUGE-L, length and repetition diagnostics, and failure-flag breakdown.
-- Stabilized training configs — opt-in label smoothing, cosine LR schedule, warmup steps, and dropout-free validation behind explicit flags in [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml).
-- Reproducible evaluation pipeline — `metrics.json` + `predictions.jsonl` + `diagnostics.jsonl` + `run_meta.json` + `report.md` per run, so any two runs can be diffed mechanically rather than re-typed into a spreadsheet.
+> Notebook freezing is the smallest possible piece of engineering that earns the largest amount of trust. A SHA-256 file plus a pre-commit hook plus one CI step is enough to guarantee the published research is exactly what reviewers think it is, three years from now.
 
 ---
 
-## Citation
+## 📝 License & Contact
 
-If you reference this work in academic writing, please cite the IEEE paper:
+This project is released under the [MIT License](LICENSE).
 
-```bibtex
-@inproceedings{ainarratives,
-  title     = {AI Narratives: Bridging Visual Content and Linguistic Expression},
-  booktitle = {Proceedings of the IEEE Conference},
-  publisher = {IEEE},
-  year      = {2024},
-  url       = {https://ieeexplore.ieee.org/document/10675203},
-}
-```
+**Built by [apoorvrajdev](https://github.com/apoorvrajdev)** — reach me at [apoorvrajmgr@gmail.com](mailto:apoorvrajmgr@gmail.com).
+
+Contribution + commit governance for this repo is codified in [`CLAUDE.md`](CLAUDE.md).
 
 ---
 
-## Acknowledgements
-
-- The model architecture, hyperparameters, and BLEU baseline are from the IEEE-published paper *AI Narratives: Bridging Visual Content and Linguistic Expression*.
-- COCO 2017 captions provided by the [Microsoft COCO project](https://cocodataset.org/).
-- TensorFlow / Keras for the model layers; Pydantic for the configuration system; sacrebleu for evaluation; Ruff, mypy, and pytest for tooling.
-
----
-
-## License
-
-Released under the [MIT License](LICENSE). The IEEE paper itself is published under separate terms.
-
----
-
-## Author
-
-**Apoorv Raj** — AI / ML systems engineer.
-Repository structured by phase; contributions and issues welcome.
+<p align="center">
+  <em>Built as a flagship portfolio project for ML and multimodal-AI engineering roles.</em>
+</p>
