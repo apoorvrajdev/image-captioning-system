@@ -1,0 +1,71 @@
+# =============================================================================
+# .dockerignore — keep the build context tiny.
+# Everything not needed by the backend runtime is excluded.
+# =============================================================================
+
+# --- VCS / IDE ---------------------------------------------------------------
+.git
+.github
+.gitignore
+.gitattributes
+.vscode
+.idea
+*.swp
+
+# --- Python caches & build artefacts -----------------------------------------
+__pycache__
+*.py[cod]
+*$py.class
+*.egg-info
+.eggs
+build
+dist
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+.coverage.*
+htmlcov
+.tox
+
+# --- Virtual envs ------------------------------------------------------------
+.venv
+venv
+env
+
+# --- Frontend (deployed separately to Vercel) --------------------------------
+frontend
+node_modules
+
+# --- Tests, notebooks, docs --------------------------------------------------
+tests
+notebooks
+docs
+assets
+scripts
+
+# --- Local dev / secrets -----------------------------------------------------
+.env
+.env.*
+!.env.example
+*.local
+
+# --- OS junk -----------------------------------------------------------------
+.DS_Store
+Thumbs.db
+
+# --- Docker / CI configs (not needed inside the image) -----------------------
+Dockerfile
+.dockerignore
+.pre-commit-config.yaml
+Makefile
+CLAUDE.md
+
+# --- Lockfiles / dev-only deps -----------------------------------------------
+requirements-dev.txt
+requirements-eval.txt
+
+# --- Model artefacts: keep ONLY the production version -----------------------
+# (Add explicit exceptions here if you publish multiple versions.)
+models/**/*.tar
+models/**/*.zip
