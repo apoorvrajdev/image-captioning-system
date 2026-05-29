@@ -543,7 +543,7 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 ### Phase 2C — Public deployment 🚧 (in progress)
 
 - [x] **WS-A** — Backend containerisation: `Dockerfile` (python:3.11-slim, non-root UID 1000, EXPOSE 7860, HEALTHCHECK on `/healthz`) + `.dockerignore` + corrected `.env.example` schema
-- [ ] **WS-A4** — Lifespan integration with HuggingFace Hub: extend `BackendSettings` with `weights_hub_repo` / `weights_hub_revision`, call `huggingface_hub.snapshot_download` on startup when set
+- [x] **WS-A4** — Lifespan integration with HuggingFace Hub: extended `BackendSettings` with `weights_hub_repo` / `weights_hub_revision` / `weights_hub_filename` / `weights_cache_dir`; new `app.services.weights_loader.resolve_weights` calls `huggingface_hub.snapshot_download` when configured, falls back to local paths otherwise (4 new unit tests, downloader injected for offline testing)
 - [ ] **WS-B** — Upload trained weights + tokenizer to a HuggingFace Hub model repo
 - [ ] **WS-C** — First manual deploy to a HuggingFace Space (Docker SDK, cpu-basic, port 7860, single worker)
 - [x] **WS-D** — **Backend test suite** ([`backend/app/tests/`](backend/app/tests/)): 12 route tests covering the full `/healthz` + `/v1/captions` contract (200 / 400 / 413 / 415 / 422 / 503) with a duck-typed `FakePredictorService` — no TF loaded, full slice runs in 0.3 s

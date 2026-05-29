@@ -14,6 +14,8 @@ Override any field via environment variable, prefixed with ``BACKEND_``::
     BACKEND_TOKENIZER_DIR=models/v1.0.0
     BACKEND_MODEL_VERSION=v1.0.0
     BACKEND_WARMUP=true
+    BACKEND_WEIGHTS_HUB_REPO=your-username/captioning-weights
+    BACKEND_WEIGHTS_HUB_REVISION=v1.0.0
 """
 
 from __future__ import annotations
@@ -34,11 +36,14 @@ class BackendSettings(BaseSettings):
     )
     weights_path: Path = Field(
         default=Path("models/v1.0.0/model.h5"),
-        description="Path to the trained Keras weights file.",
+        description="Path to the trained Keras weights file (used when weights_hub_repo is unset).",
     )
     tokenizer_dir: Path = Field(
         default=Path("models/v1.0.0"),
-        description="Directory containing vocab.pkl / vocab.json artifacts.",
+        description=(
+            "Directory containing vocab.pkl / vocab.json artifacts "
+            "(used when weights_hub_repo is unset)."
+        ),
     )
     model_version: str = Field(
         default="v1.0.0",
@@ -57,6 +62,28 @@ class BackendSettings(BaseSettings):
         description="HTTP header used for request correlation IDs.",
     )
 
+    # ---- HuggingFace Hub weights pull (WS-A4) -------------------------------
+    # When ``weights_hub_repo`` is set, ``lifespan`` calls
+    # ``huggingface_hub.snapshot_download`` and resolves ``weights_path`` and
+    # ``tokenizer_dir`` to paths inside the downloaded snapshot. This lets the
+    # Docker image stay small and lets us rotate weights without rebuilding.
+    weights_hub_repo: str | None = Field(
+        default=None,
+        description="HuggingFace Hub repo id (e.g. 'user/captioning-weights'). None = use local paths.",
+    )
+    weights_hub_revision: str = Field(
+        default="main",
+        description="Git ref/tag/commit to pin (recommended: pin a tag like 'v1.0.0').",
+    )
+    weights_hub_filename: str = Field(
+        default="model.h5",
+        description="Filename of the weights file inside the Hub snapshot.",
+    )
+    weights_cache_dir: Path | None = Field(
+        default=None,
+        description="Local cache dir for snapshot_download. None = HF Hub default ($HF_HOME).",
+    )
+
     model_config = SettingsConfigDict(
         env_prefix="BACKEND_",
         case_sensitive=False,
@@ -67,6 +94,11 @@ class BackendSettings(BaseSettings):
     @classmethod
     def _expand_user(cls, value: Path) -> Path:
         return value.expanduser()
+
+    @field_validator("weights_cache_dir")
+    @classmethod
+    def _expand_optional_user(cls, value: Path | None) -> Path | None:
+        return value.expanduser() if value is not None else None
 
 
 @lru_cache(maxsize=1)

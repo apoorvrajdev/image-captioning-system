@@ -26,6 +26,7 @@ from app.api.routes import router
 from app.core.config import BackendSettings, get_backend_settings
 from app.core.logging import RequestContextMiddleware, configure_app_logging
 from app.services.predictor_service import PredictorService
+from app.services.weights_loader import resolve_weights
 from captioning.config import load_config
 from captioning.config.schema import AppConfig
 from captioning.inference import CaptionPredictor
@@ -40,16 +41,18 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: BackendSettings = app.state.backend_settings
     config: AppConfig = app.state.app_config
 
+    weights_path, tokenizer_dir = resolve_weights(settings)
+
     log.info(
         "predictor_loading",
-        weights=str(settings.weights_path),
-        tokenizer_dir=str(settings.tokenizer_dir),
+        weights=str(weights_path),
+        tokenizer_dir=str(tokenizer_dir),
         model_version=settings.model_version,
     )
 
     predictor = CaptionPredictor.from_artifacts(
-        weights_path=settings.weights_path,
-        tokenizer_dir=settings.tokenizer_dir,
+        weights_path=weights_path,
+        tokenizer_dir=tokenizer_dir,
         config=config,
     )
     if settings.warmup:
