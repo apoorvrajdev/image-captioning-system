@@ -193,6 +193,8 @@ warn_unused_ignores = true
 warn_no_return = true
 no_implicit_optional = true
 files = ["src/captioning", "backend/app", "scripts"]
+mypy_path = "src:backend"
+explicit_package_bases = true
 
 [[tool.mypy.overrides]]
 module = [
