@@ -28,7 +28,7 @@ short_description: InceptionV3 + Transformer image captioning inference API
 <p align="center">
   <img alt="Ruff"             src="https://img.shields.io/badge/lint-ruff-261230?style=flat-square&logo=ruff&logoColor=white">
   <img alt="mypy strict"      src="https://img.shields.io/badge/typed-mypy%20strict-1F5082?style=flat-square">
-  <img alt="Tests"            src="https://img.shields.io/badge/tests-90%20passing-brightgreen?style=flat-square">
+  <img alt="Tests"            src="https://img.shields.io/badge/tests-94%20passing-brightgreen?style=flat-square">
   <img alt="Pre-commit"       src="https://img.shields.io/badge/pre--commit-enabled-FAB040?style=flat-square&logo=pre-commit&logoColor=white">
   <img alt="IEEE Published"   src="https://img.shields.io/badge/IEEE-published-00629B?style=flat-square&logo=ieee&logoColor=white">
   <img alt="License: MIT"     src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -45,6 +45,20 @@ short_description: InceptionV3 + Transformer image captioning inference API
 > 🚧 **Active build.** The research → modular conversion (Phase 1) is complete and the full inference stack (Phase 2A backend + 2B frontend) is operational end-to-end: a React 19 / Vite 8 SPA posts multipart uploads to `POST /v1/captions`, the FastAPI service returns a typed `CaptionResponse`, and the lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check. A four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C (public deployment) is now in flight — workstream **D (backend test suite)** is complete: 12 new FastAPI route tests use a duck-typed fake predictor service to cover the full 200 / 400 / 413 / 415 / 422 / 503 contract end-to-end without loading TensorFlow, dropping the backend slice from a cold-start liability to a 0.3-second suite. The remaining workstreams (Dockerfile, HuggingFace Hub weights hosting, HF Spaces deploy, Vercel deploy, production CORS, GitHub Actions CI/CD, runbook) are sequenced in the [Roadmap](#-roadmap) below.
 
 > ⚠️ **Caption quality disclaimer.** The weights committed under [`models/v1.0.0/`](models/v1.0.0/) are **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py): the architecture is wired correctly but every weight is randomly initialised. They exist to exercise the serving stack (lifespan, predictor wiring, multipart upload, frontend integration) before a real COCO-trained checkpoint is dropped in. Live captions therefore look like noise today — that is the *intended* state of the bootstrap path, not a regression. See [Current model quality status](#-current-model-quality-status) for what is being done about it.
+
+---
+
+## 🌐 Live Demo
+
+| Component | URL | What you can do |
+|---|---|---|
+| **Frontend SPA** | https://image-captioning-system.vercel.app | Drag-and-drop an image, hit **Generate caption**, see the typed `CaptionResponse` rendered with model version, decode strategy, and latency |
+| **Backend API** | https://apoorvrajdev-image-captioning-api.hf.space | Interactive Swagger at [`/docs`](https://apoorvrajdev-image-captioning-api.hf.space/docs); liveness + readiness at [`/healthz`](https://apoorvrajdev-image-captioning-api.hf.space/healthz); inference at `POST /v1/captions` |
+| **Weights (HF Hub)** | https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer | Pinned to tag `v1.0.0`; the backend pulls these at lifespan startup via `snapshot_download` so the Space's git tree never contains the `.h5` |
+
+Deployment topology: GitHub `main` → CI on every push → on green, `deploy-backend.yml` pushes to a HuggingFace Space (Docker SDK, cpu-basic, port 7860, single uvicorn worker); Vercel's Git integration builds and promotes the SPA in parallel. Production CORS is wired through the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable, not a hardcoded config. Full topology + rollback procedure: [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). CI/CD workflows: [`docs/CI.md`](docs/CI.md).
+
+> ⚠️ The live caption you get will look like noise (e.g. `"plate city mountain [UNK]"`). That is the dev-scaffold weight story above — the infrastructure is what's being demonstrated end-to-end; the trained checkpoint is a future `v2.0.0` swap with **zero code changes** (just a Space variable bump from `v1.0.0` → `v2.0.0`).
 
 ---
 
@@ -552,20 +566,20 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 - [x] **2B-6** — Single `ErrorBanner` surface mapping every `ApiError.kind` to actionable copy
 - [x] **2B-7** — CORS allow-list wired through backend YAML (`serve.cors_allowed_origins`), dev origins pre-allowed
 
-### Phase 2C — Public deployment 🚧 (in progress)
+### Phase 2C — Public deployment ✅ (complete)
 
 - [x] **WS-A** — Backend containerisation: `Dockerfile` (python:3.11-slim, non-root UID 1000, EXPOSE 7860, HEALTHCHECK on `/healthz`) + `.dockerignore` + corrected `.env.example` schema
 - [x] **WS-A4** — Lifespan integration with HuggingFace Hub: extended `BackendSettings` with `weights_hub_repo` / `weights_hub_revision` / `weights_hub_filename` / `weights_cache_dir`; new `app.services.weights_loader.resolve_weights` calls `huggingface_hub.snapshot_download` when configured, falls back to local paths otherwise (4 new unit tests, downloader injected for offline testing)
 - [x] **WS-B** — Uploaded dev-scaffold weights + tokenizer to [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on HuggingFace Hub, tagged `v1.0.0`, verified via `snapshot_download` (SHA-256 hashes match local artefacts byte-for-byte)
 - [x] **WS-C** — First manual deploy to [`apoorvrajdev/image-captioning-api`](https://huggingface.co/spaces/apoorvrajdev/image-captioning-api) on HuggingFace Spaces (Docker SDK, cpu-basic, port 7860, single worker) — Space variables wire `BACKEND_WEIGHTS_HUB_REPO` / `_REVISION` / `_FILENAME` + `BACKEND_WARMUP=true`; lifespan pulls weights from the Hub on cold start; `/healthz` returns `model_loaded: true` and `/v1/captions` verified end-to-end via Swagger UI
 - [x] **WS-D** — **Backend test suite** ([`backend/app/tests/`](backend/app/tests/)): 12 route tests covering the full `/healthz` + `/v1/captions` contract (200 / 400 / 413 / 415 / 422 / 503) with a duck-typed `FakePredictorService` — no TF loaded, full slice runs in 0.3 s
-- [ ] **WS-E** — Frontend deploy to Vercel (static SPA, `VITE_API_BASE` baked at build time, SPA rewrites)
-- [ ] **WS-F** — Production CORS: add the deployed Vercel origin to `serve.cors_allowed_origins`
-- [ ] **WS-G** — GitHub Actions CI/CD:
+- [x] **WS-E** — Frontend deploy to Vercel: `frontend/` imported as a Vite project, `VITE_API_BASE` env var baked at build time, production alias [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) auto-redeployed on every push to `main` via Vercel's GitHub integration
+- [x] **WS-F** — Production CORS: deployed Vercel origin added to `serve.cors_allowed_origins` via the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable (JSON array, pydantic-settings parsed), so the policy is explicit in app config rather than relying on the HF reverse-proxy default
+- [x] **WS-G** — GitHub Actions CI/CD:
   - [x] `ci.yml` — Python quality (ruff lint + format check, mypy), pytest matrix on 3.10/3.11/3.12, notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
-  - [ ] `deploy-backend.yml` — gated on `needs: ci`, pushes to the HF Space
-  - [ ] `deploy-frontend.yml` *(optional)* — Vercel-native GitHub integration is the recommended path
-- [ ] **WS-H** — README "Live Demo" section (badges swapped to live HF Space + Vercel URLs) + `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` + `docs/CI.md`
+  - [x] [`deploy-backend.yml`](.github/workflows/deploy-backend.yml) — chained via `workflow_run` after CI, pushes `HEAD:main` to the HF Space remote using the `HF_TOKEN` repo secret; also supports `workflow_dispatch` for manual redeploys
+  - [x] `deploy-frontend.yml` *(skipped — Vercel-native GitHub integration deploys on every push, no separate workflow needed)*
+- [x] **WS-H** — "[Live Demo](#-live-demo)" section above + [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md) (full topology, prerequisites, weights upload, Space setup, Vercel setup, CORS, CI/CD, smoke tests, known quirks, rollback) + [`docs/CI.md`](docs/CI.md) (workflow reference)
 
 ### Phase 3 — Multimodal baselines ⏳ (planned)
 
