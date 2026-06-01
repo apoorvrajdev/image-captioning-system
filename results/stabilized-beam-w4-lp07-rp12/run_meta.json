@@ -1,0 +1,12 @@
+{
+  "model_id": "inceptionv3-transformer-stabilized",
+  "decode_strategy": "beam",
+  "weights_path": "models/v1.0.0/model.h5",
+  "tokenizer_dir": "models/v1.0.0",
+  "n_samples": 500,
+  "max_length": 40,
+  "beam_width": 4,
+  "length_penalty": 0.7,
+  "repetition_penalty": 1.2,
+  "timestamp_utc": "2026-06-01T13:49:29.575579+00:00"
+}
