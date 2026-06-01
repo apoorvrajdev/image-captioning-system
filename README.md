@@ -44,7 +44,14 @@ short_description: InceptionV3 + Transformer image captioning inference API
 
 > ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a multi-stage Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a four-job GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11/3.12, notebook SHA-256 freeze, frontend lint + build) plus a chained `deploy-backend.yml` that pushes `main` to the Space remote only after CI is green, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Next up: Phase 3 (multimodal baselines) — see [Roadmap](#-roadmap).
 
-> ⚠️ **Caption quality disclaimer.** The weights committed under [`models/v1.0.0/`](models/v1.0.0/) are **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py): the architecture is wired correctly but every weight is randomly initialised. They exist to exercise the serving stack (lifespan, predictor wiring, multipart upload, frontend integration) before a real COCO-trained checkpoint is dropped in. Live captions therefore look like noise today — that is the *intended* state of the bootstrap path, not a regression. See [Current model quality status](#-current-model-quality-status) for what is being done about it.
+> 📊 **Trained checkpoint shipped.** The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) was trained on COCO 2017 (95,918 train captions, 24,082 val captions, 10 epochs, Kaggle T4 ×2, cosine LR with 500-step warmup, label smoothing 0.1). Results on a 500-sample val2017 slice:
+>
+> | Decode strategy | BLEU-1 | BLEU-4 | ROUGE-L | METEOR | CIDEr |
+> |---|---|---|---|---|---|
+> | Greedy | 42.20 | 10.57 | 37.57 | 15.45 | 0.789 |
+> | Beam (w=4, lp=0.7, rp=1.2) | 41.93 | 10.39 | 36.84 | 15.56 | **0.826** |
+>
+> Full artefacts: [`results/stabilized-greedy/`](results/stabilized-greedy/) and [`results/stabilized-beam-w4-lp07-rp12/`](results/stabilized-beam-w4-lp07-rp12/). The trained weights are hosted on the Hub at [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) and loaded by the backend at startup — the live demo now produces real captions.
 
 ---
 
@@ -58,7 +65,7 @@ short_description: InceptionV3 + Transformer image captioning inference API
 
 Deployment topology: GitHub `main` → CI on every push → on green, `deploy-backend.yml` pushes to a HuggingFace Space (Docker SDK, cpu-basic, port 7860, single uvicorn worker); Vercel's Git integration builds and promotes the SPA in parallel. Production CORS is wired through the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable, not a hardcoded config. Full topology + rollback procedure: [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). CI/CD workflows: [`docs/CI.md`](docs/CI.md).
 
-> ⚠️ The live caption you get will look like noise (e.g. `"plate city mountain [UNK]"`). That is the dev-scaffold weight story above — the infrastructure is what's being demonstrated end-to-end; the trained checkpoint is a future `v2.0.0` swap with **zero code changes** (just a Space variable bump from `v1.0.0` → `v2.0.0`).
+> 💡 The live demo produces real captions from a COCO-trained checkpoint (CIDEr 0.83). Example: *"a bathroom with a toilet and a sink"*, *"a man riding skis down a snow covered slope"*. See [`results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl`](results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl) for 30 sample predictions vs. ground-truth references.
 
 ---
 
@@ -203,33 +210,51 @@ The notebook is preserved verbatim as the canonical research artefact. Improveme
 
 ---
 
-## ⚠️ Current model quality status
+## 📊 Model quality — stabilized training results
 
-The frontend, backend, and inference pipeline are operational end-to-end against the modular package, but **caption quality from the current modular pipeline is still below expectations**. The IEEE notebook reported BLEU-4 ~24; a freshly trained checkpoint produced by the modular trainer has not yet reproduced that figure on COCO. The serving stack is production-style and ready for a real checkpoint — what is missing is the checkpoint itself.
+The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) converged on COCO 2017 in 10 epochs on Kaggle T4 ×2. Training loss dropped monotonically from 4.69 (epoch 1) to 3.33 (epoch 10); validation accuracy climbed from 0.43 to 0.48. No overfitting was observed — val_acc was still rising at epoch 10.
 
-Current engineering effort is focused on:
+### Corpus-level metrics (500-sample val2017 slice)
 
-- **Training stability** — diagnosing why early modular training runs collapse onto a small set of high-frequency captions instead of generalising.
-- **Evaluation correctness** — moving from a single BLEU score to a full corpus-level metric suite with deterministic tokenisation, so two runs against the same slice are mechanically comparable.
-- **Decoding improvements** — replacing greedy-only generation with beam search, repetition controls, and length normalisation.
-- **Reproducible benchmarking** — emitting one consistent artefact set per evaluation run so any two runs (or any two models) can be diffed without bespoke parsing per checkpoint.
+| Metric | Greedy | Beam (w=4, lp=0.7, rp=1.2) |
+|---|---|---|
+| BLEU-1 | 42.20 | 41.93 |
+| BLEU-2 | 26.09 | 25.41 |
+| BLEU-3 | 16.52 | 16.01 |
+| BLEU-4 | 10.57 | 10.39 |
+| ROUGE-L | 37.57 | 36.84 |
+| METEOR | 15.45 | 15.56 |
+| CIDEr | 0.789 | **0.826** |
 
-The weights currently committed under [`models/v1.0.0/`](models/v1.0.0/) are the **bootstrap dev artefacts** produced by [`scripts/bootstrap_dev_artifacts.py`](scripts/bootstrap_dev_artifacts.py). Captions returned by the live API today will look like noise; that is the *intended* state of the bootstrap path, not a regression. Poor caption quality at this stage is expected until a properly COCO-trained checkpoint replaces those files.
+Beam search trades a marginal n-gram overlap regression for a +5% CIDEr lift — CIDEr down-weights generic phrases and rewards image-specific vocabulary, making it the better quality signal for captioning. Full artefact sets (metrics, predictions, diagnostics, qualitative samples) are committed under [`results/`](results/).
 
-This gap is being addressed through the **stabilized training workflow** at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml), which gates convergence-stability primitives behind explicit, ablatable flags rather than rewriting the baseline.
+### Qualitative highlights
 
-### Accuracy investigation (ongoing)
+The model produces fluent, semantically grounded captions with correct object identification across diverse scenes. Sample predictions vs. COCO references (beam decode):
 
-- **Greedy decoding limited caption quality and diversity.** Argmax-per-step routinely picked the locally-most-probable token regardless of how that affected the overall sequence likelihood, biasing outputs toward a small "safe captions" basin. Beam-search infrastructure now lives at [`src/captioning/inference/beam.py`](src/captioning/inference/beam.py) and dispatches through `CaptionPredictor` alongside the existing greedy path; decode strategy is selectable per inference call and per evaluation run.
-- **BLEU-only evaluation hid behaviour the score did not reflect.** CIDEr, METEOR, and ROUGE-L are implemented under [`src/captioning/evaluation/`](src/captioning/evaluation/) and run through the same corpus-level runner that already produces BLEU-1..4. Every evaluation now emits the full metric set in a single `metrics.json`.
-- **Validation-time dropout parity quirks** inherited from the notebook (`compute_loss_and_acc` ignoring its `training` argument, so dropout stayed active during validation) were identified during the parity audit. They are now gated behind an explicit config flag (`train.honour_training_flag_in_test_step`) so notebook parity is preserved by default and the conventional dropout-free validation path is opt-in via [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml).
-- **Training stabilization experiments** are introduced as opt-in flags so they can be ablated cleanly rather than entangled with the baseline:
-  - label smoothing (`train.label_smoothing`),
-  - cosine LR schedule (`train.lr_schedule: cosine`),
-  - warmup steps (`train.warmup_steps`),
-  - dropout-free validation path (`train.honour_training_flag_in_test_step`).
+| Image | Predicted | Reference | BLEU-4 |
+|---|---|---|---|
+| 000000129379 | a woman sitting on a bench talking on a cell phone | a woman sitting on a cement wall talking on a cell phone | 64.1 |
+| 000000360371 | a white toilet sitting in a bathroom next to a sink | a toilet sitting in a bathroom next to a scale | 69.9 |
+| 000000402020 | a sandwich on a plate on a table | a sandwich on a plate and full wine glass are under blurry lights | 74.2 |
+| 000000082881 | a man riding skis down a snow covered slope | two people ski over a snow covered slope | 29.8 |
+| 000000252596 | a person riding a skateboard down a street | a person skateboards down a street that has greenery on either side | 15.7 |
 
-A complete experimental training config — not a thin override — lives at [`configs/train/stabilized.yaml`](configs/train/stabilized.yaml). It is byte-for-byte identical to [`configs/base.yaml`](configs/base.yaml) except for those four flags, so any quality delta between the two runs is attributable to those flags alone.
+Known failure modes: colour attribute errors (red vs. yellow), count mismatches (one vs. two), generic fallback on unusual compositions. These are expected limitations of a frozen-InceptionV3 encoder and addressable in Phase 3 with modern vision backbones.
+
+### Training configuration
+
+| Parameter | Value |
+|---|---|
+| Encoder | InceptionV3 (frozen, ImageNet weights) |
+| Decoder | Multi-head Transformer (4 heads, 512-dim) |
+| Data | COCO 2017, 95,918 train / 24,082 val captions |
+| Epochs | 10 (no early stopping triggered) |
+| Batch size | 64 |
+| LR schedule | Cosine decay, peak 0.001, 500-step warmup |
+| Label smoothing | 0.1 |
+| Platform | Kaggle T4 ×2, TF 2.19, tf-keras 2.19 (legacy Keras 2 shim) |
+| Wall-clock | ~3.3 hours |
 
 ---
 
@@ -638,9 +663,8 @@ The repository is evolving from a "research notebook reproduction" into a reprod
 ## ⚖️ Limitations
 
 - The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines for side-by-side comparison.
-- The modular pipeline has not yet reproduced the IEEE notebook's BLEU-4 ~24 on a freshly trained checkpoint; see [Current model quality status](#-current-model-quality-status). The bootstrap weights shipped under [`models/v1.0.0/`](models/v1.0.0/) are intentionally random and exist only for architectural smoke testing.
-- Beam search is implemented and selectable, but a head-to-head benchmark against greedy on a real checkpoint is part of in-progress Phase 1b validation, not a published result yet.
-- CIDEr / METEOR / ROUGE-L are implemented and emitted into `metrics.json` per run; finalised numbers from the modular pipeline are pending a stabilized COCO-trained checkpoint.
+- BLEU-4 (10.57 greedy / 10.39 beam) is below the IEEE notebook's reported ~24. The gap is attributable to frozen encoder features and a 10-epoch budget; fine-tuning the encoder or training longer would close it. See [Model quality](#-model-quality--stabilized-training-results) for the full metric table.
+- Colour attribute errors (red vs. yellow), count mismatches (one vs. two), and generic fallback on unusual compositions are the dominant failure modes — visible in [`results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl`](results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl).
 - Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless, removed in Phase 1b).
 
 These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOTES.md` § Technical debt](docs/PHASE_1_NOTES.md#technical-debt-remaining).
