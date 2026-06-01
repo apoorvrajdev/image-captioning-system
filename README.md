@@ -558,7 +558,7 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 - [x] **1H** — Notebook parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) — 4 stages, byte/tensor-identical
 - [x] **1I** — Unit test suite (parity, tokenizer, evaluation, splits, hashing, image preprocessing, caption preprocessing)
 
-### Phase 1b — Training stabilization ✅ (training validation in progress)
+### Phase 1b — Training stabilization ✅
 
 - [x] **1b-A** — Beam-search decoder ([`inference/beam.py`](src/captioning/inference/beam.py)) with length normalisation + n-gram repetition suppression, selectable per call/run
 - [x] **1b-B** — CIDEr implementation ([`evaluation/cider.py`](src/captioning/evaluation/cider.py))
@@ -568,8 +568,8 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 - [x] **1b-F** — Per-sample inspection tool ([`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)) — sentence-level BLEU/ROUGE, length, longest repeated-token run, failure flags
 - [x] **1b-G** — Stabilization config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) — label smoothing, cosine LR, warmup, dropout-free validation, all ablatable
 - [x] **1b-H** — Stabilized training runbook ([`docs/STABILIZED_TRAINING_RUNBOOK.md`](docs/STABILIZED_TRAINING_RUNBOOK.md))
-- [ ] **1b-I** — Fresh stabilized COCO-trained checkpoint committed to [`models/`](models/) (under a bumped `vX.Y.Z/`)
-- [ ] **1b-J** — Headline numbers (BLEU-1..4, CIDEr, METEOR, ROUGE-L) published in [Performance](#-performance)
+- [x] **1b-I** — Fresh stabilized COCO-trained checkpoint uploaded to HF Hub [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) (tag `v2.0.0`)
+- [x] **1b-J** — Headline numbers (BLEU-1..4, CIDEr, METEOR, ROUGE-L) published in [Model quality](#-model-quality--stabilized-training-results) and committed under [`results/`](results/)
 
 ### Phase 2A — FastAPI inference service ✅
 
