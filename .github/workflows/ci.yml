@@ -49,7 +49,9 @@ jobs:
         run: ruff format --check src/captioning backend scripts tests
 
       - name: Mypy
-        run: mypy src/captioning backend/app scripts
+        env:
+          MYPYPATH: src:backend
+        run: mypy --explicit-package-bases --namespace-packages src/captioning backend/app scripts
 
   python-tests:
     name: pytest (Python ${{ matrix.python-version }})
