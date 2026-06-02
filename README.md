@@ -1,15 +1,3 @@
----
-title: Image Captioning API
-emoji: 🖼️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
-license: mit
-short_description: InceptionV3 + Transformer image captioning inference API
----
-
 <h1 align="center">Image Captioning System</h1>
 
 <p align="center">
