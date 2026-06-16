@@ -5,6 +5,8 @@ STAGE 0 — EVALUATION-METHODOLOGY GATE  (run BEFORE Stage 1; may make Stage 1
 unnecessary)
 ================================================================================
 
+OUTCOME (gate complete): verdict = REFRAME, do not retrain — Stage 1 deferred to optional ablation. See results/stabilized-beam-w4-lp07-rp12/verdict.md.
+
 Purpose: before spending 3.5 GPU-hours retraining, test whether the apparent
 gap to the IEEE BLEU-4 ~24 baseline is an evaluation-methodology artefact
 rather than a genuine quality deficit. Two pre-registered, falsifiable tests:
