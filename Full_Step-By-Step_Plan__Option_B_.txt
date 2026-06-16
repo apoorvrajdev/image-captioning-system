@@ -1,0 +1,323 @@
+Full Step-By-Step Plan (Option B)
+
+================================================================================
+STAGE 0 — EVALUATION-METHODOLOGY GATE  (run BEFORE Stage 1; may make Stage 1
+unnecessary)
+================================================================================
+
+Purpose: before spending 3.5 GPU-hours retraining, test whether the apparent
+gap to the IEEE BLEU-4 ~24 baseline is an evaluation-methodology artefact
+rather than a genuine quality deficit. Two pre-registered, falsifiable tests:
+
+  Part A (BLEU)         — rescore the EXISTING v2.0.0 predictions against all 5
+                          COCO references (the committed predictions.jsonl has
+                          only ~1.46 refs/image). Emits a pre-registered band:
+                          DOMINANT / MAJOR-BUT-PARTIAL / MINOR.
+  Part B (qualitative)  — blinded categorization of 30 predictions into
+                          SPECIFIC-CORRECT / GENERIC-CORRECT / PARTIALLY-CORRECT
+                          / INCORRECT, run WITHOUT seeing Part A's number.
+
+Combined verdict (see scripts/categorize_predictions.py docstring) decides
+whether Stage 1 is REQUIRED, OPTIONAL, or UNNECESSARY. If "don't retrain" or
+"ship without retraining", skip Stages 1-2 and go to Stage 7 (reframe).
+
+Pre-registration discipline: both scripts embed their predictions/rubric in
+their module docstrings and must be COMMITTED before being run. Part A is run
+and committed first; Part B runs afterward so the BLEU number cannot bias the
+qualitative read.
+
+--------------------------------------------------------------------------------
+Cell G0 — locate the COCO annotations file (path varies by dataset mount)
+
+ANN=$(find /kaggle/input -maxdepth 6 -name "captions_train2017.json" 2>/dev/null | head -1)
+echo "Annotations: $ANN"
+# If empty, the coco-2017-dataset is not attached — add it in the right sidebar.
+
+--------------------------------------------------------------------------------
+Cell G1 — PART A: 5-ref BLEU rescore + pre-registered band
+
+# Assumes the repo is already cloned + installed (see Stage 1 Cell 2/4). If
+# running Stage 0 standalone, clone first:
+#   !git clone https://github.com/apoorvrajdev/image-captioning-system.git
+#   %cd image-captioning-system
+!pip install -q nltk sacrebleu
+
+import subprocess
+ANN = subprocess.check_output(
+    "find /kaggle/input -maxdepth 6 -name captions_train2017.json 2>/dev/null | head -1",
+    shell=True).decode().strip()
+print("Annotations:", ANN)
+
+!python -m scripts.rescore_nltk_bleu \
+    --predictions-path results/stabilized-beam-w4-lp07-rp12/predictions.jsonl \
+    --coco-annotations "$ANN"
+
+# Watch the line: "PRE-REGISTERED BAND (...): <DOMINANT|MAJOR-BUT-PARTIAL|MINOR>".
+# The full table is also written to
+#   results/stabilized-beam-w4-lp07-rp12/metrics_5ref.json
+# Commit metrics_5ref.json before running Part B.
+
+--------------------------------------------------------------------------------
+Cell G2 — PART B: blinded qualitative worklist (run AFTER Part A is committed)
+
+# Blinding: do NOT open metrics_5ref.json before categorizing. This cell only
+# PREPARES the sample (prints 30 predictions + their 5 refs, no metrics). The
+# categorization itself is a judgment step done against the rubric in
+# scripts/categorize_predictions.py — either by you, or by handing the printed
+# worklist to a separate Claude Code turn. It never reads the BLEU output.
+
+import subprocess
+ANN = subprocess.check_output(
+    "find /kaggle/input -maxdepth 6 -name captions_train2017.json 2>/dev/null | head -1",
+    shell=True).decode().strip()
+
+!python -m scripts.categorize_predictions \
+    --predictions-path results/stabilized-beam-w4-lp07-rp12/predictions.jsonl \
+    --coco-annotations "$ANN"
+
+# After judging each sample, write a categories JSONL
+# ({sample_id, category, justification}) and finalize:
+#   !python -m scripts.categorize_predictions \
+#       --coco-annotations "$ANN" \
+#       --categories results/stabilized-beam-w4-lp07-rp12/categories.jsonl
+# Then apply the COMBINED DECISION RULE (categorize docstring) with the Part A
+# band to decide whether to proceed to Stage 1.
+
+--------------------------------------------------------------------------------
+Stage 0 decision gate:
+  - Combined verdict "don't retrain" / "ship without retraining" -> SKIP Stage 1
+    and Stage 2; go straight to Stage 7 (README reframe).
+  - Combined verdict "retrain" -> proceed to Stage 1 below.
+  - "Flag for human review" -> stop and decide manually before any GPU spend.
+
+================================================================================
+
+Stage 1 - Kaggle Training (you do this in a browser):-
+
+Step 1.1 - Create the Kaggle notebook
+Go to https://www.kaggle.com -> + Create -> New Notebook
+Right sidebar -> Settings:
+Accelerator: GPU T4 x2
+Internet: ON
+Persistence: Files only
+Add Data -> search awsaf49/coco-2017-dataset -> click Add
+Rename notebook to: image-captioning-baseline-recipe-v3
+
+Step 1.2 - Paste these cells in order
+Cell 1 - Confirm dataset path
+
+!ls /kaggle/input/datasets/awsaf49/
+!find /kaggle/input -maxdepth 6 -name "captions_train2017.json" 2>/dev/null
+
+Cell 2 - Clone repo (already pushed, current main has the right code)
+
+!git clone https://github.com/apoorvrajdev/image-captioning-system.git
+%cd image-captioning-system
+
+Cell 3 - Install tf-keras legacy shim
+
+!pip install -q tf-keras
+import os
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
+Cell 4 - Install project deps
+
+import os
+os.environ["TF_USE_LEGACY_KERAS"] = "1"
+
+!sed -i '/^tensorflow/d' requirements.txt
+!pip install -q -r requirements.txt -r requirements-dev.txt -r requirements-eval.txt
+!pip install -q --no-deps -e .
+
+import tensorflow as tf
+import tf_keras
+print("TF:", tf.__version__, "| tf_keras:", tf_keras.__version__, "| GPUs:", tf.config.list_physical_devices("GPU"))
+
+# Expect: TF 2.19, tf_keras 2.x, 2 GPUs.
+
+Cell 5 - Patch base.yaml with Kaggle dataset path
+# NOTE: confirm the real mount from Cell 1's find output; the awsaf49 dataset
+# commonly mounts at /kaggle/input/coco-2017-dataset/coco2017 (no datasets/awsaf49 segment).
+
+!sed -i 's|base_path: data/coco2017|base_path: /kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017|' configs/base.yaml
+!grep base_path configs/base.yaml
+
+Cell 6 - TRAIN with base.yaml (the actual training, ~3.3h)
+
+import os
+os.environ["CAPTIONING__DATA__BASE_PATH"] = "/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017"
+
+!python -m scripts.train \
+    --config configs/base.yaml \
+    --output-dir outputs/runs/baseline
+
+# Watch for: Epoch 1 loss ~3.6. EarlyStopping likely fires ~epoch 5-7 with restore_best_weights=True.
+
+Cell 7 - Copy artefacts to versioned dir
+
+!mkdir -p models/v3.0.0
+!cp outputs/runs/baseline/best.h5    models/v3.0.0/model.h5
+!cp outputs/runs/baseline/vocab.pkl  models/v3.0.0/vocab.pkl
+!cp outputs/runs/baseline/vocab.json models/v3.0.0/vocab.json
+!ls -la models/v3.0.0/
+
+Cell 8 - Greedy evaluation
+
+import os
+os.environ["CAPTIONING__DATA__BASE_PATH"] = "/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017"
+
+!python -m scripts.evaluate \
+    --config configs/base.yaml \
+    --weights models/v3.0.0/model.h5 \
+    --tokenizer-dir models/v3.0.0 \
+    --results-root results \
+    --run-id baseline-greedy \
+    --model-id inceptionv3-transformer-baseline \
+    --decode-strategy greedy \
+    --max-samples 500
+
+Cell 9 - Beam evaluation (same params as v2.0.0 for apples-to-apples)
+
+import os
+os.environ["CAPTIONING__DATA__BASE_PATH"] = "/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017"
+
+!python -m scripts.evaluate \
+    --config configs/base.yaml \
+    --weights models/v3.0.0/model.h5 \
+    --tokenizer-dir models/v3.0.0 \
+    --results-root results \
+    --run-id baseline-beam-w4-lp07-rp12 \
+    --model-id inceptionv3-transformer-baseline \
+    --decode-strategy beam \
+    --beam-width 4 \
+    --length-penalty 0.7 \
+    --repetition-penalty 1.2 \
+    --max-samples 500
+
+Cell 10 - Qualitative samples (30 random predictions)
+
+!python -m scripts.inspect_predictions \
+    --config configs/base.yaml \
+    --weights models/v3.0.0/model.h5 \
+    --tokenizer-dir models/v3.0.0 \
+    --decode-strategy beam \
+    --beam-width 4 \
+    --n-samples 30 \
+    --output results/baseline-beam-w4-lp07-rp12/qualitative.jsonl
+
+Cell 11 - Print metrics summary + side-by-side vs v2.0.0
+
+import json
+
+print("=" * 70)
+print("BASELINE RECIPE (v3.0.0) - configs/base.yaml")
+print("=" * 70)
+for run in ("baseline-greedy", "baseline-beam-w4-lp07-rp12"):
+    m = json.load(open(f"results/{run}/metrics.json"))
+    print(f"\n{run}:")
+    for k in ("bleu1", "bleu2", "bleu3", "bleu4", "rouge_l", "meteor", "cider"):
+        print(f"  {k:10s} = {m[k]:.4f}")
+
+print("\n" + "=" * 70)
+print("STABILIZED RECIPE (v2.0.0) - for comparison")
+print("=" * 70)
+print("""
+stabilized-greedy:
+  bleu1 = 42.20, bleu4 = 10.57, rouge_l = 37.57, meteor = 15.45, cider = 0.789
+stabilized-beam-w4-lp07-rp12:
+  bleu1 = 41.93, bleu4 = 10.39, rouge_l = 36.84, meteor = 15.56, cider = 0.826
+""")
+
+Cell 12 - Package handoff zip
+
+!mkdir -p /kaggle/working/handoff
+!cp -r results /kaggle/working/handoff/
+!cp -r models /kaggle/working/handoff/
+!cp outputs/runs/baseline/history.json /kaggle/working/handoff/ 2>/dev/null || true
+!cd /kaggle/working && zip -r /kaggle/working/handoff-baseline.zip handoff/
+!ls -la /kaggle/working/handoff-baseline.zip
+
+Step 1.3 - Run the notebook
+Hit Run All -> wait ~3.5 hours
+Save Version -> "Save & Run All (Commit)" so the outputs persist
+After completion, Output tab -> download handoff-baseline.zip
+
+Stage 2 - Decision Gate (1 minute, you do this looking at Cell 11 output)
+Look at the CIDEr numbers in Cell 11:
+
+Outcome / What to do
+base.yaml CIDEr >= 0.88 (significantly better than 0.826) -> Parity validated.
+    Proceed to Stage 3. Reframe as ablation in README.
+base.yaml CIDEr 0.83-0.87 (similar to stabilized) -> Mixed signal. Check Cell 10
+    qualitative captions -> if they look more specific, still ship. Otherwise
+    pause and investigate.
+base.yaml CIDEr < 0.82 (worse than stabilized) -> Surprise. Don't ship. There's
+    a hidden divergence we missed.
+Also check Cell 10 qualitative samples - look for confident, specific captions
+("a woman riding a brown horse on a beach") vs generic ones ("a person on a
+beach"). This matters more than the metric delta for the live demo.
+
+Stage 3 - Local Setup (5 min, you do this on your machine)
+
+Step 3.1 - Download + extract handoff zip
+
+mkdir -p "/d/PROJECT/New folder/handoff-baseline"
+cd "/d/PROJECT/New folder/handoff-baseline"
+unzip -o handoff-baseline.zip
+ls -la handoff/
+ls -la handoff/models/v3.0.0/
+ls -la handoff/results/
+
+# Expect: model.h5 (~227MB), vocab.json, vocab.pkl, two baseline-* results dirs, history.json.
+
+Step 3.2 - Sanity check the metrics
+
+cat handoff/results/baseline-greedy/metrics.json | python -m json.tool
+cat handoff/results/baseline-beam-w4-lp07-rp12/metrics.json | python -m json.tool
+
+Stage 4 - Upload to HF Hub (5 min)
+
+Step 4.1 - Upload v3.0.0 weights
+
+cd "/d/PROJECT/New folder/handoff-baseline/handoff"
+hf auth whoami || hf auth login
+hf upload apoorvrajdev/captioning-inceptionv3-transformer models/v3.0.0/model.h5 model.h5
+hf upload apoorvrajdev/captioning-inceptionv3-transformer models/v3.0.0/vocab.json vocab.json
+hf upload apoorvrajdev/captioning-inceptionv3-transformer models/v3.0.0/vocab.pkl vocab.pkl
+
+Step 4.2 - Tag as v3.0.0
+
+python -c "from huggingface_hub import HfApi; HfApi().create_tag('apoorvrajdev/captioning-inceptionv3-transformer', tag='v3.0.0')"
+
+# Verify at https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer/tags
+
+Stage 5 - Flip Live Demo to v3.0.0 (2 min, browser)
+Go to https://huggingface.co/spaces/apoorvrajdev/image-captioning-api -> Settings
+Variables and secrets -> find BACKEND_WEIGHTS_HUB_REVISION
+Click edit -> change from v2.0.0 -> v3.0.0 -> Save
+Space auto-rebuilds (~2 min). Watch the Logs tab -> snapshot_download pulling
+v3.0.0 then model_loaded: true.
+Test: https://image-captioning-system.vercel.app -> drop an image -> check quality.
+
+Stage 6 - Commit Results to Repo (5 min)
+
+cd /d/PROJECT/image-captioning-system-main
+cp -r "/d/PROJECT/New folder/handoff-baseline/handoff/results/baseline-greedy" results/
+cp -r "/d/PROJECT/New folder/handoff-baseline/handoff/results/baseline-beam-w4-lp07-rp12" results/
+git add results/baseline-greedy results/baseline-beam-w4-lp07-rp12
+git status
+
+# Suggested commit (you run it):
+# git commit -m "feat(results): add baseline-recipe COCO eval (v3.0.0 checkpoint)"
+# git push origin main
+
+Stage 7 - Reframe README as Ablation (no Kaggle needed)
+Once Stage 6 is done (or once the Stage 0 gate says "don't retrain"), rewrite
+the README's "Model Quality" section as a recipe ablation:
+  Original recipe (v3.0.0) - constant Adam(1e-3), no label smoothing, EarlyStopping
+  Stabilized recipe (v2.0.0) - cosine LR + warmup + label smoothing 0.1 + dropout-off val
+  Side-by-side table of BLEU-1..4 / CIDEr / METEOR / ROUGE-L (greedy + beam) for both
+  Honest explanation: stabilization tricks designed for large-data regimes hurt
+  small-data captioning. The portfolio story becomes "I ran an ablation and
+  learned when modern recipes don't help" — and, from Stage 0, "I separated a
+  metric-methodology artefact from a genuine quality gap before spending GPU time."
