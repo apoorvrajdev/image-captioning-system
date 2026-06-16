@@ -1,0 +1,43 @@
+{
+  "predictions_path": "results/stabilized-beam-w4-lp07-rp12/predictions.jsonl",
+  "coco_annotations": "/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017/annotations/captions_train2017.json",
+  "ref_stats": {
+    "n_examples": 500,
+    "mean": 5.0,
+    "min": 5,
+    "max": 5,
+    "n_lt_5": 0
+  },
+  "committed_1p46ref_sacrebleu": {
+    "bleu1": 41.92993161784126,
+    "bleu2": 25.407254877413084,
+    "bleu3": 16.009033427971406,
+    "bleu4": 10.388352276291533
+  },
+  "new_5ref": {
+    "sacrebleu_corpus": {
+      "bleu1": 66.84680939513613,
+      "bleu2": 49.072372807125525,
+      "bleu3": 35.58291848370939,
+      "bleu4": 25.90588167391134
+    },
+    "nltk_method1": {
+      "bleu1": 65.96929308173725,
+      "bleu2": 46.60710941167467,
+      "bleu3": 31.91388207552126,
+      "bleu4": 22.22143106639756
+    },
+    "nltk_method4": {
+      "bleu1": 65.96929308173725,
+      "bleu2": 46.91012354234974,
+      "bleu3": 33.1182599403034,
+      "bleu4": 23.80179844214476
+    }
+  },
+  "band": "DOMINANT",
+  "band_basis": "5ref_sacrebleu_corpus_bleu4",
+  "secondary_check": {
+    "method1_vs_corpus_bleu4_delta": -3.6845,
+    "axis_a_wash_under_5ref": false
+  }
+}
