@@ -41,6 +41,8 @@
 >
 > Full artefacts: [`results/stabilized-greedy/`](results/stabilized-greedy/) and [`results/stabilized-beam-w4-lp07-rp12/`](results/stabilized-beam-w4-lp07-rp12/). The trained weights are hosted on the Hub at [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) and loaded by the backend at startup — the live demo now produces real captions.
 
+> 🔬 **Evaluation-methodology audit (Stage 0 gate).** Before retraining to chase the apparent gap to the IEEE BLEU-4 ≈ 24 baseline, I ran a **pre-registered, blinded** evaluation audit. **Part A** re-scored the *same* beam predictions against the full COCO 5-reference set (the committed slice averages ~1.46 references/image): corpus BLEU-4 rose from **10.39 (≈1.46 refs) to 25.91 (5 refs)** — most of the apparent gap was a *reference-count* methodology difference, not a model deficit. This is **methodology parity with the paper's evaluation setup, not a claim of superiority** — the headline number is dominated by how many references you score against. **Part B** (blinded categorisation of 30 predictions, judged before the BLEU result was unblinded) found captions are fluent and usually on-topic but mostly *generic* rather than image-specific: **3/30 specific-correct, 11/30 generic-correct, 15/30 partially-correct, 1/30 incorrect**. Combined verdict: **reframe, do not retrain** ([`verdict.md`](results/stabilized-beam-w4-lp07-rp12/verdict.md)). Specificity is the primary remaining weakness — an architecture limit addressed in Phase 3.
+
 ---
 
 ## 🌐 Live Demo
@@ -215,6 +217,36 @@ The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/
 | CIDEr | 0.789 | **0.826** |
 
 Beam search trades a marginal n-gram overlap regression for a +5% CIDEr lift — CIDEr down-weights generic phrases and rewards image-specific vocabulary, making it the better quality signal for captioning. Full artefact sets (metrics, predictions, diagnostics, qualitative samples) are committed under [`results/`](results/).
+
+### Evaluation methodology audit (5-reference rescore)
+
+The corpus BLEU above (10.39 beam BLEU-4) is scored against the references in the evaluation slice, which average **~1.46 references/image**. The IEEE-era baseline (~24) and standard COCO scoring use the full **5 references/image**. Because BLEU credits an n-gram that matches *any* reference, reference count alone moves the headline number substantially.
+
+To measure this rather than assume it, I ran a **pre-registered, blinded** audit (Stage 0 gate; [`verdict.md`](results/stabilized-beam-w4-lp07-rp12/verdict.md)). **Part A** re-scored the *same* beam predictions against the full COCO 5-reference set:
+
+| BLEU-4 (beam, identical predictions) | References / image | Source |
+|---|---|---|
+| 10.39 | ~1.46 (stored slice) | committed `metrics.json` |
+| **25.91** | 5 (full COCO) | `metrics_5ref.json` (sacrebleu corpus) |
+
+Scored on equal footing (5 references), the checkpoint reaches **25.9 BLEU-4**, in the same range as the IEEE baseline. This demonstrates **methodology parity** — the apparent ~14-point gap was largely a reference-count artefact — **not** that this model is better than the paper's. The transferable finding: **reported BLEU depends heavily on evaluation setup (reference count, tokenisation, smoothing), so a raw BLEU delta is not a model-quality verdict until the eval is held constant.** Reference count remains the dominant contributor to the methodology effect, but the audit also found a measurable smoothing/aggregation contribution under the 5-reference condition.
+
+### Blinded qualitative review (Part B)
+
+A separate **blinded** categorisation of 30 beam predictions — judged against a pre-registered rubric *before* the BLEU result was unblinded — characterises caption quality independently of BLEU:
+
+| Category | Count | Meaning |
+|---|---|---|
+| Specific-correct | **3/30** | Correct subject *and* a distinguishing attribute (colour / count / action / relation) |
+| Generic-correct | 11/30 | Correct subject, no distinguishing detail ("a person on a beach") |
+| Partially-correct | 15/30 | A real element captured, another wrong (count / colour / action / secondary object) |
+| Incorrect | 1/30 | Main subject misidentified or scene absent from references |
+
+(N=30, so each proportion carries ~±18% sampling margin.) Read together: captions are **fluent and usually on-topic**, but **often generic rather than image-specific**, and **count / colour / attribute mistakes remain common**. **Specificity is the primary remaining weakness** — an architectural limit of the frozen InceptionV3 encoder, not something the original training recipe would fix. Artefacts: [`categories.jsonl`](results/stabilized-beam-w4-lp07-rp12/categories.jsonl) · [`metrics_5ref.json`](results/stabilized-beam-w4-lp07-rp12/metrics_5ref.json) · [`verdict.md`](results/stabilized-beam-w4-lp07-rp12/verdict.md).
+
+### Deferred: original-recipe ablation (was "Option B / Stage 1")
+
+A 3.5-hour retrain on the IEEE-style recipe (constant Adam, no label smoothing, early stopping) was originally planned, motivated by the belief that the checkpoint underperformed the paper. The audit **falsified that premise**, so the retrain is **no longer required to close a BLEU gap**. It remains a **valid, decoupled experimental question** — *would the original recipe outperform the stabilized recipe under this exact architecture?* — kept as a future ablation rather than a fix.
 
 ### Qualitative highlights
 
@@ -651,7 +683,8 @@ The repository is evolving from a "research notebook reproduction" into a reprod
 ## ⚖️ Limitations
 
 - The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines for side-by-side comparison.
-- BLEU-4 (10.57 greedy / 10.39 beam) is below the IEEE notebook's reported ~24. The gap is attributable to frozen encoder features and a 10-epoch budget; fine-tuning the encoder or training longer would close it. See [Model quality](#-model-quality--stabilized-training-results) for the full metric table.
+- The headline corpus BLEU-4 (10.57 greedy / 10.39 beam) is scored against ~1.46 references/image; a pre-registered **5-reference rescore of the identical predictions reaches 25.9 BLEU-4**, in the IEEE baseline's range. Most of the apparent gap was therefore an **evaluation-methodology (reference-count) artefact, not a model deficit** — see [Evaluation methodology audit](#evaluation-methodology-audit-5-reference-rescore). This is methodology parity, not superiority over the paper.
+- **Caption specificity** is the primary remaining quality weakness: a blinded 30-sample review found only **3/30** captions image-specific (11/30 generic, 15/30 with a count/colour/attribute error, 1/30 incorrect). This reflects the frozen-InceptionV3 encoder and is addressed in Phase 3 with modern vision backbones — not by re-running the original training recipe.
 - Colour attribute errors (red vs. yellow), count mismatches (one vs. two), and generic fallback on unusual compositions are the dominant failure modes — visible in [`results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl`](results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl).
 - Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless, removed in Phase 1b).
 
@@ -682,6 +715,8 @@ Clear extension paths beyond the current scope, ordered by how much I'd learn bu
 > The split between research config (`AppConfig`) and serving config (`BackendSettings`) felt over-engineered the day it was introduced and has paid for itself every week since. The two surfaces change on different cadences, ship on different schedules, and need different env-var prefixes for the deploy story to make sense. Conflating them would have meant every backend-only env var lived in a research YAML.
 
 > Notebook freezing is the smallest possible piece of engineering that earns the largest amount of trust. A SHA-256 file plus a pre-commit hook plus one CI step is enough to guarantee the published research is exactly what reviewers think it is, three years from now.
+
+> Before retraining a model to close a gap, check whether the gap is real. I suspected this checkpoint underperformed a published baseline by ~14 BLEU points. Rather than immediately spending GPU hours retraining, I designed a **pre-registered, blinded evaluation audit** — fixed hypotheses and decision thresholds committed *before* any result, with the qualitative review judged *before* the BLEU number was unblinded. The audit showed most of the apparent gap came from **evaluation methodology (reference count), not model quality**. The cheapest, most honest engineering move was an experiment, not a retrain.
 
 ---
 
