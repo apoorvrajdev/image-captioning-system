@@ -29,6 +29,57 @@ Use Conventional Commits. Examples:
 
 Keep subject under 72 characters. Body optional but explains *why*, not *what*.
 
+## Commit Granularity
+
+**Prefer many small, focused commits over a few large ones.** Atomic commits are
+a widely defensible engineering practice — easier review, cleaner revert paths,
+more legible history — and a portfolio project benefits from the richer
+contribution graph as a byproduct. Split a batch of work so each logical change
+lands as its own Conventional Commit.
+
+### Rules
+
+- **One reason per commit.** If you'd describe the work as "X *and* Y" with
+  separable verbs (e.g. "fix tokenizer *and* add tests *and* update CHANGELOG"),
+  that's three commits. If it's a single coherent action ("rename `foo` to `bar`
+  across the codebase"), it's one commit — even if it touches twenty files.
+  Granularity is logical, not per-file.
+
+- **Indivisible commits stay indivisible.** Pre-registration blocks (which must
+  land before any result), notebook SHA-256 freeze updates, atomic reverts —
+  these exist as one commit on purpose and are NOT subject to the splitting
+  rule. Do not break them apart to inflate the count.
+
+- **Conventional Commits format applies to every split commit**, not just the
+  combined one. `feat(eval): add rescore script` and `test(eval): cover error
+  paths` are two valid commits; rolling them together loses scope clarity.
+
+- **Always present the sequence, never execute it.** Per the existing rule that
+  Claude does not stage, commit, or push: output the full intended commit
+  sequence (each `git add <file>` + `git commit` pair) so the user can run
+  them. Order matters — within a multi-commit sequence, prefer:
+  schemas/types → implementation → tests → docs → CHANGELOG.
+
+- **No padding.** Do not split a single indivisible change across artificial
+  commits purely to inflate the count. Cohesive granularity, not noise.
+
+### Example
+
+For a change that adds a new evaluation script, its tests, and a Makefile target:
+
+```
+# Bad — one combined commit:
+feat(eval): add rescore script, tests, and Makefile target
+
+# Good — three commits, in order:
+feat(eval): add scripts/rescore_nltk_bleu.py
+test(eval): cover rescore script error paths
+build(make): add rescore-5ref target
+```
+
+The "good" sequence is reviewable, revertable, and reads honestly as three
+logical contributions.
+
 ## Project Stack
 
 - **Core ML:** Python 3.10+, TensorFlow / Keras, NumPy, Pillow
