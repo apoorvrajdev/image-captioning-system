@@ -116,6 +116,27 @@ predict: ## CLI single-image inference (usage: make predict IMAGE=path/to/img.jp
 	$(PYTHON) -m scripts.predict --image $(IMAGE)
 
 # =============================================================================
+# Evaluation-methodology gate (Phase 1b — run BEFORE Kaggle Stage 1 retrain)
+# =============================================================================
+# Both targets need the official COCO 2017 captions file. Download + extract:
+#   curl -L -o ann.zip https://images.cocodataset.org/annotations/annotations_trainval2017.zip
+#   unzip ann.zip   # -> annotations/captions_train2017.json
+# Then pass its path via COCO_ANNOTATIONS, e.g.:
+#   make rescore-5ref COCO_ANNOTATIONS=annotations/captions_train2017.json
+
+.PHONY: rescore-5ref
+rescore-5ref: ## Part A: 5-ref BLEU rescore + pre-registered band (needs COCO_ANNOTATIONS=...)
+	$(PYTHON) -m scripts.rescore_nltk_bleu \
+		--predictions-path results/stabilized-beam-w4-lp07-rp12/predictions.jsonl \
+		--coco-annotations $(COCO_ANNOTATIONS)
+
+.PHONY: categorize-30
+categorize-30: ## Part B: blinded 30-sample categorization worklist (needs COCO_ANNOTATIONS=...)
+	$(PYTHON) -m scripts.categorize_predictions \
+		--predictions-path results/stabilized-beam-w4-lp07-rp12/predictions.jsonl \
+		--coco-annotations $(COCO_ANNOTATIONS)
+
+# =============================================================================
 # Backend (FastAPI)
 # =============================================================================
 
