@@ -1,0 +1,30 @@
+{"sample_id": "381195", "category": "GENERIC-CORRECT", "justification": "Broccoli correct but generic; misses the second dish of beans/lentils that distinguishes the image."}
+{"sample_id": "65965", "category": "PARTIALLY-CORRECT", "justification": "Banana present, but it's a costume/mask worn on the head, not held in the mouth; also a woman, not a man."}
+{"sample_id": "14774", "category": "GENERIC-CORRECT", "justification": "Toilet and sink correct but a default bathroom caption; misses the distinguishing potted plant."}
+{"sample_id": "440844", "category": "PARTIALLY-CORRECT", "justification": "Tennis court and racquet correct, but two players are present and prediction says one (count error)."}
+{"sample_id": "163506", "category": "GENERIC-CORRECT", "justification": "Group on a snowy slope correct but generic; misses the skis/skiing that define the scene."}
+{"sample_id": "145409", "category": "GENERIC-CORRECT", "justification": "Kites flying correctly identified but generic; misses the distinguishing waterside/beach setting."}
+{"sample_id": "132540", "category": "GENERIC-CORRECT", "justification": "Living room with TV correct but default; misses that the TV is on showing an old movie."}
+{"sample_id": "82881", "category": "PARTIALLY-CORRECT", "justification": "Skiing on a snowy slope correct, but two people are skiing and prediction says one (count error)."}
+{"sample_id": "437710", "category": "PARTIALLY-CORRECT", "justification": "Cake correct, but it's a welcome-home cake with red lettering; candle is fabricated, none in references."}
+{"sample_id": "61262", "category": "PARTIALLY-CORRECT", "justification": "Polar bear in water correct, but it's holding/playing with a disc, not laying on a rock (rock fabricated)."}
+{"sample_id": "402020", "category": "GENERIC-CORRECT", "justification": "Sandwich on a plate on a table correct but generic; misses the ham, salad, and wine glass."}
+{"sample_id": "440283", "category": "GENERIC-CORRECT", "justification": "A clock tower roughly captured as a building with a clock; generic, misses the grassy field setting."}
+{"sample_id": "529522", "category": "PARTIALLY-CORRECT", "justification": "Surfing a wave correct, but two surfers are present and prediction says one (count error)."}
+{"sample_id": "326712", "category": "GENERIC-CORRECT", "justification": "Kites in the sky correct but generic; misses the distinguishing colors and long row of kites."}
+{"sample_id": "51652", "category": "GENERIC-CORRECT", "justification": "Street sign on a pole, close up, correct but generic; misses the foreign-language detail."}
+{"sample_id": "352936", "category": "PARTIALLY-CORRECT", "justification": "Bench correct, but the salient bird sitting on the bench is entirely missed."}
+{"sample_id": "252596", "category": "GENERIC-CORRECT", "justification": "Person skateboarding down a street correct but generic; misses the greenery/trees lining the road."}
+{"sample_id": "18773", "category": "SPECIFIC-CORRECT", "justification": "Hot dog with mustard and ketchup; condiments are a distinguishing attribute confirmed by references."}
+{"sample_id": "17667", "category": "PARTIALLY-CORRECT", "justification": "Red boat correct, but it's on a river under a bridge, not a lake (setting error)."}
+{"sample_id": "56028", "category": "PARTIALLY-CORRECT", "justification": "Cows present, but the man and woman who are the main subjects are missed."}
+{"sample_id": "129379", "category": "PARTIALLY-CORRECT", "justification": "Woman talking on a cell phone correct, but she's on a cement wall, not a bench (object error)."}
+{"sample_id": "137730", "category": "SPECIFIC-CORRECT", "justification": "Two zebras standing side by side; count and spatial relation are distinguishing attributes confirmed by references."}
+{"sample_id": "302666", "category": "SPECIFIC-CORRECT", "justification": "Cat sitting on a toilet next to a sink; specific subject and spatial relation correct and constraining."}
+{"sample_id": "360371", "category": "PARTIALLY-CORRECT", "justification": "Toilet correct, but adjacent object is a scale/tub, not a sink; color likely tan, not white."}
+{"sample_id": "15667", "category": "PARTIALLY-CORRECT", "justification": "Fire hydrant and street correct, but it's yellow, not red (color error across all references)."}
+{"sample_id": "336027", "category": "PARTIALLY-CORRECT", "justification": "Man and woman present, but they're at a haircut, not standing in a kitchen; activity and setting wrong."}
+{"sample_id": "117759", "category": "INCORRECT", "justification": "References show a woman blow-drying her hair; prediction says a little girl with a toothbrush — wrong subject, object, action."}
+{"sample_id": "425135", "category": "PARTIALLY-CORRECT", "justification": "Bathroom with a sink correct, but references show two sinks and no toilet; the toilet is fabricated."}
+{"sample_id": "387515", "category": "PARTIALLY-CORRECT", "justification": "Bus on a street correct, but it's traveling/driving, not parked (action error); misses overhead wires."}
+{"sample_id": "416246", "category": "GENERIC-CORRECT", "justification": "Stop sign by a road correct but generic; misses the rural/gravel deserted-road setting."}
