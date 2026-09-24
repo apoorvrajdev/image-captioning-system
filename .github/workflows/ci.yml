@@ -84,6 +84,9 @@ jobs:
       - name: Run pytest
         run: pytest tests backend/app/tests -v --maxfail=5
 
+      - name: Notebook parity audit (4 stages)
+        run: python -m scripts.notebook_module_audit
+
   notebook-freeze:
     name: Notebook SHA-256 freeze
     runs-on: ubuntu-latest
