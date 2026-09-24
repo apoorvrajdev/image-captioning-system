@@ -1,6 +1,6 @@
 # CI / CD
 
-GitHub Actions runs two workflows out of [`.github/workflows/`](../.github/workflows/).
+GitHub Actions runs three workflows (`ci.yml`, `deploy-backend.yml`, and the commit-message policy gate `no-ai-attribution.yml`) out of [`.github/workflows/`](../.github/workflows/).
 
 ## `ci.yml` — quality + tests
 
@@ -8,10 +8,10 @@ Triggered on every push and pull request to `main`. Four parallel jobs:
 
 | Job | What it runs | Why |
 |---|---|---|
-| `python-quality` | `ruff check`, `ruff format --check`, `mypy --strict` on `src/` and `backend/` | Catch style + typing regressions before they land |
-| `python-tests` | `pytest` matrix on Python **3.10 / 3.11 / 3.12** | Confirm the package keeps working on every supported interpreter |
+| `python-quality` | `ruff check`, `ruff format --check`, `mypy` (config in `pyproject.toml`, `strict = false`) on `src/captioning`, `backend/app`, `scripts` | Catch style + typing regressions before they land |
+| `python-tests` | `pytest` matrix on Python **3.10 / 3.11**, then the 4-stage notebook parity audit (`python -m scripts.notebook_module_audit`) | Confirm the package keeps working on every supported interpreter and still matches the notebook |
 | `notebook-freeze` | `make freeze-paper-notebook` (SHA-256 check) | Fail if the IEEE notebook is mutated — it is the canonical research artefact |
-| `frontend` | `npm ci`, `npm run lint`, `npm run build` on Node 20 | Catch ESLint + Vite build regressions in the SPA |
+| `frontend` | `npm install`, `npm run lint`, `npm run build` on Node 20 | Catch ESLint + Vite build regressions in the SPA |
 
 Caching:
 - pip via `actions/setup-python` (key derived from `requirements*.txt` + `pyproject.toml`)
@@ -51,9 +51,10 @@ secret.
 Everything CI does is reproducible locally:
 
 ```bash
-make lint            # ruff check + format --check
-make typecheck       # mypy strict
+make lint            # ruff check (CI also runs: ruff format --check src/captioning backend scripts tests)
+make typecheck       # mypy (pyproject config)
 make test            # pytest (single Python version)
+python -m scripts.notebook_module_audit   # 4-stage notebook parity audit
 make freeze-paper-notebook   # SHA-256 freeze check
 
 cd frontend
