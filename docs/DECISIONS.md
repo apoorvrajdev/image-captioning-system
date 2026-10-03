@@ -88,3 +88,18 @@ Format: **Decision · Why · Evidence**.
 - **Decision:** CI runs `pre-commit run --all-files` with the pinned hook config (`SKIP=mypy`, because `python-quality` runs mypy with the full dependency set).
 - **Why:** hooks only run on machines where they're installed. CI makes hygiene, nbstripout, and prettier binding for every commit, which matches what `.pre-commit-config.yaml` already promised. The gitleaks hook scans staged changes only, so it's a no-op in CI and doesn't count as CI secret scanning.
 - **Evidence:** `.github/workflows/ci.yml` `pre-commit` job, `.pre-commit-config.yaml`.
+
+### ADR-017 — The HF Space is a deployment target fed by force-pushed deploy commits (refines ADR-008)
+- **Decision:** GitHub `main` is the only source of truth, and only CI-verified commits deploy. `deploy-backend.yml` checks out the exact commit CI tested and skips it if `main` has moved past it. Manual `workflow_dispatch` runs must first prove, via the GitHub API, that the exact SHA has a completed, successful CI run on `main`; otherwise they fail before checkout. It adds a deploy commit that prepends the Space's README config header (the block removed from GitHub in `befac80`), then **force-pushes** that commit to the Space. A deploy passes only once the HF API shows a rebuild of the new commit reaching `RUNNING` and `/healthz` reports `model_loaded: true`.
+- **Why:** mirroring GitHub history with plain pushes broke twice.
+  - On 2026-06-16, `302e907` was deployed, then GitHub `main` was rewritten into atomic commits. Every later push was rejected as non-fast-forward.
+  - Since `befac80` (2026-06-02), the Space has had no YAML config, so it sits in `CONFIG_ERROR` while pushes still showed "success".
+- **Why force-push is safe:**
+  - The Space's history is derived from GitHub. Its only divergent commit, `302e907`, has a tree identical to `64f80e8` on GitHub.
+  - Space variables and secrets live in Space settings, not git.
+  - The guard against superseded commits stops an older run from rolling the Space back.
+- **Consequences:**
+  - Don't push to the Space by hand; a raw GitHub commit has no config header.
+  - Rollback is `git revert` on `main`.
+  - Space-only edits made in the HF UI are overwritten on the next deploy.
+- **Evidence:** `.github/workflows/deploy-backend.yml`, `docs/CI.md`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` §§ 4, 7, 10, HF runtime API `errorMessage: "Missing configuration in README"`.
