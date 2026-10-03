@@ -40,11 +40,24 @@ Goal: README reflects `pyproject.toml` (mypy not strict), `ci.yml` (3.10/3.11 ma
 shipped checkpoint (remove "bootstrap weights" / "pending re-training" wording).
 Acceptance criteria: every tool claim in README § Testing and Tech Stack matches a config file.
 
-### TASK-004 — Reconcile model-version labelling            [status: todo] (needs owner input)
+### TASK-004 — Reconcile model-version labelling            [status: done] (verified in production 2026-10-03)
 Area: deployment · docs
 Goal: one consistent version for the served checkpoint across README, `BackendSettings.model_version`
 default, `.env.example`, and the Space's `BACKEND_WEIGHTS_HUB_REVISION` / `BACKEND_MODEL_VERSION`.
 Acceptance criteria: `/healthz.model_version` equals the Hub tag actually served; README states the same tag.
+Root cause: `BACKEND_MODEL_VERSION` was not set on the Space, so the code default `"v1.0.0"` was reported while
+`BACKEND_WEIGHTS_HUB_REVISION=v2.0.0` was being served. The two settings are independent in `BackendSettings`, and
+the runbook's promotion steps bumped only the revision.
+Outcome:
+- The owner set `BACKEND_MODEL_VERSION=v2.0.0`. Space variables (owner-confirmed):
+  `BACKEND_WEIGHTS_HUB_REPO=apoorvrajdev/captioning-inceptionv3-transformer`, `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0`,
+  `BACKEND_MODEL_VERSION=v2.0.0`, `BACKEND_WARMUP=true`.
+- Tag `v2.0.0` resolves to Hub commit `59d93b4` (trained `model.h5`, sha256 `74963a3f…`, 14,927-token vocab).
+- Live `/healthz` (2026-10-03T18:12Z): HTTP 200, `model_loaded: true`, `model_version: "v2.0.0"`. The Space was
+  `RUNNING` on deploy commit `123c5aa`, with no redeploy.
+- README states tag `v2.0.0`. Runbook §§ 3, 4 and 10 now require both variables to move together (ADR-018).
+- Not changed (out of scope, no code edits): the `BackendSettings.model_version` code default (`"v1.0.0"`, used
+  only when the variable is unset) and `.env.example`.
 
 ### TASK-005 — Repair stale Makefile targets            [status: todo]
 Area: deployment
@@ -86,7 +99,7 @@ Outcome:
   about 90 s. The workflow and an independent check both confirmed `/healthz` HTTP 200 with
   `model_loaded: true`, `model_version: v1.0.0`; `/docs` and `/openapi.json` returned HTTP 200.
 - The Space's previous `CONFIG_ERROR` is resolved.
-- Which Hub weights revision is loaded is still open (TASK-004).
+- Which Hub weights revision is loaded was resolved by TASK-004: `v2.0.0`, now also reported as `model_version`.
 
 ---
 
