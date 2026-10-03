@@ -59,10 +59,38 @@ Outcome:
 - Not changed (out of scope, no code edits): the `BackendSettings.model_version` code default (`"v1.0.0"`, used
   only when the variable is unset) and `.env.example`.
 
-### TASK-005 — Repair stale Makefile targets            [status: todo]
+### TASK-005 — Repair stale Makefile targets            [status: done] (verified locally 2026-10-04)
 Area: deployment
 Goal: `docker-build*` use the root `Dockerfile`; remove or fix `docker-up/down` (no compose file) and `eval` (missing required `--weights`/`--tokenizer-dir`).
-Verification: `make -n docker-build eval` shows valid commands (dry run).
+Verification: `make -n docker-build eval` shows valid commands (dry run). On Windows: `mingw32-make -n …` (MSYS2 GNU Make).
+Outcome:
+- `docker-build` now runs `docker build -t captioning-backend:latest .`, which builds the root `Dockerfile` (the
+  image the HF Space builds).
+- `docker-build-hf` removed:
+  - The Dockerfile declares no `ARG INSTALL_HF`, so the build-arg was ignored and the plain image was tagged
+    `hf-latest`.
+  - Nothing in `backend/`, `src/` or `scripts/` imports `transformers` or `torch`.
+  - An HF image belongs to the Phase 3 task that needs one (ADR-013).
+- `docker-up` / `docker-down` removed: no compose file has ever existed. The compose stack only appeared in
+  `restructure-plan.md`.
+- `eval` and `predict` now pass `--config configs/base.yaml`, `--weights $(MODEL_DIR)/model.h5` and
+  `--tokenizer-dir $(MODEL_DIR)`, with `MODEL_DIR ?= models/v1.0.0`. That is the layout used in the README and in
+  both committed `run_meta.json` files.
+- `eval` dropped `--report docs/results/latest.md`, because each run already writes `results/<run_id>/report.md`.
+- `predict` had the same missing-arguments defect and was included at the owner's request.
+- New test `tests/unit/test_makefile.py` is static: it never runs Make or Docker and never imports TensorFlow. It
+  checks Dockerfile paths, `--build-arg`/`ARG` pairs, compose targets, and that each `-m scripts.X` target passes
+  the script's required options. It failed 5 checks on the old Makefile and passes 8/8 now.
+- Verification:
+  - `mingw32-make -n docker-build eval predict` printed the three full commands.
+  - The removed targets fail with "No rule to make target" (exit 2).
+  - `mingw32-make freeze-paper-notebook` printed OK.
+  - click parsed the `eval` / `predict` arguments without running either script.
+  - Full suite 104 passed; ruff lint + format clean; mypy 0 issues (71 files); pre-commit passed.
+- Not run: `docker build` (Docker isn't installed) and a real `make eval` (no COCO data locally).
+- Committed as `1be8c1f`, `29e6db5`, `a6780f6` (Makefile) and `b7b2903` (test).
+- Note: locally, `models/v1.0.0` holds the dev scaffold. To evaluate the served checkpoint, pass
+  `MODEL_DIR=<v2.0.0 snapshot dir>`.
 
 ### TASK-006 — Bound upload reads in `/v1/captions`            [status: done] (verified locally 2026-10-04)
 Area: inference-api

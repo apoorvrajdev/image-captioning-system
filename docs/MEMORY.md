@@ -14,13 +14,13 @@ _Last updated: 2026-10-04_
   It must be decomposed into small tasks before any implementation.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
-  verified locally. TASK-007 (Playwright) is deferred to the start of Phase 3D.
+  deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
 
 ## System status (verified 2026-10-03, local Windows, Python 3.10.11)
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 96 passed on 2026-10-04, after TASK-006 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 104 passed on 2026-10-04, after TASK-005 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -41,6 +41,12 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Recent changes
 
+- 2026-10-04 Makefile repair (TASK-005, done):
+  - `docker-build` builds the root `Dockerfile`.
+  - `docker-build-hf`, `docker-up` and `docker-down` are removed: there was no `ARG INSTALL_HF` and no compose file.
+  - `eval` and `predict` pass `--config`, `--weights` and `--tokenizer-dir`, using `MODEL_DIR ?= models/v1.0.0`.
+  - `tests/unit/test_makefile.py` checks the targets statically.
+  - Committed as `1be8c1f`..`b7b2903`.
 - 2026-10-04 bounded upload read (TASK-006, done): `/v1/captions` reads at most `max_upload_bytes + 1` bytes, then
   returns a 413 if the upload is over the limit. The 413 detail now reads "Image exceeds the {limit}-byte upload
   limit."; status codes and the response shape are unchanged. Committed as `cd5ee1c` (fix) and `b42fae6` (two new
@@ -65,8 +71,6 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Known issues / open debt
 
-- `Makefile`: `docker-build*` point at the nonexistent `backend/Dockerfile`. `docker-up/down` reference a
-  missing compose file. `eval` lacks required `--weights`/`--tokenizer-dir` (TASK-005).
 - No frontend tests / e2e (TASK-007), no coverage measured in CI, no dependency-vulnerability scanning,
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
@@ -74,7 +78,8 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Before coding, know this
 
-- Windows + Git Bash, no `make`. Use `.venv/Scripts/*.exe` (see `CLAUDE.md` → Commands).
+- Windows + Git Bash. `make` isn't on PATH, but `mingw32-make -n <target>` (MSYS2) dry-runs a target. Use
+  `.venv/Scripts/*.exe` (see `CLAUDE.md` → Commands).
 - The notebook is frozen, parity must stay 4/4, and `results/` + `models/vX.Y.Z/` are immutable. Edits to
   them are blocked by `.claude/settings.json`.
 - Retraining and deployments are owner-run (Kaggle / HF / Vercel). Code tasks prepare instructions only.
