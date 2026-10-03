@@ -15,7 +15,7 @@
 
 <p align="center">
   <img alt="Ruff"             src="https://img.shields.io/badge/lint-ruff-261230?style=flat-square&logo=ruff&logoColor=white">
-  <img alt="mypy strict"      src="https://img.shields.io/badge/typed-mypy%20strict-1F5082?style=flat-square">
+  <img alt="mypy"             src="https://img.shields.io/badge/typed-mypy-1F5082?style=flat-square">
   <img alt="Tests"            src="https://img.shields.io/badge/tests-94%20passing-brightgreen?style=flat-square">
   <img alt="Pre-commit"       src="https://img.shields.io/badge/pre--commit-enabled-FAB040?style=flat-square&logo=pre-commit&logoColor=white">
   <img alt="IEEE Published"   src="https://img.shields.io/badge/IEEE-published-00629B?style=flat-square&logo=ieee&logoColor=white">
@@ -30,7 +30,7 @@
 
 ## Status
 
-> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a multi-stage Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a four-job GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11/3.12, notebook SHA-256 freeze, frontend lint + build) plus a chained `deploy-backend.yml` that pushes `main` to the Space remote only after CI is green, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Next up: Phase 3 (multimodal baselines) — see [Roadmap](#-roadmap).
+> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a slim non-root Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11 plus the notebook parity audit, notebook SHA-256 freeze, pre-commit hooks, frontend lint + build) plus a chained `deploy-backend.yml` that pushes `main` to the Space remote only after CI is green, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Next up: Phase 3 (multimodal baselines) — see [Roadmap](#-roadmap).
 
 > 📊 **Trained checkpoint shipped.** The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) was trained on COCO 2017 (95,918 train captions, 24,082 val captions, 10 epochs, Kaggle T4 ×2, cosine LR with 500-step warmup, label smoothing 0.1). Results on a 500-sample val2017 slice:
 >
@@ -63,7 +63,7 @@ Deployment topology: GitHub `main` → CI on every push → on green, `deploy-ba
 
 Image Captioning System is a research-to-production conversion of the IEEE paper *"AI Narratives: Bridging Visual Content and Linguistic Expression"*. The original work — a Kaggle notebook training an InceptionV3-encoder + multi-head Transformer-decoder on MS COCO — is preserved verbatim as the canonical research artefact. Around it sits a typed Python package, a FastAPI inference service, and a React SPA that together turn the published model into something a serving team could actually run, version, and reason about.
 
-It is **not** a hosted product (yet — Phase 2C is shipping that), and it is **not** a thin Streamlit wrapper around `model.predict`. What this project *is* is a deliberate engineering showcase aimed at hiring teams evaluating ML, multimodal-AI, and backend skills, and at anyone who has ever wondered what it actually takes to lift a research notebook into a codebase the rest of an engineering org can build on. Every architectural decision in this repository is one I can defend in an interview.
+It is **not** a commercial product (the live deployment is a public demo), and it is **not** a thin Streamlit wrapper around `model.predict`. What this project *is* is a deliberate engineering showcase aimed at hiring teams evaluating ML, multimodal-AI, and backend skills, and at anyone who has ever wondered what it actually takes to lift a research notebook into a codebase the rest of an engineering org can build on. Every architectural decision in this repository is one I can defend in an interview.
 
 ---
 
@@ -92,7 +92,7 @@ This project demonstrates that conversion end-to-end at a scale one engineer can
 - **Beam search decoder** with length normalisation and n-gram repetition suppression alongside greedy, selectable per inference call and per evaluation run.
 - **Corpus-level metric suite** — BLEU-1..4 (sacrebleu), CIDEr, METEOR, ROUGE-L — emitted as one typed artefact per run.
 - **Notebook freeze + parity audit** — SHA-256 lock on the IEEE notebook plus a four-stage inline re-implementation that fails CI if the modular path drifts.
-- **Pre-commit governance** — Ruff, mypy (strict), `nbstripout`, `gitleaks`, line-ending and TOML/YAML hygiene, all enforced before commits land.
+- **Pre-commit governance** — Ruff, mypy, `nbstripout`, `gitleaks`, line-ending and TOML/YAML hygiene, all enforced before commits land.
 - **Clean Git workflow** with Conventional Commits and small, reviewable changesets ([`CLAUDE.md`](CLAUDE.md) codifies the contribution rules).
 
 ---
@@ -168,7 +168,7 @@ This project demonstrates that conversion end-to-end at a scale one engineer can
 | ![](https://github.com/user-attachments/assets/64e8412b-1d49-404c-a5b2-1da121b224e2) | *a man is standing on a beach with a surfboard* |
 | ![](https://github.com/user-attachments/assets/c802d420-a1c1-48be-8e79-599f193c72cd) | *a man riding a motorcycle on a street* |
 
-Outputs above are from the IEEE notebook; the modular pipeline reproduces these via the parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)). Live captions from the current bootstrap weights will *not* match — see [Current model quality status](#-current-model-quality-status).
+Outputs above are from the IEEE notebook; the modular pipeline reproduces these via the parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)). Live captions come from the stabilized COCO-trained checkpoint rather than the notebook's own weights, so their wording differs — see [Model quality](#-model-quality--stabilized-training-results).
 
 ---
 
@@ -196,7 +196,7 @@ The notebook is preserved verbatim as the canonical research artefact. Improveme
 | Backend test suite | 12 tests · 0.3 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
 | Full suite | **90 tests passing** | `pytest` (unit + backend + parity) |
 
-> Re-training on the modular pipeline is a Phase 1b deliverable; once a fresh checkpoint exists, this table will publish corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L (the harnesses already exist under [`evaluation/`](src/captioning/evaluation/)).
+> Corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L for the stabilized checkpoint are published in [Model quality](#-model-quality--stabilized-training-results) below, produced by the harnesses under [`evaluation/`](src/captioning/evaluation/).
 
 ---
 
@@ -287,8 +287,8 @@ Known failure modes: colour attribute errors (red vs. yellow), count mismatches 
 | **Backend** | FastAPI 0.111, Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
 | **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config |
 | **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations |
-| **Tooling** | Ruff (lint + format), mypy (strict), pytest 8, pre-commit, nbstripout, gitleaks |
-| **Infra (planned, Phase 2C)** | HuggingFace Hub (weights), HuggingFace Spaces (backend), Vercel (frontend), GitHub Actions (CI/CD) |
+| **Tooling** | Ruff (lint + format), mypy, pytest 8, pre-commit, nbstripout, gitleaks |
+| **Infra** | HuggingFace Hub (weights), HuggingFace Spaces (backend), Vercel (frontend), GitHub Actions (CI/CD) |
 
 ---
 
@@ -345,7 +345,8 @@ image-captioning-system/
 │   └── notebook_module_audit.py                 # 4-stage parity gate vs. notebook
 │
 ├── tests/unit/                                  # 78 unit tests (parity, tokenizer, eval, splits, …)
-├── docs/                                        # restructure-plan · PHASE_0_NOTES · PHASE_1_NOTES · STABILIZED_TRAINING_RUNBOOK
+├── docs/                                        # phase notes · runbooks · EVAL_METHODOLOGY · CI
+│                                                # + living docs: MEMORY · TASKS · DECISIONS · TEST_PLAN · SECURITY
 ├── pyproject.toml · requirements*.txt · Makefile
 ├── .pre-commit-config.yaml · .python-version · .env.example
 ├── .paper-notebook.sha256                       # Locked notebook hash for the freeze check
@@ -535,8 +536,8 @@ Schema in [`src/captioning/config/schema.py`](src/captioning/config/schema.py); 
 
 ```bash
 make test            # pytest — 90/90 (unit + backend route tests + parity)
-make lint            # Ruff lint + format check
-make typecheck       # mypy strict on src/captioning + scripts
+make lint            # Ruff lint (CI also runs ruff format --check)
+make typecheck       # mypy on src/captioning + backend/app + scripts
 make pre-commit      # All hooks across all files
 make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 ```
@@ -621,7 +622,7 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
 - [x] **WS-E** — Frontend deploy to Vercel: `frontend/` imported as a Vite project, `VITE_API_BASE` env var baked at build time, production alias [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) auto-redeployed on every push to `main` via Vercel's GitHub integration
 - [x] **WS-F** — Production CORS: deployed Vercel origin added to `serve.cors_allowed_origins` via the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable (JSON array, pydantic-settings parsed), so the policy is explicit in app config rather than relying on the HF reverse-proxy default
 - [x] **WS-G** — GitHub Actions CI/CD:
-  - [x] `ci.yml` — Python quality (ruff lint + format check, mypy), pytest matrix on 3.10/3.11/3.12, notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
+  - [x] `ci.yml` — Python quality (ruff lint + format check, mypy), pytest matrix on 3.10/3.11, notebook SHA-256 freeze check, frontend lint + build, concurrency cancel-in-progress, pip + npm caching
   - [x] [`deploy-backend.yml`](.github/workflows/deploy-backend.yml) — chained via `workflow_run` after CI, pushes `HEAD:main` to the HF Space remote using the `HF_TOKEN` repo secret; also supports `workflow_dispatch` for manual redeploys
   - [x] `deploy-frontend.yml` *(skipped — Vercel-native GitHub integration deploys on every push, no separate workflow needed)*
 - [x] **WS-H** — "[Live Demo](#-live-demo)" section above + [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md) (full topology, prerequisites, weights upload, Space setup, Vercel setup, CORS, CI/CD, smoke tests, known quirks, rollback) + [`docs/CI.md`](docs/CI.md) (workflow reference)
@@ -659,7 +660,7 @@ Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restru
 > TensorFlow's `predict` call is synchronous and CPU-bound. Calling it directly from an async route handler would block the event loop and starve every other request. Offloading via `anyio.to_thread.run_sync` lets the event loop keep serving health checks and concurrent uploads while the model runs.
 
 > **Why is the bootstrap-weights script committed?**
-> The serving stack (lifespan, predictor wiring, multipart upload, frontend integration) has to be verifiable before a real COCO-trained checkpoint exists. The bootstrap script makes the entire path runnable from a fresh clone, which is what lets reviewers actually evaluate the architectural work independently of the model-quality work. The captions are gibberish — by design — and the README states that prominently to keep expectations honest.
+> The serving stack (lifespan, predictor wiring, multipart upload, frontend integration) has to be verifiable before a real COCO-trained checkpoint exists. The bootstrap script makes the entire path runnable from a fresh clone, which is what lets reviewers actually evaluate the architectural work independently of the model-quality work. The captions it produces are gibberish — by design — which is why production serves the trained checkpoint from the Hub instead.
 
 > **Why `extra="forbid"` on every config schema?**
 > ML projects fail catastrophically when a typo in a hyperparameter silently uses a default. `vocabularsy_size: 30000` should be a load-time error, not a quiet retraining run on the wrong vocabulary size. Strict configs are the cheapest possible insurance against the most expensive class of bug in this domain.
@@ -686,7 +687,7 @@ The repository is evolving from a "research notebook reproduction" into a reprod
 - The headline corpus BLEU-4 (10.57 greedy / 10.39 beam) is scored against ~1.46 references/image; a pre-registered **5-reference rescore of the identical predictions reaches 25.9 BLEU-4**, in the IEEE baseline's range. Most of the apparent gap was therefore an **evaluation-methodology (reference-count) artefact, not a model deficit** — see [Evaluation methodology audit](#evaluation-methodology-audit-5-reference-rescore). This is methodology parity, not superiority over the paper.
 - **Caption specificity** is the primary remaining quality weakness: a blinded 30-sample review found only **3/30** captions image-specific (11/30 generic, 15/30 with a count/colour/attribute error, 1/30 incorrect). This reflects the frozen-InceptionV3 encoder and is addressed in Phase 3 with modern vision backbones — not by re-running the original training recipe.
 - Colour attribute errors (red vs. yellow), count mismatches (one vs. two), and generic fallback on unusual compositions are the dominant failure modes — visible in [`results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl`](results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl).
-- Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless, removed in Phase 1b).
+- Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless; kept deliberately for notebook parity, see [`data/pipeline.py`](src/captioning/data/pipeline.py)).
 
 These are explicitly tracked rather than hidden; full list in [`docs/PHASE_1_NOTES.md` § Technical debt](docs/PHASE_1_NOTES.md#technical-debt-remaining).
 
