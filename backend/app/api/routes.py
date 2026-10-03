@@ -90,7 +90,9 @@ async def caption_image(
             ),
         )
 
-    payload = await image.read()
+    # Read at most one byte past the limit: enough to detect an oversized
+    # upload without pulling the whole file into memory.
+    payload = await image.read(service.max_upload_bytes + 1)
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -99,7 +101,7 @@ async def caption_image(
     if len(payload) > service.max_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-            detail=(f"Image is {len(payload)} bytes; limit is {service.max_upload_bytes}."),
+            detail=f"Image exceeds the {service.max_upload_bytes}-byte upload limit.",
         )
 
     try:
