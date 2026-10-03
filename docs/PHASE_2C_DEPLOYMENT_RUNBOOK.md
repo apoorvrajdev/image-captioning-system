@@ -26,6 +26,11 @@ The Space pulls weights from the model repo at lifespan startup via
 
 ## 1. Live URLs
 
+> **Status (2026-10-03):** the backend Space is down. It reports `CONFIG_ERROR`
+> ("Missing configuration in README"), so `/healthz` returns an HF error page.
+> It recovers once the fixed `deploy-backend.yml` runs (TASK-008). Remove this
+> note after a green deploy.
+
 | Component | URL |
 |---|---|
 | Frontend SPA | `https://image-captioning-system.vercel.app` |
@@ -113,11 +118,9 @@ and the Space restarts with the new weights. No code change required.
    | `BACKEND_WARMUP` | `true` |
    | `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `["https://image-captioning-system.vercel.app","http://localhost:5173","http://localhost:5174","http://127.0.0.1:5173","http://127.0.0.1:5174"]` |
 
-3. Add a `space` git remote and push `main`:
-   ```bash
-   git remote add space https://huggingface.co/spaces/apoorvrajdev/image-captioning-api
-   git push space main
-   ```
+3. Deploy by running **Deploy backend to HuggingFace Space** (`deploy-backend.yml`)
+   from the Actions tab on `main` (`workflow_dispatch`). Don't push GitHub commits
+   to the Space by hand: they lack the Space config header (see the note below).
 4. Watch the Space's **Logs** tab. First build takes ~8–12 min (Docker base
    pull, `apt-get`, `pip install -r requirements.txt` with TensorFlow,
    weight download via `snapshot_download`, predictor warmup).
@@ -128,9 +131,11 @@ and the Space restarts with the new weights. No code change required.
    ```
 
 The README YAML frontmatter (`title`, `emoji`, `sdk: docker`, `app_port: 7860`,
-etc.) is what tells the Space how to build. It must remain at the literal top
-of `README.md`. GitHub auto-hides the frontmatter when rendering the README, so
-the same file serves both audiences.
+etc.) is what tells the Space how to build, and it must be at the literal top of
+the Space's `README.md`. GitHub renders that block as a table, so it was removed
+from the GitHub README (`befac80`). Without it the Space reports `CONFIG_ERROR`
+("Missing configuration in README"). `deploy-backend.yml` now prepends the
+original header to the deployment copy only (ADR-017).
 
 ---
 
@@ -172,9 +177,12 @@ Two workflows under [`.github/workflows/`](../.github/workflows/):
   - `notebook-freeze`: SHA-256 freeze check on the IEEE notebook
   - `frontend`: `npm ci && npm run lint && npm run build`
 - **`deploy-backend.yml`** — chained via `workflow_run`, runs only after a
-  successful `CI` run on `main`. Pushes `HEAD:main` to the Space remote using
-  the `HF_TOKEN` repository secret. Also supports `workflow_dispatch` for
-  manual redeploys.
+  successful `CI` run on `main`. It deploys the exact commit CI tested and skips
+  commits `main` has moved past. It adds the Space config header to the deploy
+  copy, force-pushes it to the Space with the `HF_TOKEN` repository secret, and
+  passes only once the HF API reports `RUNNING` and `/healthz` reports
+  `model_loaded: true`. `workflow_dispatch` (on `main`) redeploys the tip of
+  `main`, but only if that exact commit has a successful CI run. Details: [`CI.md`](CI.md).
 
 ### Required GitHub secret
 
@@ -224,8 +232,10 @@ open https://image-captioning-system.vercel.app  # macOS
 
 ## 10. Rollback
 
-- **Bad code on the Space**: `git push space <known-good-sha>:main --force`
-  (from a local checkout). Space rebuilds from that SHA.
+- **Bad code on the Space**: `git revert` the bad commit on GitHub `main` and
+  push. CI runs and `deploy-backend.yml` redeploys the reverted tree with the
+  config header and health checks. Don't force-push a raw GitHub SHA to the
+  Space: it has no config header, so the Space would go to `CONFIG_ERROR`.
 - **Bad weights on the Hub**: bump the Space's
   `BACKEND_WEIGHTS_HUB_REVISION` back to the previous tag (e.g. `v1.0.0`)
   and save. Space restarts in ~30 s with the previous weights.
