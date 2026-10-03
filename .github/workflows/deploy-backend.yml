@@ -1,5 +1,10 @@
 name: Deploy backend to HuggingFace Space
 
+# The Space is a deployment target, not a source repository (ADR-017). Each
+# deploy force-pushes a generated commit (the CI-tested GitHub commit plus the
+# Space's README config header) and only succeeds once the Space reports
+# RUNNING and /healthz reports model_loaded: true.
+
 on:
   workflow_run:
     workflows: ["CI"]
@@ -13,31 +18,136 @@ concurrency:
 
 permissions:
   contents: read
+  actions: read   # manual runs look up the CI result for the exact commit
 
 jobs:
   push-to-space:
-    name: Push main to HF Space
+    name: Deploy tested commit to HF Space
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 50
+    # Manual dispatch is limited to main: a force push from any other branch
+    # would deploy code that never passed CI on main. Manual runs must also
+    # pass the CI-verification step below.
     if: >-
-      github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'main')
     env:
       HF_USERNAME: apoorvrajdev
       HF_SPACE: image-captioning-api
+      # workflow_run: the exact commit the CI run tested.
+      # workflow_dispatch: the commit at the tip of main, deployed only if that
+      # exact commit has a successful CI run (verified in the first step).
+      DEPLOY_SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
     steps:
-      - name: Checkout full history
+      # workflow_run deploys are CI-verified by their trigger. Manual runs are
+      # verified here, before anything is checked out, built, or pushed: the
+      # exact DEPLOY_SHA needs a completed, successful CI run on main. A
+      # success for any other commit doesn't count, and an API error refuses.
+      - name: Verify the requested commit passed CI (manual runs)
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          CI_WORKFLOW_FILE: ci.yml
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import urllib.error
+          import urllib.request
+
+          sha = os.environ["DEPLOY_SHA"]
+          url = (f"{os.environ['GITHUB_API_URL']}/repos/{os.environ['GITHUB_REPOSITORY']}"
+                 f"/actions/workflows/{os.environ['CI_WORKFLOW_FILE']}/runs?head_sha={sha}&per_page=100")
+          request = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+              "X-GitHub-Api-Version": "2022-11-28",
+          })
+          try:
+              with urllib.request.urlopen(request, timeout=30) as response:
+                  runs = json.load(response).get("workflow_runs") or []
+          except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+              print(f"::error::Could not query CI runs for {sha} ({type(exc).__name__}); refusing to deploy")
+              sys.exit(1)
+
+          # Re-check every field rather than trusting the API's head_sha filter.
+          verified = [r for r in runs
+                      if r.get("head_sha") == sha and r.get("head_branch") == "main"
+                      and r.get("status") == "completed" and r.get("conclusion") == "success"]
+          if not verified:
+              seen = ", ".join(
+                  f"{str(r.get('head_sha'))[:7]}@{r.get('head_branch')} {r.get('status')}/{r.get('conclusion')}"
+                  for r in runs) or "none"
+              print(f"::error::{sha} has no completed, successful CI run on main "
+                    f"(runs found: {seen}); refusing to deploy")
+              sys.exit(1)
+          print(f"CI verified {sha}: {verified[0].get('html_url')}")
+          PY
+
+      - name: Checkout the tested commit (full history)
         uses: actions/checkout@v4
         with:
+          ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 0
 
+      # With force-push, an older CI run finishing after a newer one would roll
+      # the Space back. Only the current tip of main is deployed; a superseded
+      # commit is skipped because the newer commit's own CI run deploys it.
+      - name: Skip commits already superseded on main
+        id: guard
+        run: |
+          tip=$(git rev-parse origin/main)
+          if [ "$GITHUB_EVENT_NAME" = "workflow_run" ] && [ "$tip" != "$DEPLOY_SHA" ]; then
+            echo "::notice::main is at ${tip}; ${DEPLOY_SHA} is superseded and will not be deployed."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Configure git identity
+        if: steps.guard.outputs.skip != 'true'
         run: |
           git config user.name "apoorvrajdev"
           git config user.email "apoorvrajmgr@gmail.com"
 
-      - name: Push to HuggingFace Space
+      # The Space reads its build config from YAML front-matter at the top of
+      # README.md. GitHub's README has none (removed in befac80 because GitHub
+      # renders it as a table), so it is added to the deployment copy only.
+      # The header is the one removed in befac80, unchanged.
+      - name: Build the Space deployment commit
+        if: steps.guard.outputs.skip != 'true'
+        run: |
+          cat > "$RUNNER_TEMP/space-header.md" <<'HEADER'
+          ---
+          title: Image Captioning API
+          emoji: 🖼️
+          colorFrom: blue
+          colorTo: indigo
+          sdk: docker
+          app_port: 7860
+          pinned: false
+          license: mit
+          short_description: InceptionV3 + Transformer image captioning inference API
+          ---
+
+          HEADER
+          if [ "$(head -n 1 README.md)" = "---" ]; then
+            echo "::notice::README.md already starts with front-matter; deploying it unchanged."
+          else
+            cat "$RUNNER_TEMP/space-header.md" README.md > "$RUNNER_TEMP/README.space.md"
+            mv "$RUNNER_TEMP/README.space.md" README.md
+          fi
+          git add README.md
+          git commit -q --allow-empty -m "deploy: ${DEPLOY_SHA} with Space config header"
+          echo "DEPLOY_COMMIT=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+
+      # Force-push is intentional (ADR-017): the Space's history is derived from
+      # GitHub and holds nothing that is not already in GitHub's history. Space
+      # variables and secrets live in Space settings, not git, and are untouched.
+      - name: Force-push the deployment commit to the Space
+        if: steps.guard.outputs.skip != 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -46,4 +156,106 @@ jobs:
             exit 1
           fi
           git remote add space "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_USERNAME}/${HF_SPACE}"
-          git push space HEAD:main
+          git push --force space HEAD:main
+
+      # A successful push is not a successful deploy (the Space ended up in
+      # CONFIG_ERROR while pushes still reported success). The runtime API
+      # reports no build SHA, so a stage seen before any build stage may be
+      # left over from the previous commit and is not trusted until
+      # BUILD_START_TIMEOUT has passed.
+      - name: Wait for the Space to build and report healthy
+        if: steps.guard.outputs.skip != 'true'
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          POLL_SECONDS: "15"
+          BUILD_START_TIMEOUT: "600"   # s to observe a rebuild of the new commit
+          RUNNING_TIMEOUT: "1800"      # s for build + startup (first builds take ~8-12 min)
+          HEALTH_TIMEOUT: "600"        # s for /healthz to report model_loaded: true
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          import sys
+          import time
+          import urllib.error
+          import urllib.request
+
+          API = f"https://huggingface.co/api/spaces/{os.environ['HF_USERNAME']}/{os.environ['HF_SPACE']}"
+          TOKEN = os.environ["HF_TOKEN"]
+          EXPECTED = os.environ["DEPLOY_COMMIT"]
+          POLL = int(os.environ["POLL_SECONDS"])
+          BUILD_START_TIMEOUT = int(os.environ["BUILD_START_TIMEOUT"])
+          RUNNING_TIMEOUT = int(os.environ["RUNNING_TIMEOUT"])
+          HEALTH_TIMEOUT = int(os.environ["HEALTH_TIMEOUT"])
+          ERROR_STAGES = {"CONFIG_ERROR", "BUILD_ERROR", "RUNTIME_ERROR", "NO_APP_FILE",
+                          "STOPPED", "PAUSED", "DELETING"}
+
+
+          def get_json(url, auth=True):
+              headers = {"Authorization": f"Bearer {TOKEN}"} if auth else {}
+              try:
+                  with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=30) as r:
+                      return json.load(r)
+              except (urllib.error.URLError, TimeoutError, ValueError) as exc:
+                  print(f"  request failed ({type(exc).__name__}); retrying")
+                  return None
+
+
+          def fail(message):
+              print(f"::error::{message}")
+              sys.exit(1)
+
+
+          # 1. The Space repo must be on the commit that was just pushed.
+          deadline = time.monotonic() + 120
+          while True:
+              head = (get_json(API) or {}).get("sha")
+              if head == EXPECTED:
+                  print(f"Space head is the deployment commit {EXPECTED}")
+                  break
+              if time.monotonic() >= deadline:
+                  fail(f"Space head is {head}, expected {EXPECTED}")
+              time.sleep(5)
+
+          # 2. Wait for a rebuild of the new commit to start, then for RUNNING.
+          start = time.monotonic()
+          seen_build = False
+          domain = None
+          while True:
+              elapsed = int(time.monotonic() - start)
+              runtime = get_json(f"{API}/runtime") or {}
+              stage = runtime.get("stage", "UNKNOWN")
+              for entry in runtime.get("domains") or []:
+                  domain = entry.get("domain") or domain
+              print(f"[{elapsed:>5}s] stage={stage}")
+              if stage == "RUNNING":
+                  if seen_build:
+                      break
+                  if elapsed >= BUILD_START_TIMEOUT:
+                      fail(f"Space reports RUNNING but no rebuild of {EXPECTED} was observed "
+                           f"within {BUILD_START_TIMEOUT}s; refusing to trust a stale state")
+              elif stage in ERROR_STAGES:
+                  if seen_build or elapsed >= BUILD_START_TIMEOUT:
+                      fail(f"Space entered {stage}: {runtime.get('errorMessage') or 'no error message'}")
+              elif stage not in ("UNKNOWN", "SLEEPING"):
+                  seen_build = True  # BUILDING, RUNNING_BUILDING, APP_STARTING, ...
+              if elapsed >= RUNNING_TIMEOUT:
+                  fail(f"Space did not reach RUNNING within {RUNNING_TIMEOUT}s (last stage {stage})")
+              time.sleep(POLL)
+
+          # 3. Healthy means the predictor is loaded, not just an HTTP 200.
+          if not domain:
+              fail("runtime API returned no Space domain")
+          url = f"https://{domain}/healthz"
+          start = time.monotonic()
+          while True:
+              body = get_json(url, auth=False)
+              if isinstance(body, dict) and body.get("model_loaded") is True:
+                  print(f"Healthy: model_version={body.get('model_version')} "
+                        f"api_version={body.get('api_version')}")
+                  break
+              if time.monotonic() - start >= HEALTH_TIMEOUT:
+                  fail(f"{url} did not report model_loaded: true within {HEALTH_TIMEOUT}s "
+                       f"(last response: {body})")
+              time.sleep(POLL)
+          PY
