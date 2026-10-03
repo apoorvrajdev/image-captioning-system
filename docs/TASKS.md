@@ -27,13 +27,14 @@ Rule: no task spans a whole phase. If a task needs more than ~one reviewable cha
 Area: docs · deployment
 Goal: living docs, CI parity-audit step, LF pin for the frozen notebook, CI.md drift fixes.
 
-### TASK-002 — Decide whether to track the agent context directory            [status: todo]
+### TASK-002 — Decide whether to track the agent context directory            [status: done]
 Area: deployment
 Goal: `.claude/` is gitignored, so the repo map, skills, and lane definitions exist only on the
 development machine. Decide: keep local-only, or narrow the ignore to `settings.local.json` and generated index files.
 Acceptance criteria: decision recorded in `DECISIONS.md`; `.gitignore` matches it.
+Outcome: tracked, with guardrails (ADR-015). Local settings and the generated index stay ignored.
 
-### TASK-003 — Fix README drift against config and CI            [status: todo]
+### TASK-003 — Fix README drift against config and CI            [status: done]
 Area: docs
 Goal: README reflects `pyproject.toml` (mypy not strict), `ci.yml` (3.10/3.11 matrix + parity audit), and the
 shipped checkpoint (remove "bootstrap weights" / "pending re-training" wording).
@@ -55,6 +56,23 @@ Area: inference-api
 Goal: reject oversize uploads without reading the whole body into memory (check `Content-Length`
 and/or read at most `max_upload_bytes + 1`).
 Acceptance criteria: GIVEN a body over the limit THEN 413 and at most `limit+1` bytes read; existing 413 test still passes; new test added.
+
+### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (awaiting approval to install)
+Area: frontend · deployment
+Goal: promote the manual browser check in `TEST_PLAN.md` into a committed Playwright spec that mocks
+`/healthz` and `/v1/captions` with `page.route` (no backend, no TensorFlow), run in the CI `frontend` job.
+Acceptance criteria: GIVEN a mocked healthy API WHEN a PNG is uploaded and Generate clicked THEN the caption card
+renders; GIVEN a disallowed file THEN an inline error shows and no request is sent; GIVEN the API is unreachable THEN
+"Cannot reach backend" shows; zero console errors in each case.
+Needs: `@playwright/test` devDependency + Chromium download (local and CI).
+
+### TASK-008 — Restore backend auto-deploy to the HF Space            [status: todo] (needs owner action)
+Area: deployment
+Goal: no `deploy-backend.yml` run has succeeded since mid-June. The 2026-06-16/17 runs failed with HF HTTP 429
+rate limits. The 2026-09-24 run was rejected as non-fast-forward because the Space's git history has commits that
+aren't on GitHub `main`. Inspect the Space history, then either merge those commits into GitHub `main` or decide
+that GitHub is the source of truth and force-push once.
+Acceptance criteria: a green `deploy-backend.yml` run; Space `/healthz` reports `model_loaded: true`.
 
 ---
 
