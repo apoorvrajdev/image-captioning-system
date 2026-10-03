@@ -38,4 +38,5 @@ docker build -t captioning-backend:local .   # only if Docker is available; othe
 
 ## Non-negotiables
 - Never push, deploy, re-tag, or delete Hub revisions. Weights tags are immutable. New checkpoint → new tag.
+- Weights promotion or rollback instructions must set `BACKEND_WEIGHTS_HUB_REVISION` **and** `BACKEND_MODEL_VERSION` to the same tag, and are done only when `/healthz` shows `model_loaded: true` with that `model_version` (ADR-018).
 - Never add paid services or authenticated external integrations without the user's explicit approval.
