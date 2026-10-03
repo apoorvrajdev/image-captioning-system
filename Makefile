@@ -152,18 +152,6 @@ serve: ## Run the FastAPI backend locally with hot reload
 docker-build: ## Build the backend image from the root Dockerfile (the HF Space image)
 	docker build -t captioning-backend:latest .
 
-.PHONY: docker-build-hf
-docker-build-hf: ## Build the backend image WITH HuggingFace baselines (~2.3 GB)
-	docker build --build-arg INSTALL_HF=1 -f $(BACKEND_DIR)/Dockerfile -t captioning-backend:hf-latest .
-
-.PHONY: docker-up
-docker-up: ## Start backend + frontend + mlflow via docker compose
-	docker compose up --build
-
-.PHONY: docker-down
-docker-down: ## Stop docker compose stack
-	docker compose down
-
 # =============================================================================
 # Reproducibility / paper integrity
 # =============================================================================
