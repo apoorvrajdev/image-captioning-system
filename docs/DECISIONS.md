@@ -78,3 +78,13 @@ Format: **Decision · Why · Evidence**.
 - **Decision:** `.gitattributes` sets `eol=lf` on the frozen notebook.
 - **Why:** with `core.autocrlf=true`, the Windows working copy was CRLF, so the SHA-256 freeze check failed locally even though the committed blob matched.
 - **Evidence:** `.gitattributes`, `.paper-notebook.sha256`.
+
+### ADR-015 — Agent workflow config is tracked; invariants are enforced, not just documented
+- **Decision:** the agent workflow config under `.claude/` (`settings.json`, `skills/`, `agents/`, `context/repo-map.md`, `context/build_index.py`) is versioned and reviewed like code. Personal settings and the regenerated code index stay gitignored. `settings.json` denies edits to the frozen notebook, its hash, `models/**`, and `results/**`, denies reading `.env` files, prompts before `git commit`/`push`/`tag`, and rebuilds the index at session start.
+- **Why:** unversioned workflow config can't be reviewed or reproduced on another machine. Invariants enforced by permission rules hold even when instructions are skimmed.
+- **Evidence:** `.gitignore`, `.claude/settings.json`, `CLAUDE.md` § Traps.
+
+### ADR-016 — pre-commit hooks also run in CI
+- **Decision:** CI runs `pre-commit run --all-files` with the pinned hook config (`SKIP=mypy`, because `python-quality` runs mypy with the full dependency set).
+- **Why:** hooks only run on machines where they're installed. CI makes hygiene, nbstripout, and prettier binding for every commit, which matches what `.pre-commit-config.yaml` already promised. The gitleaks hook scans staged changes only, so it's a no-op in CI and doesn't count as CI secret scanning.
+- **Evidence:** `.github/workflows/ci.yml` `pre-commit` job, `.pre-commit-config.yaml`.
