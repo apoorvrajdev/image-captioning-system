@@ -103,3 +103,8 @@ Format: **Decision · Why · Evidence**.
   - Rollback is `git revert` on `main`.
   - Space-only edits made in the HF UI are overwritten on the next deploy.
 - **Evidence:** `.github/workflows/deploy-backend.yml`, `docs/CI.md`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` §§ 4, 7, 10, HF runtime API `errorMessage: "Missing configuration in README"`.
+
+### ADR-018 — `BACKEND_MODEL_VERSION` is set alongside `BACKEND_WEIGHTS_HUB_REVISION`, never derived
+- **Decision:** the reported `model_version` stays an operator-set Space variable (`BACKEND_MODEL_VERSION`). Every promotion or rollback sets it to the same Hub tag as `BACKEND_WEIGHTS_HUB_REVISION`, in the same change, then checks `/healthz`. The backend code is unchanged; its `"v1.0.0"` default applies only when the variable is unset.
+- **Why:** the two are independent fields in `BackendSettings`, and nothing links them. TASK-004 found production serving tag `v2.0.0` while reporting the default `v1.0.0`, because the documented promotion step bumped only the revision. Fixing this with a procedure and a Space variable needed no code change and no redeploy. Deriving the label from the revision in code is a possible future change, not a requirement.
+- **Evidence:** `backend/app/core/config.py` (`model_version`, `weights_hub_revision`), `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` §§ 3, 4, 10, live `/healthz` 2026-10-03 (`model_version: "v2.0.0"`, `model_loaded: true`).
