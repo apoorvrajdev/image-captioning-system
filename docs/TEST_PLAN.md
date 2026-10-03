@@ -13,7 +13,8 @@ Every change is verified against the rows for the layers it touches. The same ch
 | `backend/app/**` | `pytest backend/app/tests -q` then the full suite | pass; backend slice imports no TensorFlow |
 | `src/captioning/evaluation/**`, eval scripts | `pytest tests/unit/test_evaluation*.py -q` | pass; existing `results/*` unchanged |
 | `frontend/**` | `npm run lint` · `npm run build` · manual/browser flow (below) | exit 0; flow verified or reported "not browser-verified" |
-| workflows, Dockerfile, deps | YAML parses · full suite · `docker build .` if Docker is available | no gate removed or weakened |
+| workflows, Dockerfile, deps, hooks | YAML parses · `SKIP=mypy pre-commit run --all-files` · full suite · `docker build .` if Docker is available | no gate removed or weakened |
+| any commit | pre-commit hooks (locally on commit; all files in CI) | pass with no rewrites |
 
 ## What each area must demonstrate
 
@@ -43,7 +44,7 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 **Evaluation.** Metric implementations match hand-checkable tiny corpora, and run artefacts follow the
 `write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`).
 
-**Frontend (manual until a runner exists).** With backend + `npm run dev` running: upload a valid image,
+**Frontend (manual until TASK-007 lands a mocked-API Playwright spec).** With backend + `npm run dev` running: upload a valid image,
 then Generate shows the caption card with version/strategy/latency/request ID. A disallowed type or a >10 MB file
 is rejected client-side with no request. With the backend stopped, the badge goes offline and Generate shows
 "Cannot reach backend". Browser console has zero errors.
@@ -59,5 +60,5 @@ is rejected client-side with no request. With the backend stopped, the badge goe
 
 ## Known gaps (not yet covered)
 
-No frontend unit/e2e runner, no coverage measured in CI, no load tests, no test for beam width 1 ≡ greedy,
+No frontend unit/e2e runner (E2E proposed as TASK-007), no coverage measured in CI, no load tests, no test for beam width 1 ≡ greedy,
 and no end-to-end lifespan test with real weights (manual smoke only).
