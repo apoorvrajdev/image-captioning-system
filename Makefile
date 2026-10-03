@@ -149,8 +149,8 @@ serve: ## Run the FastAPI backend locally with hot reload
 # =============================================================================
 
 .PHONY: docker-build
-docker-build: ## Build the backend Docker image (slim, no HF extras)
-	docker build -f $(BACKEND_DIR)/Dockerfile -t captioning-backend:latest .
+docker-build: ## Build the backend image from the root Dockerfile (the HF Space image)
+	docker build -t captioning-backend:latest .
 
 .PHONY: docker-build-hf
 docker-build-hf: ## Build the backend image WITH HuggingFace baselines (~2.3 GB)
