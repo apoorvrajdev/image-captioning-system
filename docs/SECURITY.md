@@ -19,6 +19,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 |---|---|
 | Upload allow-list (JPEG/PNG/WebP/BMP) → 415 | `backend/app/utils/image.py`, `api/routes.py` |
 | Empty → 400, oversize (`serve.max_upload_bytes`, 10 MB) → 413, undecodable → 422 | `api/routes.py` |
+| Bounded upload read: the route reads at most `max_upload_bytes + 1` bytes, so an oversize upload is never loaded into memory in full (TASK-006) | `api/routes.py`, `backend/app/tests/test_captions.py` |
 | Client-side type/size validation (mirrors backend) | `frontend/src/components/UploadZone.jsx` |
 | Explicit CORS allow-list from config / `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `backend/app/main.py`, `configs/base.yaml` |
 | Request-ID correlated structured logs | `backend/app/core/logging.py` |
@@ -33,7 +34,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 
 | Gap | Risk | Suggested fix |
 |---|---|---|
-| `/v1/captions` reads the full upload into memory before the size check | memory pressure from very large bodies on a small Space | bound the read / check `Content-Length` (TASK-006) |
+| The multipart parser receives and spools the whole request body (in memory up to 1 MiB, then a temporary file) before the `/v1/captions` size check runs | bandwidth and disk use from very large bodies on a small Space. Route memory is bounded by TASK-006. | reject early on `Content-Length`, or cap the body size at the server or proxy |
 | No rate limiting | abuse can starve the single worker | platform-level limits or a lightweight limiter, if abuse appears |
 | No security headers (CSP, HSTS, X-Content-Type-Options) | low for a JSON API; relevant for the SPA host | configure on Vercel (`vercel.json` headers) |
 | No full-history secret scan in CI (the pre-commit job's gitleaks hook is staged-only) | a commit made without hooks isn't scanned | add a `gitleaks detect` CI step |

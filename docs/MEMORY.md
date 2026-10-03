@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-03_
+_Last updated: 2026-10-04_
 
 ## Current phase
 
@@ -13,13 +13,14 @@ _Last updated: 2026-10-03_
 - **Next:** Phase 3 — multimodal baselines (3A–3D in [`TASKS.md`](TASKS.md)). **Not started.**
   It must be decomposed into small tasks before any implementation.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
-  TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-007 (Playwright) is deferred to the start of Phase 3D.
+  TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
+  verified locally. TASK-007 (Playwright) is deferred to the start of Phase 3D.
 
 ## System status (verified 2026-10-03, local Windows, Python 3.10.11)
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 94 passed (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 96 passed on 2026-10-04, after TASK-006 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -40,6 +41,10 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Recent changes
 
+- 2026-10-04 bounded upload read (TASK-006, done): `/v1/captions` reads at most `max_upload_bytes + 1` bytes, then
+  returns a 413 if the upload is over the limit. The 413 detail now reads "Image exceeds the {limit}-byte upload
+  limit."; status codes and the response shape are unchanged. Committed as `cd5ee1c` (fix) and `b42fae6` (two new
+  tests). Starlette still spools the whole multipart body before the route runs (see [`SECURITY.md`](SECURITY.md)).
 - 2026-10-03 model-version labelling (TASK-004, done): the Space variable `BACKEND_MODEL_VERSION=v2.0.0` now matches
   `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0`. `/healthz` reports `model_version: v2.0.0` with `model_loaded: true`. The
   runbook's promotion and rollback steps now move both variables together (ADR-018). No code change, no redeploy.
@@ -62,7 +67,6 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 - `Makefile`: `docker-build*` point at the nonexistent `backend/Dockerfile`. `docker-up/down` reference a
   missing compose file. `eval` lacks required `--weights`/`--tokenizer-dir` (TASK-005).
-- The upload route reads the whole body into memory before the size check (TASK-006, [`SECURITY.md`](SECURITY.md)).
 - No frontend tests / e2e (TASK-007), no coverage measured in CI, no dependency-vulnerability scanning,
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected

@@ -64,11 +64,27 @@ Area: deployment
 Goal: `docker-build*` use the root `Dockerfile`; remove or fix `docker-up/down` (no compose file) and `eval` (missing required `--weights`/`--tokenizer-dir`).
 Verification: `make -n docker-build eval` shows valid commands (dry run).
 
-### TASK-006 — Bound upload reads in `/v1/captions`            [status: todo]
+### TASK-006 — Bound upload reads in `/v1/captions`            [status: done] (verified locally 2026-10-04)
 Area: inference-api
 Goal: reject oversize uploads without reading the whole body into memory (check `Content-Length`
 and/or read at most `max_upload_bytes + 1`).
 Acceptance criteria: GIVEN a body over the limit THEN 413 and at most `limit+1` bytes read; existing 413 test still passes; new test added.
+Outcome:
+- `caption_image` (`backend/app/api/routes.py`) now calls `image.read(max_upload_bytes + 1)` instead of reading the
+  whole upload. A longer upload gets a 413.
+- The 413 `detail` changed to "Image exceeds the {limit}-byte upload limit." because a bounded read can't report the
+  true size. The status codes (200/400/413/415/422/503) and the `ErrorResponse` shape are unchanged.
+- New test `test_captions_oversize_upload_reads_at_most_limit_plus_one` spies on `UploadFile.read`. Given a body
+  10× the limit, it asserts a 413, no unbounded `read()`, at most `limit+1` bytes returned, and no predictor call. It
+  failed on the old code (`unbounded read() call: [(-1, 10240)]`).
+- New test `test_captions_accepts_upload_exactly_at_limit` pins the boundary: exactly `limit` bytes returns 200. The
+  existing 413 test is unchanged and passes.
+- Verification: backend 18 passed (TensorFlow not imported); full suite 96 passed; ruff lint + format clean; mypy 0
+  issues (71 files); pre-commit hooks passed on both files.
+- Committed as `cd5ee1c` (fix) and `b42fae6` (test).
+- Residual, out of scope: Starlette still receives and spools the whole multipart body (in memory up to 1 MiB, then a
+  temporary file) before the route runs. The bound applies to what the route loads, not to what the server accepts.
+  See [`SECURITY.md`](SECURITY.md) § Known gaps.
 
 ### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (awaiting approval to install)
 Area: frontend · deployment
