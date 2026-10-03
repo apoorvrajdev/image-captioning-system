@@ -12,8 +12,8 @@ _Last updated: 2026-10-03_
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup.
 - **Next:** Phase 3 — multimodal baselines (3A–3D in [`TASKS.md`](TASKS.md)). **Not started.**
   It must be decomposed into small tasks before any implementation.
-- **Current task:** TASK-008 (backend deploy). The fix is implemented in `deploy-backend.yml` and awaiting
-  review, commit, and a first `workflow_dispatch` run. TASK-007 (Playwright) is deferred to the start of Phase 3D.
+- **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
+  TASK-007 (Playwright) is deferred to the start of Phase 3D. TASK-004 (weights revision) is still open.
 
 ## System status (verified 2026-10-03, local Windows, Python 3.10.11)
 
@@ -26,20 +26,25 @@ _Last updated: 2026-10-03_
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds |
-| CI on `main` (last run, 2026-10-03) | green, all 6 jobs incl. `pre-commit` |
-| `deploy-backend.yml` (last run, 2026-10-03) | **failed** (non-fast-forward to the Space, TASK-008) |
-| Backend Space (HF runtime API, 2026-10-03) | **down: `CONFIG_ERROR`, "Missing configuration in README"** |
+| CI on `main` for `915112b` (run `37140358717`) | green, all 6 jobs incl. `pre-commit` |
+| `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
+| Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
+| `GET /healthz` (public, 2026-10-03) | HTTP 200, `model_loaded: true`, `model_version: v1.0.0` |
 
-SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **not serving**: it is in `CONFIG_ERROR` because every
-commit pushed since `befac80` (2026-06-02) lacks the README YAML header, and later pushes were also rejected. Weights live
-on HF Hub `apoorvrajdev/captioning-inceptionv3-transformer`. Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
+SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
+`https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
+is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). So far only the manual path has run. The backend reports
+`model_version: v1.0.0`, but which revision of HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` the Space
+actually loads is not yet established (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
 (beam CIDEr 0.826; 5-ref BLEU-4 25.91).
 
 ## Recent changes
 
-- 2026-10-03 deploy fix (TASK-008, uncommitted): `deploy-backend.yml` deploys the tested SHA (manual runs must
-  prove the exact SHA passed CI), skips superseded commits, adds the Space config header to a force-pushed deploy commit, and gates on HF `RUNNING` +
-  `/healthz` `model_loaded: true` (ADR-017).
+- 2026-10-03 deploy fix (TASK-008, done): `deploy-backend.yml` deploys the tested SHA (manual runs must
+  prove the exact SHA passed CI), skips superseded commits, adds the Space config header to a force-pushed deploy
+  commit, and gates on HF `RUNNING` + `/healthz` `model_loaded: true` (ADR-017).
+  - Committed as `a2ee431`..`915112b`; CI run `37140358717` green.
+  - The first deploy (run `37140993110`) created Space commit `123c5aa` and resolved the `CONFIG_ERROR`.
 - 2026-10-03 workflow upgrade (committed and pushed as `545c76b`..`9e8874c`):
   - `.claude/` config is now tracked (ADR-015), and `.claude/settings.json` enforces the invariants.
   - The code index rebuilds at session start.
@@ -52,13 +57,8 @@ on HF Hub `apoorvrajdev/captioning-inceptionv3-transformer`. Headline results: `
 
 ## Known issues / open debt
 
-- **Backend down, auto-deploy broken (TASK-008, fix pending first run):**
-  - The Space is in `CONFIG_ERROR` because `befac80` removed the README YAML header.
-  - Pushes fail: 429s in June, then non-fast-forward since 2026-09-24. The Space's only extra commit, `302e907`,
-    is tree-identical to GitHub's `64f80e8`.
-  - The README's "Deployed / live" claims are stale until the redeploy succeeds. The README is currently
-    staged by the owner, so it was left untouched.
-- **Model version labels disagree (TASK-004):** README says the stabilized checkpoint is Hub tag `v2.0.0` (1b-I),
+- **Model version labels disagree (TASK-004):** the live backend reports `model_version: v1.0.0`, but which Hub
+  weights revision it loads has not been verified. README says the stabilized checkpoint is Hub tag `v2.0.0` (1b-I),
   while the Live Demo table says "pinned to `v1.0.0`" and `BackendSettings.model_version` defaults to `v1.0.0`.
   The owner needs to confirm the Space's `BACKEND_WEIGHTS_HUB_REVISION`.
 - `Makefile`: `docker-build*` point at the nonexistent `backend/Dockerfile`. `docker-up/down` reference a
