@@ -102,6 +102,34 @@ jobs:
       - name: Verify IEEE notebook is byte-stable
         run: make freeze-paper-notebook
 
+  pre-commit:
+    name: pre-commit hooks (all files)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Cache hook environments
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Install pre-commit (pinned as in requirements-dev.txt)
+        run: pip install pre-commit==3.7.1
+
+      # mypy is skipped here because python-quality already runs it with the
+      # full dependency set; every other hook runs exactly as it does locally.
+      - name: Run hooks
+        env:
+          SKIP: mypy
+        run: pre-commit run --all-files --show-diff-on-failure
+
   frontend:
     name: Frontend (lint + build)
     runs-on: ubuntu-latest
