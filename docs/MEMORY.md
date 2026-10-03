@@ -13,7 +13,7 @@ _Last updated: 2026-10-03_
 - **Next:** Phase 3 — multimodal baselines (3A–3D in [`TASKS.md`](TASKS.md)). **Not started.**
   It must be decomposed into small tasks before any implementation.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
-  TASK-007 (Playwright) is deferred to the start of Phase 3D. TASK-004 (weights revision) is still open.
+  TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-007 (Playwright) is deferred to the start of Phase 3D.
 
 ## System status (verified 2026-10-03, local Windows, Python 3.10.11)
 
@@ -29,17 +29,20 @@ _Last updated: 2026-10-03_
 | CI on `main` for `915112b` (run `37140358717`) | green, all 6 jobs incl. `pre-commit` |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
-| `GET /healthz` (public, 2026-10-03) | HTTP 200, `model_loaded: true`, `model_version: v1.0.0` |
+| `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
 
 SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 `https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
-is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). So far only the manual path has run. The backend reports
-`model_version: v1.0.0`, but which revision of HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` the Space
-actually loads is not yet established (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
+is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). So far only the manual path has run. The Space serves HF Hub
+`apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
+(TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
 (beam CIDEr 0.826; 5-ref BLEU-4 25.91).
 
 ## Recent changes
 
+- 2026-10-03 model-version labelling (TASK-004, done): the Space variable `BACKEND_MODEL_VERSION=v2.0.0` now matches
+  `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0`. `/healthz` reports `model_version: v2.0.0` with `model_loaded: true`. The
+  runbook's promotion and rollback steps now move both variables together (ADR-018). No code change, no redeploy.
 - 2026-10-03 deploy fix (TASK-008, done): `deploy-backend.yml` deploys the tested SHA (manual runs must
   prove the exact SHA passed CI), skips superseded commits, adds the Space config header to a force-pushed deploy
   commit, and gates on HF `RUNNING` + `/healthz` `model_loaded: true` (ADR-017).
@@ -57,10 +60,6 @@ actually loads is not yet established (TASK-004). Headline results: `results/sta
 
 ## Known issues / open debt
 
-- **Model version labels disagree (TASK-004):** the live backend reports `model_version: v1.0.0`, but which Hub
-  weights revision it loads has not been verified. README says the stabilized checkpoint is Hub tag `v2.0.0` (1b-I),
-  while the Live Demo table says "pinned to `v1.0.0`" and `BackendSettings.model_version` defaults to `v1.0.0`.
-  The owner needs to confirm the Space's `BACKEND_WEIGHTS_HUB_REVISION`.
 - `Makefile`: `docker-build*` point at the nonexistent `backend/Dockerfile`. `docker-up/down` reference a
   missing compose file. `eval` lacks required `--weights`/`--tokenizer-dir` (TASK-005).
 - The upload route reads the whole body into memory before the size check (TASK-006, [`SECURITY.md`](SECURITY.md)).
@@ -75,3 +74,5 @@ actually loads is not yet established (TASK-004). Headline results: `results/sta
 - The notebook is frozen, parity must stay 4/4, and `results/` + `models/vX.Y.Z/` are immutable. Edits to
   them are blocked by `.claude/settings.json`.
 - Retraining and deployments are owner-run (Kaggle / HF / Vercel). Code tasks prepare instructions only.
+- Promoting or rolling back weights means setting the Space's `BACKEND_WEIGHTS_HUB_REVISION` and `BACKEND_MODEL_VERSION`
+  to the same tag (runbook § 3). The code never links them.
