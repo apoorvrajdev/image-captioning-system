@@ -1,0 +1,34 @@
+{
+  "permissions": {
+    "deny": [
+      "Edit(notebooks/01_ieee_inceptionv3_transformer.ipynb)",
+      "Edit(.paper-notebook.sha256)",
+      "Edit(models/**)",
+      "Edit(results/**)",
+      "Read(.env)",
+      "Read(frontend/.env)",
+      "Read(frontend/.env.local)",
+      "Bash(git push --force *)",
+      "Bash(git push -f *)"
+    ],
+    "ask": [
+      "Bash(git commit *)",
+      "Bash(git push *)",
+      "Bash(git tag *)"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/context/build_index.py\" >/dev/null 2>&1 || true",
+            "timeout": 60,
+            "async": true
+          }
+        ]
+      }
+    ]
+  }
+}
