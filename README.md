@@ -51,7 +51,7 @@
 |---|---|---|
 | **Frontend SPA** | https://image-captioning-system.vercel.app | Drag-and-drop an image, hit **Generate caption**, see the typed `CaptionResponse` rendered with model version, decode strategy, and latency |
 | **Backend API** | https://apoorvrajdev-image-captioning-api.hf.space | Interactive Swagger at [`/docs`](https://apoorvrajdev-image-captioning-api.hf.space/docs); liveness + readiness at [`/healthz`](https://apoorvrajdev-image-captioning-api.hf.space/healthz); inference at `POST /v1/captions` |
-| **Weights (HF Hub)** | https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer | Pinned to tag `v1.0.0`; the backend pulls these at lifespan startup via `snapshot_download` so the Space's git tree never contains the `.h5` |
+| **Weights (HF Hub)** | https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer | Pinned to tag `v2.0.0` (Space variables `BACKEND_WEIGHTS_HUB_REVISION` and `BACKEND_MODEL_VERSION`; `/healthz` reports `model_version: v2.0.0`); the backend pulls these at lifespan startup via `snapshot_download` so the Space's git tree never contains the `.h5` |
 
 Deployment topology: GitHub `main` → CI on every push → on green, `deploy-backend.yml` pushes to a HuggingFace Space (Docker SDK, cpu-basic, port 7860, single uvicorn worker); Vercel's Git integration builds and promotes the SPA in parallel. Production CORS is wired through the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable, not a hardcoded config. Full topology + rollback procedure: [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). CI/CD workflows: [`docs/CI.md`](docs/CI.md).
 
