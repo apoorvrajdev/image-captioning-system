@@ -119,7 +119,7 @@ logical contributions.
 
 ## Commands
 
-Local dev is Windows + Git Bash; `make` is **not** installed, so run the underlying commands.
+Local dev is Windows + Git Bash. `make` isn't on PATH, but MSYS2's GNU Make is: `mingw32-make -n <target>` dry-runs a target. Otherwise run the underlying commands.
 Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Scripts/{pytest,ruff,mypy}.exe`.
 
 | Task | Command |
@@ -127,7 +127,7 @@ Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Script
 | install | `pip install -r requirements-dev.txt -r requirements-eval.txt && pip install -e ".[hf,mlflow]"` |
 | backend dev | `uvicorn app.main:app --app-dir backend --port 8000 --reload` (needs `models/v1.0.0/model.h5` or `BACKEND_WEIGHTS_HUB_REPO`) |
 | frontend dev | `cd frontend && npm run dev` (http://localhost:5173) |
-| all tests | `pytest tests backend/app/tests -q` (94 tests, ~30 s) |
+| all tests | `pytest tests backend/app/tests -q` (104 tests, ~30 s) |
 | backend tests only | `pytest backend/app/tests -q` (<1 s, no TF) |
 | single test | `pytest tests/unit/test_beam_decoder.py::test_name -q` |
 | lint + format | `ruff check src/captioning backend scripts tests && ruff format --check src/captioning backend scripts tests` |
@@ -137,6 +137,7 @@ Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Script
 | frontend checks | `cd frontend && npm run lint && npm run build` |
 | pre-commit (all hooks) | `SKIP=mypy .venv/Scripts/pre-commit.exe run --all-files` (rewrites files on failure; review the diff) |
 | refresh code index | `.venv/Scripts/python.exe .claude/context/build_index.py` (also runs at session start) |
+| make dry run | `mingw32-make -n <target>` (prints the commands, runs nothing) |
 
 CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build. Local DoD = these.
 
@@ -158,7 +159,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 - Importing `captioning.models` / `inference` pulls in TensorFlow (~10 s). Backend route tests stay TF-free by using `FakePredictorService`. Keep it that way.
 - `models/v1.0.0/model.h5` is untracked. Production pulls weights from HF Hub (`BACKEND_WEIGHTS_HUB_*`).
 - When README prose and a config file disagree, the config file is right. Fix the README in the same task.
-- `make docker-build` points at `backend/Dockerfile`, which doesn't exist (the Dockerfile is at the repo root).
+- `make -n` exits 0 even when a printed command is broken. `tests/unit/test_makefile.py` is the real check that Make targets match the Dockerfile, compose files, and script CLIs.
 - `.claude/settings.json` denies edits to the frozen notebook, its hash, `models/**`, and `results/**`, and prompts before any `git commit`/`push`/`tag`. A denial there means the plan is wrong. Don't route around it via Bash.
 
 ## Retrieval protocol
