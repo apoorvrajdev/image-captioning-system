@@ -14,7 +14,7 @@ GitHub (apoorvrajdev/image-captioning-system, main)
   └── Vercel Git Integration → image-captioning-system.vercel.app
 
 HuggingFace Hub
-  ├── Model repo: apoorvrajdev/captioning-inceptionv3-transformer  (weights + vocab, tag v1.0.0)
+  ├── Model repo: apoorvrajdev/captioning-inceptionv3-transformer  (weights + vocab; tag v2.0.0 served, v1.0.0 = dev scaffold)
   └── Space:     apoorvrajdev/image-captioning-api                  (Docker SDK, cpu-basic, port 7860)
 ```
 
@@ -32,8 +32,10 @@ The Space pulls weights from the model repo at lifespan startup via
 >   commit `123c5aa`.
 > - The Space reached `RUNNING`, and `/healthz` returned HTTP 200 with `model_loaded: true`.
 > - `/docs` and `/openapi.json` returned HTTP 200.
-> - `model_version: v1.0.0` is what the backend reports. Which Hub weights revision the Space loads
->   isn't confirmed yet (TASK-004).
+> - Served weights verified (TASK-004, 2026-10-03):
+>   - The Space variables set `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0` (Hub commit `59d93b4`) and
+>     `BACKEND_MODEL_VERSION=v2.0.0`.
+>   - `/healthz` reports `model_loaded: true`, `model_version: "v2.0.0"`.
 
 | Component | URL |
 |---|---|
@@ -100,9 +102,15 @@ for f in ("model.h5", "vocab.json"):
 PY
 ```
 
-To promote a new checkpoint after this: bump the Space variable
-`BACKEND_WEIGHTS_HUB_REVISION` from `v1.0.0` to the new tag (e.g. `v2.0.0`)
-and the Space restarts with the new weights. No code change required.
+To promote a new checkpoint after this, set **both** Space variables to the new tag in the same change, e.g.
+`BACKEND_WEIGHTS_HUB_REVISION=v2.0.0` and `BACKEND_MODEL_VERSION=v2.0.0`.
+
+- **Why both:** they are independent settings in `BackendSettings` (`backend/app/core/config.py`). The code never
+  derives `model_version` from the revision, so bumping only the revision serves new weights under the old label.
+  That is exactly the mismatch TASK-004 found.
+- **When they take effect:** settings are read once per process, so the new values apply when the Space restarts.
+  No code change or deploy is required.
+- **Then verify:** `/healthz` must report `model_loaded: true` and a `model_version` equal to the new tag.
 
 ---
 
@@ -117,7 +125,8 @@ and the Space restarts with the new weights. No code change required.
    | Name | Value |
    |---|---|
    | `BACKEND_WEIGHTS_HUB_REPO` | `apoorvrajdev/captioning-inceptionv3-transformer` |
-   | `BACKEND_WEIGHTS_HUB_REVISION` | `v1.0.0` |
+   | `BACKEND_WEIGHTS_HUB_REVISION` | `v2.0.0` |
+   | `BACKEND_MODEL_VERSION` | `v2.0.0`. Must always equal `BACKEND_WEIGHTS_HUB_REVISION` (§3) |
    | `BACKEND_WEIGHTS_HUB_FILENAME` | `model.h5` |
    | `BACKEND_WARMUP` | `true` |
    | `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `["https://image-captioning-system.vercel.app","http://localhost:5173","http://localhost:5174","http://127.0.0.1:5173","http://127.0.0.1:5174"]` |
@@ -131,7 +140,7 @@ and the Space restarts with the new weights. No code change required.
 5. When the badge in the Space header turns **Running**, verify:
    ```bash
    curl https://apoorvrajdev-image-captioning-api.hf.space/healthz
-   # {"status":"ok","model_loaded":true,"model_version":"v1.0.0",...}
+   # {"status":"ok","model_loaded":true,"model_version":"v2.0.0",...}
    ```
 
 The README YAML frontmatter (`title`, `emoji`, `sdk: docker`, `app_port: 7860`,
@@ -227,10 +236,10 @@ open https://image-captioning-system.vercel.app  # macOS
 - **First request after Space idle is slow** (~5–10 s extra). HF Spaces
   sleep idle containers; the next call wakes the container, which then runs
   the lifespan startup (snapshot_download cache hit + predictor rewarmup).
-- **Caption quality is gibberish** by design at `v1.0.0`. The shipped weights
-  are dev scaffolds from `scripts/bootstrap_dev_artifacts.py`. A real trained
-  checkpoint will be uploaded as `v2.0.0` and promoted via the Space variable
-  bump described in §3.
+- **Hub tag `v1.0.0` is a dev scaffold.** Its weights come from
+  `scripts/bootstrap_dev_artifacts.py` and produce gibberish captions by design.
+  Production serves the COCO-trained checkpoint at tag `v2.0.0`, promoted via
+  the §3 variable change and verified 2026-10-03 (TASK-004).
 
 ---
 
@@ -240,8 +249,9 @@ open https://image-captioning-system.vercel.app  # macOS
   push. CI runs and `deploy-backend.yml` redeploys the reverted tree with the
   config header and health checks. Don't force-push a raw GitHub SHA to the
   Space: it has no config header, so the Space would go to `CONFIG_ERROR`.
-- **Bad weights on the Hub**: bump the Space's
-  `BACKEND_WEIGHTS_HUB_REVISION` back to the previous tag (e.g. `v1.0.0`)
-  and save. Space restarts in ~30 s with the previous weights.
+- **Bad weights on the Hub**: set the Space's
+  `BACKEND_WEIGHTS_HUB_REVISION` **and** `BACKEND_MODEL_VERSION` back to the
+  same previous tag (§3) and save. Space restarts in ~30 s with the previous
+  weights. Verify that `/healthz` reports that tag.
 - **Bad frontend on Vercel**: dashboard → Deployments → previous green
   deployment → "Promote to Production" (one click, no rebuild).
