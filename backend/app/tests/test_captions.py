@@ -12,7 +12,9 @@ Covers the route's status-code contract end-to-end:
 
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
+from starlette.datastructures import UploadFile
 
 from app.tests.conftest import FakePredictorService
 
@@ -69,6 +71,41 @@ def test_captions_rejects_oversize_upload(client: TestClient) -> None:
     response = client.post("/v1/captions", files=_image_field(b"x" * 2048))
     assert response.status_code == 413
     assert "limit" in response.json()["detail"].lower()
+
+
+def test_captions_oversize_upload_reads_at_most_limit_plus_one(
+    client: TestClient,
+    fake_service: FakePredictorService,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # TASK-006: an oversized upload must not be pulled into memory in full.
+    limit = fake_service.max_upload_bytes
+    reads: list[tuple[int, int]] = []  # (requested size, bytes returned)
+    original_read = UploadFile.read
+
+    async def spy_read(self: UploadFile, size: int = -1) -> bytes:
+        data = await original_read(self, size)
+        reads.append((size, len(data)))
+        return data
+
+    monkeypatch.setattr(UploadFile, "read", spy_read)
+
+    response = client.post("/v1/captions", files=_image_field(b"x" * (limit * 10)))
+
+    assert response.status_code == 413
+    assert reads, "route never read the upload"
+    assert all(size >= 0 for size, _ in reads), f"unbounded read() call: {reads}"
+    assert sum(n for _, n in reads) <= limit + 1
+    assert fake_service.calls == []
+
+
+def test_captions_accepts_upload_exactly_at_limit(
+    client: TestClient, fake_service: FakePredictorService
+) -> None:
+    payload = b"x" * fake_service.max_upload_bytes
+    response = client.post("/v1/captions", files=_image_field(payload))
+    assert response.status_code == 200
+    assert fake_service.calls == [payload]
 
 
 def test_captions_returns_422_on_decode_failure(build_client) -> None:
