@@ -66,7 +66,7 @@ renders; GIVEN a disallowed file THEN an inline error shows and no request is se
 "Cannot reach backend" shows; zero console errors in each case.
 Needs: `@playwright/test` devDependency + Chromium download (local and CI).
 
-### TASK-008 — Restore backend auto-deploy to the HF Space            [status: in-progress] (fix implemented, awaiting review + first deploy)
+### TASK-008 — Restore backend auto-deploy to the HF Space            [status: done] (deployed and verified 2026-10-03)
 Area: deployment
 Goal: no `deploy-backend.yml` run has succeeded since mid-June. The 2026-06-16/17 runs failed with HF HTTP 429
 rate limits. The 2026-09-24 run was rejected as non-fast-forward because the Space's git history has commits that
@@ -78,9 +78,15 @@ Findings: two faults.
 - The Space has been in `CONFIG_ERROR` ("Missing configuration in README") because `befac80` removed the README
   YAML header.
 Fix (ADR-017): `deploy-backend.yml` deploys the tested SHA, skips superseded commits, adds the header to a deploy
-commit, force-pushes, and gates on HF runtime `RUNNING` + `/healthz` `model_loaded: true`.
-Remaining: review and commit, then one `workflow_dispatch` run on `main`; then remove the status note in the
-runbook § 1.
+commit, force-pushes, and gates on HF runtime `RUNNING` + `/healthz` `model_loaded: true`. Manual runs must
+also prove the exact SHA passed CI.
+Outcome:
+- Committed as `a2ee431`..`915112b`. CI run `37140358717` passed (all 6 jobs).
+- `workflow_dispatch` run `37140993110` deployed `915112b` as Space commit `123c5aa`: built, then `RUNNING` in
+  about 90 s. The workflow and an independent check both confirmed `/healthz` HTTP 200 with
+  `model_loaded: true`, `model_version: v1.0.0`; `/docs` and `/openapi.json` returned HTTP 200.
+- The Space's previous `CONFIG_ERROR` is resolved.
+- Which Hub weights revision is loaded is still open (TASK-004).
 
 ---
 
