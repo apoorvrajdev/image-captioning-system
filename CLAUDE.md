@@ -103,7 +103,7 @@ logical contributions.
 - `notebooks/` — frozen IEEE notebook + exploratory notebooks (not part of runtime)
 - `results/<run_id>/` — committed evaluation artefact sets (append-only)
 - `docs/` — phase notes, runbooks, and the living docs: `MEMORY.md` (current state), `TASKS.md` (backlog), `DECISIONS.md`, `TEST_PLAN.md`, `SECURITY.md`
-- `.claude/` — local-only (gitignored) agent context: `context/repo-map.md` + generated index, `skills/`, `agents/`
+- `.claude/` — agent workflow config, reviewed like code: `settings.json` (guardrails + index hook), `skills/` (acceptance criteria), `agents/` (lanes), `context/repo-map.md` + `build_index.py`. Generated index files and `settings.local.json` are gitignored
 
 ## Code Standards
 
@@ -135,9 +135,10 @@ Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Script
 | parity audit | `python -m scripts.notebook_module_audit` (4 stages, must print `[OK] 4/4`) |
 | notebook freeze | `python -c "import hashlib;print(hashlib.sha256(open('notebooks/01_ieee_inceptionv3_transformer.ipynb','rb').read()).hexdigest())"` must equal `.paper-notebook.sha256` |
 | frontend checks | `cd frontend && npm run lint && npm run build` |
-| refresh code index | `.venv/Scripts/python.exe .claude/context/build_index.py` |
+| pre-commit (all hooks) | `SKIP=mypy .venv/Scripts/pre-commit.exe run --all-files` (rewrites files on failure; review the diff) |
+| refresh code index | `.venv/Scripts/python.exe .claude/context/build_index.py` (also runs at session start) |
 
-CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, frontend lint + build. Local DoD = these.
+CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build. Local DoD = these.
 
 ## Invariants — never break silently
 
@@ -156,8 +157,9 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 - `core.autocrlf=true` on this machine: `.gitattributes` pins the frozen notebook to LF so the SHA-256 check passes. Don't remove that rule.
 - Importing `captioning.models` / `inference` pulls in TensorFlow (~10 s). Backend route tests stay TF-free by using `FakePredictorService`. Keep it that way.
 - `models/v1.0.0/model.h5` is untracked. Production pulls weights from HF Hub (`BACKEND_WEIGHTS_HUB_*`).
-- README badges and prose drift from the config (e.g. "mypy strict" while `strict = false`, a Python 3.12 matrix that CI doesn't run). Trust the config files, not the README.
+- When README prose and a config file disagree, the config file is right. Fix the README in the same task.
 - `make docker-build` points at `backend/Dockerfile`, which doesn't exist (the Dockerfile is at the repo root).
+- `.claude/settings.json` denies edits to the frozen notebook, its hash, `models/**`, and `results/**`, and prompts before any `git commit`/`push`/`tag`. A denial there means the plan is wrong. Don't route around it via Bash.
 
 ## Retrieval protocol
 
@@ -168,7 +170,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 
 ## Working Style
 
-- Default loop for every task: **locate → load the matching `.claude/skills/*/SKILL.md` → plan → smallest correct change → verify → update docs → report**
+- Default loop for every task: **locate → load the matching `.claude/skills/*/SKILL.md` → plan → smallest correct change → test → review the full diff against Invariants (use `/code-review`, plus `/security-review` for upload/API/CI/Docker changes) → verify → update docs → report**. Per-change-type flows live in `.claude/skills/ship-task/SKILL.md`
 - Plan before implementing for any non-trivial change (training loop, decoder, data pipeline, API contract)
 - One module at a time, with tests. Reuse existing abstractions; don't touch unrelated files; no new dependencies without saying why
 - Never weaken an assertion or delete a test to make it pass. Fix the root cause
@@ -177,11 +179,18 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 - If a change spans library + backend + frontend, list the affected files grouped by layer in the summary
 - Work from `docs/TASKS.md` one task at a time. Never implement a whole phase in one pass
 
+## Debugging protocol
+
+When something fails, don't edit code first. Establish, in order: the exact failure (command + error output), a reproduction,
+expected vs actual behaviour, the root cause (traced through the stack trace and its immediate dependencies), then the
+smallest safe fix plus a regression test that fails without it. Re-run the failing command and the touched skill's DoD.
+No refactors while debugging. No loosened assertions, skipped tests, or widened parity tolerances.
+
 ## Definition of done
 
 A task is done only when every check from its skill's DoD ran green **in this session**, with the output quoted as proof:
 the relevant tests, ruff lint + format, mypy (Python changes), parity audit + notebook freeze (any `src/captioning/` or `configs/` change),
-frontend lint + build (any `frontend/` change). Then update `docs/MEMORY.md` (state) and `docs/TASKS.md` (status), add a `docs/DECISIONS.md` entry if a permanent decision was made,
+frontend lint + build (any `frontend/` change), and the pre-commit hooks on the changed files. Then update `docs/MEMORY.md` (state) and `docs/TASKS.md` (status), add a `docs/DECISIONS.md` entry if a permanent decision was made,
 and end with the proposed commit sequence. If a check can't run, say so. That box is not ticked.
 
 ## Orchestration (multi-lane tasks)
