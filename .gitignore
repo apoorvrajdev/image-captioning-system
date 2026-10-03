@@ -118,9 +118,18 @@ yarn-error.log*
 Thumbs.db
 desktop.ini
 
-# ---- Claude / AI tooling -----------------------------------------------------
-# Local Claude Code session state. Contains user-specific settings.
-.claude/
+# ---- Agent tooling -------------------------------------------------------------
+# Shared, reviewed config (CLAUDE.md, .claude/settings.json, skills/, agents/,
+# context/repo-map.md, context/build_index.py) is tracked. Personal settings,
+# session state, and the regenerated code index are not.
+.claude/settings.local.json
+.claude/*.lock
+.claude/worktrees/
+.claude/context/files.txt
+.claude/context/dir-weights.txt
+.claude/context/symbols.tsv
+.claude/context/deps.json
+.claude/context/hotspots.txt
 
 # ---- Frontend build cache ----------------------------------------------------
 frontend/.vite/
