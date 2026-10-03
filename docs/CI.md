@@ -4,13 +4,14 @@ GitHub Actions runs three workflows (`ci.yml`, `deploy-backend.yml`, and the com
 
 ## `ci.yml` — quality + tests
 
-Triggered on every push and pull request to `main`. Four parallel jobs:
+Triggered on every push and pull request to `main`. Five parallel jobs:
 
 | Job | What it runs | Why |
 |---|---|---|
 | `python-quality` | `ruff check`, `ruff format --check`, `mypy` (config in `pyproject.toml`, `strict = false`) on `src/captioning`, `backend/app`, `scripts` | Catch style + typing regressions before they land |
 | `python-tests` | `pytest` matrix on Python **3.10 / 3.11**, then the 4-stage notebook parity audit (`python -m scripts.notebook_module_audit`) | Confirm the package keeps working on every supported interpreter and still matches the notebook |
 | `notebook-freeze` | `make freeze-paper-notebook` (SHA-256 check) | Fail if the IEEE notebook is mutated — it is the canonical research artefact |
+| `pre-commit` | `pre-commit run --all-files` with the repo's pinned hooks (`SKIP=mypy`, which `python-quality` covers) | Enforce the same hygiene, nbstripout, prettier, and secret-scan hooks as local commits, including commits made without hooks installed |
 | `frontend` | `npm install`, `npm run lint`, `npm run build` on Node 20 | Catch ESLint + Vite build regressions in the SPA |
 
 Caching:
@@ -56,6 +57,7 @@ make typecheck       # mypy (pyproject config)
 make test            # pytest (single Python version)
 python -m scripts.notebook_module_audit   # 4-stage notebook parity audit
 make freeze-paper-notebook   # SHA-256 freeze check
+SKIP=mypy pre-commit run --all-files   # same hooks as the pre-commit job
 
 cd frontend
 npm ci && npm run lint && npm run build
