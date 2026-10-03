@@ -29,6 +29,10 @@ FRONTEND_DIR := frontend
 TESTS_DIR    := tests
 NOTEBOOK_FROZEN := notebooks/01_ieee_inceptionv3_transformer.ipynb
 
+# Model artefacts for eval / predict: models/vX.Y.Z/{model.h5, vocab.json}.
+# Override per run, e.g. `make eval MODEL_DIR=path/to/checkpoint_dir`.
+MODEL_DIR ?= models/v1.0.0
+
 # ---- Default goal: show available targets -----------------------------------
 .DEFAULT_GOAL := help
 
@@ -108,12 +112,14 @@ train: ## Train the IEEE InceptionV3+Transformer model from configs/base.yaml
 	$(PYTHON) -m scripts.train --config configs/base.yaml
 
 .PHONY: eval
-eval: ## Evaluate the latest model on COCO val (BLEU, CIDEr, METEOR, ROUGE)
-	$(PYTHON) -m scripts.evaluate --config configs/base.yaml --report docs/results/latest.md
+eval: ## Evaluate the checkpoint in MODEL_DIR on COCO val (BLEU, CIDEr, METEOR, ROUGE)
+	$(PYTHON) -m scripts.evaluate --config configs/base.yaml \
+		--weights $(MODEL_DIR)/model.h5 --tokenizer-dir $(MODEL_DIR)
 
 .PHONY: predict
 predict: ## CLI single-image inference (usage: make predict IMAGE=path/to/img.jpg)
-	$(PYTHON) -m scripts.predict --image $(IMAGE)
+	$(PYTHON) -m scripts.predict --config configs/base.yaml \
+		--weights $(MODEL_DIR)/model.h5 --tokenizer-dir $(MODEL_DIR) --image $(IMAGE)
 
 # =============================================================================
 # Evaluation-methodology gate (Phase 1b — run BEFORE Kaggle Stage 1 retrain)
