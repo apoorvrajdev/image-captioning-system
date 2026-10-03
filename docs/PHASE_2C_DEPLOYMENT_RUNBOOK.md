@@ -26,10 +26,14 @@ The Space pulls weights from the model repo at lifespan startup via
 
 ## 1. Live URLs
 
-> **Status (2026-10-03):** the backend Space is down. It reports `CONFIG_ERROR`
-> ("Missing configuration in README"), so `/healthz` returns an HF error page.
-> It recovers once the fixed `deploy-backend.yml` runs (TASK-008). Remove this
-> note after a green deploy.
+> **Status (verified 2026-10-03):** the deploy path restored in TASK-008 was verified end to end.
+>
+> - `deploy-backend.yml` run `37140993110` deployed GitHub `915112b` (CI run `37140358717`) as Space
+>   commit `123c5aa`.
+> - The Space reached `RUNNING`, and `/healthz` returned HTTP 200 with `model_loaded: true`.
+> - `/docs` and `/openapi.json` returned HTTP 200.
+> - `model_version: v1.0.0` is what the backend reports. Which Hub weights revision the Space loads
+>   isn't confirmed yet (TASK-004).
 
 | Component | URL |
 |---|---|
