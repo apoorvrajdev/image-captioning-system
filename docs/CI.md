@@ -21,28 +21,45 @@ Caching:
 Concurrency: stacked runs on the same ref cancel each other so only the
 newest commit's CI completes.
 
-## `deploy-backend.yml` — push main to the HF Space
+## `deploy-backend.yml` — deploy the tested commit to the HF Space
+
+The Space is a deployment target that receives a generated commit, not a
+mirror of GitHub history ([ADR-017](DECISIONS.md)).
 
 Triggered by:
 - `workflow_run` on `CI` completion, only when conclusion is `success` and
   branch is `main` (so a failing CI never deploys)
-- `workflow_dispatch` for manual redeploys from the Actions tab
+- `workflow_dispatch` from the Actions tab, on `main` only, to redeploy the tip of `main`.
+  Allowed only if that exact commit has a completed, successful CI run on `main`
 
 The job:
-1. Checks out the full git history (HF Space remote needs the parent
-   commits to fast-forward)
-2. Sets a fixed git identity (`apoorvrajdev <apoorvrajmgr@gmail.com>`)
-3. Adds a `space` remote authenticated with the `HF_TOKEN` repository secret
-4. Pushes `HEAD:main` to the Space
+0. Manual runs only, before anything is checked out: queries the GitHub API
+   (`/actions/workflows/ci.yml/runs?head_sha=<sha>`, with the built-in `github.token`
+   and `actions: read`). It refuses unless a run matches the exact SHA, branch `main`,
+   and `completed`/`success`. A success for another commit or an API error refuses too
+1. Checks out the exact commit CI tested (`github.event.workflow_run.head_sha`,
+   or `github.sha` for manual runs) with full history
+2. Skips the deploy if `main` has already moved past that commit (the newer
+   commit's own CI run deploys it), so a slow older run can't roll the Space back
+3. Builds a deployment commit on top of it that prepends the Space's YAML
+   config header (`sdk: docker`, `app_port: 7860`, …) to `README.md`. GitHub's
+   README has no header, because GitHub renders it as a table
+4. Force-pushes that commit to the Space with the `HF_TOKEN` secret
+5. Polls the HF API (`/api/spaces/<id>` for the repo head, `/api/spaces/<id>/runtime`
+   for the stage) until a rebuild of the new commit reaches `RUNNING`. Fails on
+   `CONFIG_ERROR`, `BUILD_ERROR`, `RUNTIME_ERROR` and other error stages
+6. Polls `https://<space-domain>/healthz` until it reports `model_loaded: true`
 
-The Space then rebuilds its Docker image. See
+Timeouts: 10 min for a rebuild to start, 30 min to reach `RUNNING`, 10 min for
+`/healthz`, 50 min for the whole job. See
 [`PHASE_2C_DEPLOYMENT_RUNBOOK.md`](PHASE_2C_DEPLOYMENT_RUNBOOK.md) for the
 end-to-end deployment topology and smoke tests.
 
 ## Required secrets
 
 - `HF_TOKEN` — HuggingFace personal access token, **Write** scope. Used only
-  by `deploy-backend.yml` to push to the Space remote.
+  by `deploy-backend.yml`, to push to the Space remote and to read the Space's
+  status from the HF API. Never sent to the app itself.
 
 Set under repo Settings → Secrets and variables → Actions → New repository
 secret.
