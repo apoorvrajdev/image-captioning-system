@@ -33,7 +33,7 @@ _Last updated: 2026-10-03_
 
 SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 `https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
-is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). So far only the manual path has run. The Space serves HF Hub
+is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
 `apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
 (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
 (beam CIDEr 0.826; 5-ref BLEU-4 25.91).
