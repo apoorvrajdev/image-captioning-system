@@ -23,9 +23,11 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | Explicit CORS allow-list from config / `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `backend/app/main.py`, `configs/base.yaml` |
 | Request-ID correlated structured logs | `backend/app/core/logging.py` |
 | Non-root container (UID 1000), minimal slim image, HEALTHCHECK | `Dockerfile` |
-| gitleaks, `detect-private-key`, large-file guard (pre-commit, local only) | `.pre-commit-config.yaml` |
+| `detect-private-key`, large-file guard (pre-commit locally **and** the CI `pre-commit` job) | `.pre-commit-config.yaml`, `ci.yml` |
+| gitleaks on staged changes (local pre-commit only; its `--staged` mode scans nothing in CI) | `.pre-commit-config.yaml` |
 | Least-privilege CI permissions, secret-presence guard in deploy | `.github/workflows/*.yml` |
 | Research-artefact integrity (SHA-256 notebook lock) | `.paper-notebook.sha256`, `ci.yml` |
+| Development-tooling guardrails: no reads of `.env` files, no edits to the frozen notebook, `models/`, or `results/`, confirmation before commit/push/tag | `.claude/settings.json` |
 
 ## Known gaps (documented, not yet addressed)
 
@@ -34,7 +36,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | `/v1/captions` reads the full upload into memory before the size check | memory pressure from very large bodies on a small Space | bound the read / check `Content-Length` (TASK-006) |
 | No rate limiting | abuse can starve the single worker | platform-level limits or a lightweight limiter, if abuse appears |
 | No security headers (CSP, HSTS, X-Content-Type-Options) | low for a JSON API; relevant for the SPA host | configure on Vercel (`vercel.json` headers) |
-| gitleaks only runs in pre-commit, not CI | a commit made without hooks isn't scanned | add a gitleaks CI job |
+| No full-history secret scan in CI (the pre-commit job's gitleaks hook is staged-only) | a commit made without hooks isn't scanned | add a `gitleaks detect` CI step |
 | No dependency or container vulnerability scanning | stale CVEs go unnoticed | Dependabot and/or `pip-audit` + `npm audit` in CI |
 | No authentication | by design (public demo) | revisit only if paid or expensive models are served |
 
