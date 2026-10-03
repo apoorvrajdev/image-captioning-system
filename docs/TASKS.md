@@ -66,13 +66,21 @@ renders; GIVEN a disallowed file THEN an inline error shows and no request is se
 "Cannot reach backend" shows; zero console errors in each case.
 Needs: `@playwright/test` devDependency + Chromium download (local and CI).
 
-### TASK-008 — Restore backend auto-deploy to the HF Space            [status: todo] (needs owner action)
+### TASK-008 — Restore backend auto-deploy to the HF Space            [status: in-progress] (fix implemented, awaiting review + first deploy)
 Area: deployment
 Goal: no `deploy-backend.yml` run has succeeded since mid-June. The 2026-06-16/17 runs failed with HF HTTP 429
 rate limits. The 2026-09-24 run was rejected as non-fast-forward because the Space's git history has commits that
 aren't on GitHub `main`. Inspect the Space history, then either merge those commits into GitHub `main` or decide
 that GitHub is the source of truth and force-push once.
 Acceptance criteria: a green `deploy-backend.yml` run; Space `/healthz` reports `model_loaded: true`.
+Findings: two faults.
+- The Space's only extra commit, `302e907`, has a tree identical to GitHub's `64f80e8` (history rewritten after deploy).
+- The Space has been in `CONFIG_ERROR` ("Missing configuration in README") because `befac80` removed the README
+  YAML header.
+Fix (ADR-017): `deploy-backend.yml` deploys the tested SHA, skips superseded commits, adds the header to a deploy
+commit, force-pushes, and gates on HF runtime `RUNNING` + `/healthz` `model_loaded: true`.
+Remaining: review and commit, then one `workflow_dispatch` run on `main`; then remove the status note in the
+runbook § 1.
 
 ---
 
