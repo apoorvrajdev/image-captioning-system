@@ -177,3 +177,139 @@ Everything is committed and reproducible:
   the qualitative review was designed to catch.
 - **Pre-registration + blinding are cheap insurance** against fitting the
   analysis to the answer you hoped for.
+
+## 8. Phase 3 comparison protocol (pre-registered)
+
+This section fixes how Phase 3 compares the project's CNN + Transformer with
+three pretrained Hugging Face captioners (TASK-009 – TASK-016 in
+[`TASKS.md`](TASKS.md)). It was committed on 2026-10-05, **before any baseline
+result existed**; at that point `results/` held only the two CNN + Transformer
+runs. Where the code lives and how it imports its dependencies:
+[ADR-019](DECISIONS.md).
+
+### 8.1 Models
+
+| `model_id` | Hub repository | Pinned revision | Licence |
+|---|---|---|---|
+| `inceptionv3-transformer-stabilized` | `apoorvrajdev/captioning-inceptionv3-transformer` | tag `v2.0.0` = `59d93b4babb16b0ac81eef598f3abc271a355cbf` | MIT |
+| `blip-base` | `Salesforce/blip-image-captioning-base` | `82a37760796d32b1411fe092ab5d4e227313294b` | BSD-3-Clause |
+| `vit-gpt2` | `nlpconnect/vit-gpt2-image-captioning` | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | Apache-2.0 |
+| `git-base-coco` | `microsoft/git-base-coco` | `a13141da42abd4a8cbf283601a8104265f537cee` | MIT |
+
+- Revisions are each repository's `main` commit on 2026-10-05, read from the
+  Hub model API (`sha`). The CNN + Transformer's is the commit behind its
+  `v2.0.0` tag. Every load (model, processor, tokenizer) passes
+  `revision=<sha>`.
+- Licences are the `license:` field of each model card at the pinned revision,
+  which the Hub also shows as the repository's `license:` tag.
+- `model_id` is the value written to `run_meta.json`. The CNN + Transformer
+  keeps the id its committed runs already use.
+
+### 8.2 Evaluation slice and references
+
+- The slice is [`results/stabilized-greedy/predictions.jsonl`](../results/stabilized-greedy/predictions.jsonl):
+  500 images in file order, with their stored references (732 in total,
+  1.46 per image, 315 images with a single reference).
+- No re-sampling, filtering or reordering. Images are matched by file name,
+  because the stored paths are Kaggle paths.
+- `results/stabilized-beam-w4-lp07-rp12/predictions.jsonl` holds the same
+  500 images in the same order (checked 2026-10-05).
+- Every model is scored against these stored references, the same reference
+  count as the existing runs. Five-reference scoring of the baselines is out of
+  scope for Phase 3.
+
+### 8.3 Caption normalisation and metrics
+
+- Every model's raw caption goes through the existing path:
+  `preprocess_caption` (`captioning/preprocessing/caption.py`), then
+  `strip_sentinels` (`captioning/evaluation/tokenization.py`). The result is
+  the `prediction` that is stored and scored. There is no second normalisation
+  implementation.
+- On the 1,000 committed CNN + Transformer predictions (greedy and beam) this
+  path changes nothing (checked 2026-10-05), so the existing runs already meet
+  this rule.
+- Metrics come from the unchanged `compute_all_metrics`: sacrebleu corpus
+  BLEU-1..4, METEOR, ROUGE-L and CIDEr, with the same code and settings as the
+  existing runs.
+- The artefact contract is unchanged, so only the normalised caption is stored.
+
+### 8.4 Decoding settings
+
+**CNN + Transformer: both decodings, greedy as the primary comparison.**
+
+- **Primary:** greedy, the serving default (`serve.decode_strategy: greedy`).
+  Its run is `results/stabilized-greedy/`. TASK-014 re-runs it through the
+  harness to show the harness reproduces it.
+- **Secondary:** beam width 4, length penalty 0.7, repetition penalty 1.2. Its
+  run is `results/stabilized-beam-w4-lp07-rp12/`, the source of the README
+  headline. It is shown as a labelled reference row. It isn't compared against
+  the baselines, which are greedy only.
+
+**Baselines: greedy, identical for all three.** The settings are passed
+explicitly to `generate()`, so the repositories' own generation defaults don't
+apply:
+
+| Setting | Value |
+|---|---|
+| `num_beams` | 1 |
+| `do_sample` | `False` |
+| `max_new_tokens` | 40, matching the CNN + Transformer's `model.max_length: 40` |
+| `repetition_penalty` | 1.0, as in the CNN greedy run |
+| `no_repeat_ngram_size` | 0 |
+| Text prompt | none (unconditional captioning) |
+| Image preprocessing | each model's own processor, from the pinned revision |
+| Precision | float32 |
+
+The token cap is a safety bound, not a length match: the tokenisers differ, and
+captions normally end at end-of-sequence well before 40 tokens. Seeds are set
+with `set_global_seed(config.train.seed)`, as in `scripts/evaluate.py`.
+
+### 8.5 Training-data overlap (methodological limitation)
+
+- **Slice origin:** the slice images come from COCO `train2017`; every stored
+  path is under `coco2017/train2017/`.
+- **Held out for the CNN + Transformer:** training and evaluation build the same
+  image-level split. Both call `make_image_level_splits` with `sample_size`
+  120000, `train_val_split` 0.8 and seed 42 (see `scripts/train.py`,
+  `scripts/evaluate.py` and `configs/train/stabilized.yaml`), and the slice is
+  taken from the validation side.
+- **The baselines' model cards, at the pinned revisions:**
+  - **BLIP-base:** "Model card for image captioning pretrained on COCO dataset".
+  - **GIT-base-coco:** "fine-tuned on COCO". Its pre-training pairs also include
+    COCO.
+  - **ViT-GPT2:** the card says the model was trained with the Hugging Face
+    Flax image-captioning example and is the PyTorch version of
+    `ydshieh/vit-gpt2-coco-en-ckpts`. Neither that card nor the upstream card
+    names the training dataset; COCO appears only in the upstream checkpoint's
+    name. It is treated as possibly trained on COCO.
+- **Unmeasured overlap:** the per-image overlap between the slice and any
+  baseline's training data is not measured. Some or most slice images may have
+  been seen by the baselines during training.
+- **Consequence:** baseline scores on this slice are **not** a held-out,
+  like-for-like comparison with the CNN + Transformer and must not be presented
+  as one. Every Phase 3 table, summary and dashboard states this limitation.
+- **Why the protocol is kept:** the slice and reference protocol are retained
+  on purpose. They are the setup behind every committed CNN + Transformer
+  result, so changing them would break comparability with those runs. A slice
+  held out for the baselines would be a separate, new protocol.
+
+### 8.6 What each Phase 3 run records
+
+- One new `results/<run_id>/` per (model, decoding), written by
+  `write_run_artifacts`. Existing `results/*` directories are never modified.
+- `run_meta.json` records:
+  - `model_id` from § 8.1;
+  - `weights_path` and `tokenizer_dir` as `<hub repository>@<revision>` for the
+    baselines;
+  - `decode_strategy` `greedy` with `repetition_penalty` 1.0;
+  - `n_samples` 500;
+  - `max_length` 40.
+
+### 8.7 Scope and changes
+
+- **Out of scope:** five-reference scoring of the baselines; latency (TASK-015
+  sets that protocol before any timing run); fine-tuning; serving any baseline.
+- **Changing this protocol:** after the first baseline result exists, any change
+  to §§ 8.1–8.6 is a dated amendment that gives its reason. Runs made under the
+  changed settings go to new run directories and aren't compared with runs made
+  under these settings.
