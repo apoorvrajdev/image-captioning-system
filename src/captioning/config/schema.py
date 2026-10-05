@@ -22,8 +22,9 @@ registry) only adds new fields, never changes the meaning of existing ones.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -186,6 +187,87 @@ class ServeConfig(_StrictModel):
         return v
 
 
+class ComparedModelConfig(_StrictModel):
+    """One model in the Phase 3 comparison, pinned to an exact Hub commit.
+
+    ``revision`` must be a full 40-character commit SHA, never a branch or tag
+    name, so a moved branch can't silently change the model being evaluated.
+    """
+
+    # ``model_id`` matches the run_meta.json field; opt out of pydantic's
+    # protected ``model_`` namespace warning, as the API response schemas do.
+    model_config = ConfigDict(extra="forbid", protected_namespaces=())
+
+    model_id: str = Field(min_length=1)
+    hub_repo: str = Field(pattern=r"^[\w.-]+/[\w.-]+$")
+    revision: str = Field(pattern=r"^[0-9a-f]{40}$")
+
+
+class BaselineDecodeConfig(_StrictModel):
+    """Generation settings passed explicitly to every Hugging Face baseline.
+
+    Greedy decoding, so each repository's own generation defaults never apply
+    (``docs/EVAL_METHODOLOGY.md`` § 8.4).
+    """
+
+    num_beams: int = Field(default=1, ge=1)
+    do_sample: bool = False
+    max_new_tokens: int = Field(default=40, ge=1)
+    repetition_penalty: float = Field(default=1.0, ge=1.0)
+    no_repeat_ngram_size: int = Field(default=0, ge=0)
+    precision: Literal["float32"] = "float32"
+
+
+def _protocol_cnn() -> ComparedModelConfig:
+    return ComparedModelConfig(
+        model_id="inceptionv3-transformer-stabilized",
+        hub_repo="apoorvrajdev/captioning-inceptionv3-transformer",
+        revision="59d93b4babb16b0ac81eef598f3abc271a355cbf",  # tag v2.0.0
+    )
+
+
+def _protocol_baselines() -> list[ComparedModelConfig]:
+    return [
+        ComparedModelConfig(
+            model_id="blip-base",
+            hub_repo="Salesforce/blip-image-captioning-base",
+            revision="82a37760796d32b1411fe092ab5d4e227313294b",
+        ),
+        ComparedModelConfig(
+            model_id="vit-gpt2",
+            hub_repo="nlpconnect/vit-gpt2-image-captioning",
+            revision="dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+        ),
+        ComparedModelConfig(
+            model_id="git-base-coco",
+            hub_repo="microsoft/git-base-coco",
+            revision="a13141da42abd4a8cbf283601a8104265f537cee",
+        ),
+    ]
+
+
+class CompareConfig(_StrictModel):
+    """Phase 3 model comparison (ADR-019).
+
+    The defaults are the frozen protocol in ``docs/EVAL_METHODOLOGY.md`` § 8.1
+    (models and revisions) and § 8.4 (baseline decoding). Changing them is a
+    protocol amendment, not a tuning knob. The CNN + Transformer's own decoding
+    still comes from ``serve`` / the caller, exactly as in ``scripts/evaluate.py``.
+    """
+
+    cnn: ComparedModelConfig = Field(default_factory=_protocol_cnn)
+    baselines: list[ComparedModelConfig] = Field(default_factory=_protocol_baselines)
+    baseline_decode: BaselineDecodeConfig = Field(default_factory=BaselineDecodeConfig)
+
+    @model_validator(mode="after")
+    def _validate_unique_model_ids(self) -> CompareConfig:
+        ids = [self.cnn.model_id, *(m.model_id for m in self.baselines)]
+        duplicates = sorted({i for i in ids if ids.count(i) > 1})
+        if duplicates:
+            raise ValueError(f"model_id must be unique across compared models, got {duplicates}")
+        return self
+
+
 class AppConfig(BaseSettings):
     """Top-level config aggregating every sub-config.
 
@@ -197,6 +279,7 @@ class AppConfig(BaseSettings):
     model: ModelConfig = Field(default_factory=ModelConfig)
     train: TrainConfig = Field(default_factory=TrainConfig)
     serve: ServeConfig = Field(default_factory=ServeConfig)
+    compare: CompareConfig = Field(default_factory=CompareConfig)
 
     model_config = SettingsConfigDict(
         env_prefix="CAPTIONING__",

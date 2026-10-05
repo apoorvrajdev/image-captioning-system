@@ -45,3 +45,28 @@ serve:
     - http://localhost:5174
     - http://127.0.0.1:5173
     - http://127.0.0.1:5174
+
+# Phase 3 comparison — frozen protocol, docs/EVAL_METHODOLOGY.md § 8 (ADR-019).
+# Changing a value here is a dated protocol amendment, not a tuning knob.
+compare:
+  cnn:                          # § 8.1: the project's model as compared
+    model_id: inceptionv3-transformer-stabilized
+    hub_repo: apoorvrajdev/captioning-inceptionv3-transformer
+    revision: 59d93b4babb16b0ac81eef598f3abc271a355cbf   # tag v2.0.0
+  baselines:                    # § 8.1: Hugging Face baselines, pinned commits
+    - model_id: blip-base
+      hub_repo: Salesforce/blip-image-captioning-base
+      revision: 82a37760796d32b1411fe092ab5d4e227313294b
+    - model_id: vit-gpt2
+      hub_repo: nlpconnect/vit-gpt2-image-captioning
+      revision: dc68f91c06a1ba6f15268e5b9c13ae7a7c514084
+    - model_id: git-base-coco
+      hub_repo: microsoft/git-base-coco
+      revision: a13141da42abd4a8cbf283601a8104265f537cee
+  baseline_decode:              # § 8.4: passed explicitly to generate()
+    num_beams: 1
+    do_sample: false
+    max_new_tokens: 40
+    repetition_penalty: 1.0
+    no_repeat_ngram_size: 0
+    precision: float32

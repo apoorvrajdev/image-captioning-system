@@ -8,6 +8,9 @@ which makes them testable in isolation and trivially overridable in CI / serve.
 from captioning.config.loader import load_config
 from captioning.config.schema import (
     AppConfig,
+    BaselineDecodeConfig,
+    CompareConfig,
+    ComparedModelConfig,
     DataConfig,
     ModelConfig,
     ServeConfig,
@@ -16,6 +19,9 @@ from captioning.config.schema import (
 
 __all__ = [
     "AppConfig",
+    "BaselineDecodeConfig",
+    "CompareConfig",
+    "ComparedModelConfig",
     "DataConfig",
     "ModelConfig",
     "ServeConfig",
