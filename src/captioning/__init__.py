@@ -13,6 +13,7 @@ Sub-package map:
     training/       Losses, callbacks, training orchestration
     inference/      Generation algorithms + a singleton-friendly Predictor
     evaluation/     BLEU/CIDEr/METEOR/ROUGE (Phase 1b expands these)
+    baselines/      Phase 3 captioner interface: CNN + Hugging Face adapters
     utils/          Cross-cutting helpers (logging, seed, hashing, paths)
 
 Public API is intentionally small. Everything else is internal and may change.
