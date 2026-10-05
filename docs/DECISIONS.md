@@ -108,3 +108,21 @@ Format: **Decision · Why · Evidence**.
 - **Decision:** the reported `model_version` stays an operator-set Space variable (`BACKEND_MODEL_VERSION`). Every promotion or rollback sets it to the same Hub tag as `BACKEND_WEIGHTS_HUB_REVISION`, in the same change, then checks `/healthz`. The backend code is unchanged; its `"v1.0.0"` default applies only when the variable is unset.
 - **Why:** the two are independent fields in `BackendSettings`, and nothing links them. TASK-004 found production serving tag `v2.0.0` while reporting the default `v1.0.0`, because the documented promotion step bumped only the revision. Fixing this with a procedure and a Space variable needed no code change and no redeploy. Deriving the label from the revision in code is a possible future change, not a requirement.
 - **Evidence:** `backend/app/core/config.py` (`model_version`, `weights_hub_revision`), `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` §§ 3, 4, 10, live `/healthz` 2026-10-03 (`model_version: "v2.0.0"`, `model_loaded: true`).
+
+### ADR-019 — Phase 3 baselines are an evaluation workflow with lazily imported Hugging Face code
+- **Decision:**
+  - The Phase 3 comparison is an offline evaluation workflow, not backend serving. No baseline is served, and the serving image and the Space don't change (ADR-013).
+  - Code location:
+    - Model adapters (the shared captioner interface, the CNN + Transformer wrapper and the Hugging Face adapter) live in `src/captioning/baselines/`.
+    - Slice loading and cross-run comparison live in `src/captioning/evaluation/`.
+    - CLI entrypoints live in `scripts/`.
+    - Baseline settings go in a new section of `src/captioning/config/schema.py` plus YAML under `configs/`.
+    - Tests live in `tests/unit/`, using fakes.
+  - `transformers` and `torch` are imported only inside `src/captioning/baselines/`, and only lazily (inside functions, never at module import). Importing `captioning` or `captioning.baselines` without `[hf]` works; using a Hugging Face adapter without it raises an error naming `pip install -e ".[hf]"`.
+  - `[hf]` stays an optional extra:
+    - CI keeps installing only `requirements-dev.txt`, `requirements-eval.txt` and `pip install -e .`.
+    - Tests never need `transformers`, `torch` or a model download.
+    - `backend/` never imports `captioning.baselines`.
+  - `tensorflow-cpu==2.15.0` and `numpy<2` stay pinned and unchanged. GPU runs of the CNN + Transformer install `tensorflow==2.15.0` in that run environment only.
+- **Why:** the comparison needs `transformers` and `torch` only where runs actually happen (owner-run, on Kaggle). Keeping them out of CI, the backend and the image keeps CI fast and offline, keeps the image slim, and leaves the TF 2.15 pin (Keras 2 `TextVectorization` save/load) untouched. Both are already installed with `[hf]` in the local dev venv, so nothing new needs installing.
+- **Evidence:** `docs/EVAL_METHODOLOGY.md` § 8, `docs/TASKS.md` (TASK-009 – TASK-018), `pyproject.toml` `[project.optional-dependencies].hf` and the mypy overrides, `.github/workflows/ci.yml` install steps, ADR-013.
