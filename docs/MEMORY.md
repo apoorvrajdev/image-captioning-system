@@ -10,8 +10,9 @@ _Last updated: 2026-10-04_
 - **Completed:** Phase 0 (bootstrap), Phase 1 (modularisation), Phase 1b (training stabilisation +
   metric suite + stabilized checkpoint), Phase 2A (FastAPI), Phase 2B (SPA), Phase 2C (public deployment),
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup.
-- **Next:** Phase 3 — multimodal baselines (3A–3D in [`TASKS.md`](TASKS.md)). **Not started.**
-  It must be decomposed into small tasks before any implementation.
+- **Next:** Phase 3 — multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
+  [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
+  No baseline code or results exist yet.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
