@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-04_
+_Last updated: 2026-10-05_
 
 ## Current phase
 
@@ -12,7 +12,7 @@ _Last updated: 2026-10-04_
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup.
 - **Next:** Phase 3 — multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
-  No baseline code or results exist yet.
+  The slice loader (TASK-010) and captioner adapters (TASK-011) exist; no baseline results exist yet.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -21,7 +21,7 @@ _Last updated: 2026-10-04_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 114 passed on 2026-10-05, after TASK-010 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 135 passed on 2026-10-05, after TASK-011 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -42,6 +42,14 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Recent changes
 
+- 2026-10-05 captioner adapters (TASK-011, done):
+  - `captioning.baselines` gives every compared model one `Captioner` interface: `CNNCaptioner` wraps
+    `CaptionPredictor` unchanged, and `HFCaptioner` loads a pinned Hub revision with the protocol's decode
+    settings.
+  - Captions are normalised once via `preprocess_caption` → `strip_sentinels`.
+  - `torch`/`transformers` are imported only in `HFCaptioner.load()`.
+  - The protocol values live in a strict `compare` config section (`configs/base.yaml`).
+  - Committed as `8f389e0`..`ebe4ea3`.
 - 2026-10-05 evaluation-slice loader (TASK-010, done):
   - `captioning.evaluation.load_eval_slice` reads the Phase 3 slice from a committed `predictions.jsonl`, keeping
     file order and stored references and remapping images by file name.

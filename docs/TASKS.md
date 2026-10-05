@@ -281,7 +281,7 @@ Outcome:
   - `results/`, `scripts/evaluate.py` and the metric code are unchanged.
 - Committed as `c6f9d7e` (loader) and `99f3dfb` (test).
 
-### TASK-011 — Add a common captioner interface with Hugging Face adapters behind `[hf]`            [status: todo]
+### TASK-011 — Add a common captioner interface with Hugging Face adapters behind `[hf]`            [status: done] (2026-10-05)
 Area: ml-core · evaluation
 Goal: every compared model captions images through one interface, so 3B scores and 3C times them through the same
 code.
@@ -305,6 +305,40 @@ Owns: the new baseline package (location per ADR-019), `tests/unit/test_captione
 and YAML, the mypy override, the `CLAUDE.md` layout line and `.claude/context/repo-map.md`.
 Out of scope: serving baselines; fine-tuning; changing the CNN + Transformer's decoding. A real one-image smoke run
 is optional and needs download approval.
+Outcome:
+- Config (`8f389e0`):
+  - New strict `compare` section (`CompareConfig`, `ComparedModelConfig`, `BaselineDecodeConfig`, all
+    `extra="forbid"`). Revisions must be full 40-character SHAs, and model ids must be unique.
+  - Defaults are the § 8.1 / § 8.4 values, stated explicitly in `configs/base.yaml`. `serve` and the notebook
+    parameters are unchanged.
+- Package `captioning.baselines` (`a5e199e`), per ADR-019:
+  - `Captioner`: a batch of image paths in, normalised captions out, through the existing `preprocess_caption` →
+    `strip_sentinels` in one place.
+  - `CaptionerIdentity`: model id, Hub repo, revision, and read-only decode settings.
+  - `CNNCaptioner`: wraps `CaptionPredictor` unchanged, one `predict_path` per image. Its `from_artifacts`
+    imports TensorFlow lazily.
+  - `HFCaptioner`:
+    - loads `AutoImageProcessor`, `AutoTokenizer` and `AutoModelForVision2Seq` at the pinned revision, in
+      float32;
+    - calls `generate()` with the protocol settings passed explicitly, and no prompt;
+    - imports `torch`/`transformers` through `importlib`, only in `load()`;
+    - without `[hf]`, raises `MissingHFDependencyError` (an `ImportError`) naming `pip install -e ".[hf]"`.
+  - No mypy override was needed.
+- `tests/unit/test_captioners.py` (`1ac78e9`, 21 tests, fakes only), covering:
+  - config pins, YAML parity and strict validation;
+  - reuse of the existing normalisation;
+  - CNN wrapping and greedy/beam decode settings, and `from_artifacts` delegation without TensorFlow;
+  - HF identity and `generate()` settings, and the pinned revision and dtype via fake modules;
+  - the missing-`[hf]` error;
+  - clean subprocesses showing that importing the package loads no `torch`, `transformers` or `tensorflow`, and
+    that it imports and fails clearly with both blocked.
+- Verification:
+  - Focused 21 passed; full suite 135 passed (1 existing warning).
+  - ruff lint and format clean; mypy 0 issues (76 files).
+  - Parity audit 4/4; notebook freeze OK; pre-commit passed.
+- Layout metadata (`ebe4ea3`): the repository layout line and `repo-map.md` list `baselines`.
+- Not run, by design: real baseline inference, checkpoint downloads, a Hugging Face smoke test. TASK-014 is the
+  first to exercise the real loading path.
 
 ### TASK-012 — Add the comparison runner that writes one results directory per model            [status: todo]
 Area: evaluation
