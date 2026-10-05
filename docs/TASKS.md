@@ -195,7 +195,7 @@ TASK-007† (Playwright E2E, start of 3D) ────────────�
 
 TASK-007 can proceed in parallel with 3A–3C as soon as its install is approved.
 
-### TASK-009 — Record the Phase 3 evaluation protocol before any baseline result            [status: todo]
+### TASK-009 — Record the Phase 3 evaluation protocol before any baseline result            [status: done] (2026-10-05)
 Area: evaluation · docs
 Goal: fix the model list, slice, references, normalisation and decode settings in writing before any baseline runs,
 so nothing can be tuned to the results.
@@ -219,6 +219,32 @@ the changed docs.
 Depends on: none.
 Owns: `docs/EVAL_METHODOLOGY.md` (new section), `docs/DECISIONS.md` (ADR-019), `docs/TASKS.md`.
 Out of scope: code; 5-reference scoring of baselines; the latency protocol (TASK-015).
+Outcome:
+- Protocol: `EVAL_METHODOLOGY.md` § 8, committed as `ba71f38`. ADR-019 committed as `03493ee`. The `MEMORY.md`
+  Phase 3 state was updated in `8870461`.
+- Models and revisions (all four ids confirmed):
+  - BLIP-base `Salesforce/blip-image-captioning-base` at `82a37760796d32b1411fe092ab5d4e227313294b`, BSD-3-Clause.
+  - ViT-GPT2 `nlpconnect/vit-gpt2-image-captioning` at `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084`, Apache-2.0.
+  - GIT-base-coco `microsoft/git-base-coco` at `a13141da42abd4a8cbf283601a8104265f537cee`, MIT.
+  - CNN + Transformer: tag `v2.0.0` = `59d93b4babb16b0ac81eef598f3abc271a355cbf`, MIT.
+- Sources: read-only Hub model API (`sha`, `cardData.license`, `license:` tag) and each model card at its pinned
+  revision, plus the card of `ydshieh/vit-gpt2-coco-en-ckpts` (ViT-GPT2's cited upstream). No weights were
+  downloaded and nothing was installed.
+- Slice: `results/stabilized-greedy/predictions.jsonl`, 500 images, 732 references (1.46/image), file order. The
+  beam run holds the same image list.
+- Normalisation: `preprocess_caption` → `strip_sentinels`. Applied to all 1,000 committed CNN + Transformer
+  predictions, it changes none.
+- Decoding: the CNN + Transformer is compared with both runs, greedy as the primary comparison and beam
+  (w4, lp 0.7, rp 1.2) as a labelled reference row. The baselines use greedy only: `num_beams` 1, no sampling,
+  `max_new_tokens` 40, `repetition_penalty` 1.0, no prompt, float32, each model's own processor.
+- Overlap caveat: the BLIP and GIT cards state COCO training. The ViT-GPT2 cards don't name a dataset, so it is
+  treated as possibly COCO-trained. The CNN + Transformer held the slice out. Scores aren't presented as a
+  held-out comparison, and the slice is kept on purpose.
+- Before any baseline result:
+  - `results/` is unchanged: `history.json` plus the two CNN + Transformer runs, last changed `c489b26` on
+    2026-06-16.
+  - `git log -- docs/EVAL_METHODOLOGY.md results/` lists `ba71f38` first.
+- Checks: pre-commit passed on each changed doc. No code, config, results, README or workflow changes.
 
 ### TASK-010 — Load the evaluation slice from a committed run            [status: todo]
 Area: evaluation
