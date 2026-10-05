@@ -16,6 +16,7 @@ Rebuild the generated files after adding/moving modules:
 | `src/captioning/training/` | losses (label smoothing), warmup+cosine schedule, callbacks, trainer | models, data | training-recipe change (behind opt-in flags) | ml-core |
 | `src/captioning/inference/` | `CaptionPredictor` (`from_artifacts`, `warmup`, `predict_tensor/path`), greedy + beam decoders, disk image loader | models, preprocessing | decode behaviour | inference-api / ml-core |
 | `src/captioning/evaluation/` | BLEU (sacrebleu), CIDEr, METEOR, ROUGE-L, corpus runner, `benchmark.py` (`RunMeta`, `write_run_artifacts`), per-sample inspection | — | metrics / artefact contract | evaluation |
+| `src/captioning/baselines/` | Phase 3 `Captioner` interface (normalises via `preprocess_caption` → `strip_sentinels`), `CNNCaptioner` (wraps `CaptionPredictor`), `HFCaptioner` (pinned Hub revision; `torch`/`transformers` imported lazily, `[hf]` extra) | config, evaluation, preprocessing; inference (lazy) | adding or changing a compared model (ADR-019) | evaluation |
 | `src/captioning/utils/` | structlog setup, `set_global_seed`, SHA-256 hashing | — | rarely | — |
 | `backend/app/main.py` | `create_app()` factory + lifespan (load config → resolve weights → predictor → warmup → `app.state.predictor_service`) | captioning.inference, services | startup / middleware / CORS | inference-api |
 | `backend/app/api/routes.py` | `/healthz`, `POST /v1/captions` (thin: validate → service → schema) | schemas, services, utils | endpoint contract | inference-api |

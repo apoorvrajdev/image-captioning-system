@@ -93,7 +93,7 @@ logical contributions.
 
 ## Repository Layout (authoritative)
 
-- `src/captioning/` — installable library (`config`, `data`, `models`, `preprocessing`, `training`, `inference`, `evaluation`, `utils`)
+- `src/captioning/` — installable library (`config`, `data`, `models`, `preprocessing`, `training`, `inference`, `evaluation`, `baselines`, `utils`)
 - `backend/app/` — FastAPI service (`api/routes.py`, `services/predictor_service.py`, `schemas/`, `core/`, `utils/`)
 - `frontend/src/` — React UI (`components/`, `services/api.js`)
 - `scripts/` — CLI entrypoints (`train.py`, `evaluate.py`, `predict.py`, etc.)
