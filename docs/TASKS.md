@@ -246,7 +246,7 @@ Outcome:
   - `git log -- docs/EVAL_METHODOLOGY.md results/` lists `ba71f38` first.
 - Checks: pre-commit passed on each changed doc. No code, config, results, README or workflow changes.
 
-### TASK-010 — Load the evaluation slice from a committed run            [status: todo]
+### TASK-010 — Load the evaluation slice from a committed run            [status: done] (2026-10-05)
 Area: evaluation
 Goal: one function returns the exact image list and references of an existing run, with image paths remapped to a
 local images directory.
@@ -260,6 +260,26 @@ Verification: `pytest tests/unit/test_eval_slice.py -q`; full suite; ruff; mypy;
 Depends on: TASK-009.
 Owns: `src/captioning/evaluation/slice.py`, `tests/unit/test_eval_slice.py`, the `captioning.evaluation` export.
 Out of scope: changing how `scripts/evaluate.py` builds its slice; downloading COCO.
+Outcome:
+- `load_eval_slice(predictions_path, images_dir)` returns a frozen `EvalSlice` (`image_paths`, `references`,
+  `source`), exported from `captioning.evaluation`.
+  - Rows stay in file order and references are kept exactly as stored.
+  - Each image path becomes `images_dir/<file name>`; `/` and `\` separators are both handled.
+  - Equality ignores `source`, so two runs' slices can be compared directly.
+  - A row without a file name or a non-empty reference list raises `ValueError` naming the file and line.
+- `tests/unit/test_eval_slice.py` (10 tests, offline, no COCO images):
+  - the greedy slice matches the committed file: 500 images, 732 references, same order;
+  - the greedy and beam slices compare equal;
+  - no image files are needed;
+  - Windows-style paths are remapped;
+  - malformed rows are rejected;
+  - a subprocess import loads no `tensorflow`, `transformers` or `torch`.
+- Verification:
+  - Focused 10 passed; full suite 114 passed.
+  - ruff lint and format clean; mypy 0 issues (72 files).
+  - Parity audit 4/4; notebook freeze OK; pre-commit passed.
+  - `results/`, `scripts/evaluate.py` and the metric code are unchanged.
+- Committed as `c6f9d7e` (loader) and `99f3dfb` (test).
 
 ### TASK-011 — Add a common captioner interface with Hugging Face adapters behind `[hf]`            [status: todo]
 Area: ml-core · evaluation

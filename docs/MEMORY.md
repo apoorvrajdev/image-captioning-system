@@ -21,7 +21,7 @@ _Last updated: 2026-10-04_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 104 passed on 2026-10-04, after TASK-005 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 114 passed on 2026-10-05, after TASK-010 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -42,6 +42,11 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Recent changes
 
+- 2026-10-05 evaluation-slice loader (TASK-010, done):
+  - `captioning.evaluation.load_eval_slice` reads the Phase 3 slice from a committed `predictions.jsonl`, keeping
+    file order and stored references and remapping images by file name.
+  - A test pins the shared greedy/beam slice: 500 images, 732 references.
+  - Committed as `c6f9d7e` and `99f3dfb`.
 - 2026-10-04 Makefile repair (TASK-005, done):
   - `docker-build` builds the root `Dockerfile`.
   - `docker-build-hf`, `docker-up` and `docker-down` are removed: there was no `ARG INSTALL_HF` and no compose file.
