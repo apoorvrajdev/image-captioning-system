@@ -114,15 +114,6 @@ Outcome:
   temporary file) before the route runs. The bound applies to what the route loads, not to what the server accepts.
   See [`SECURITY.md`](SECURITY.md) § Known gaps.
 
-### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (awaiting approval to install)
-Area: frontend · deployment
-Goal: promote the manual browser check in `TEST_PLAN.md` into a committed Playwright spec that mocks
-`/healthz` and `/v1/captions` with `page.route` (no backend, no TensorFlow), run in the CI `frontend` job.
-Acceptance criteria: GIVEN a mocked healthy API WHEN a PNG is uploaded and Generate clicked THEN the caption card
-renders; GIVEN a disallowed file THEN an inline error shows and no request is sent; GIVEN the API is unreachable THEN
-"Cannot reach backend" shows; zero console errors in each case.
-Needs: `@playwright/test` devDependency + Chromium download (local and CI).
-
 ### TASK-008 — Restore backend auto-deploy to the HF Space            [status: done] (deployed and verified 2026-10-03)
 Area: deployment
 Goal: no `deploy-backend.yml` run has succeeded since mid-June. The 2026-06-16/17 runs failed with HF HTTP 429
@@ -147,15 +138,251 @@ Outcome:
 
 ---
 
-## Phase 3 — Multimodal baselines (next phase, NOT started)
+## Phase 3 — Multimodal baselines (decomposed below, NOT started)
 
-Decompose each item into TASK-NNN entries (with acceptance criteria) **before** implementation.
 Constraints already fixed: baselines live in the optional `[hf]` extra (`transformers==4.41.2`,
 `torch==2.3.0`) and must not unpin the research pipeline (`tensorflow-cpu==2.15.0`). Every baseline
 writes the standard `results/<run_id>/` artefact contract on the **same slice, reference count and
 tokenisation** as the existing runs.
 
 - [ ] **3A** — Side-by-side comparison harness: CNN+Transformer vs BLIP-base vs ViT-GPT2 vs GIT-base-coco
+  → TASK-009, TASK-010, TASK-011, TASK-012
 - [ ] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation
-- [ ] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs GPU)
-- [ ] **3D** — Comparison-result dashboard exposed through the existing SPA
+  → TASK-013, TASK-014
+- [ ] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs GPU) → TASK-015, TASK-016
+- [ ] **3D** — Comparison-result dashboard exposed through the existing SPA → TASK-007, TASK-017, TASK-018
+
+Facts the tasks rely on (checked 2026-10-05):
+- Slice: both committed runs (`stabilized-greedy`, `stabilized-beam-w4-lp07-rp12`) score the same 500 images in the
+  same order, with about 1.46 references per image. References keep their `[start] … [end]` sentinels. Image paths
+  are Kaggle paths (`/kaggle/input/datasets/awsaf49/coco-2017-dataset/…`).
+- Tokenisation: references go through `preprocess_caption`, and metrics strip the sentinels
+  (`evaluation/tokenization.py`). Baseline output must use the same normalisation; no second path.
+- `RunMeta` has no latency or device fields, so 3C extends the artefact contract.
+- `[hf]` is installed in the local venv. CI installs only the dev/eval requirements, so Phase 3 code imports
+  `transformers`/`torch` lazily and its tests use fakes. mypy ignores missing `transformers.*` imports but not
+  `torch.*`.
+- The slice comes from COCO train2017. The HF baselines were, per their model cards, fine-tuned on COCO training
+  data, so they have very likely seen these images; the CNN + Transformer held them out. This is disclosed, not fixed.
+- Out of scope for Phase 3 (from `restructure-plan.md`, not in the README roadmap): `GET /v1/models`; a live
+  `POST /v1/compare` on the Space, which would put `torch` in the image against ADR-013; and a `model-eval.yml` PR
+  comment (that workflow has never existed).
+
+Approvals needed before implementation:
+
+| Approval | Needed by |
+|---|---|
+| None (built and tested offline with fakes) | TASK-009, 010, 011, 012, 013, 015, 017 |
+| Read-only Hugging Face API lookups to pin revision SHAs | TASK-009 |
+| Downloads of the three baseline checkpoints (about 0.7–1 GB each) | TASK-014, TASK-016 (optional TASK-011 smoke run) |
+| Owner-run Kaggle CPU and GPU sessions with COCO 2017 | TASK-014, TASK-016 |
+| `@playwright/test` and a Chromium download, locally and in CI | TASK-007, then TASK-018 |
+
+Not needed: changes to `requirements.txt`, the `Dockerfile` or the Space; new runtime dependencies; any change to
+the `tensorflow-cpu` pin.
+
+Dependency graph (`*` owner-run, needs approvals; `†` blocked on install approval). First task: TASK-009.
+
+```
+TASK-009 (protocol)
+ ├─► TASK-010 (slice loader) ─┬─► TASK-012 (runner) ─────────► TASK-014* (baseline runs) ─┐
+ │                            ├─► TASK-013 (comparison check) ─► TASK-014*                 │
+ │                            └─► TASK-015 (latency tool) ─► TASK-016* (CPU/GPU runs) ─────┤
+ └─► TASK-011 (captioners) ───┬─► TASK-012                                                 ├─► TASK-017 (dashboard data) ─► TASK-018 (dashboard UI)
+                              └─► TASK-015                                                 │                                   ▲
+TASK-007† (Playwright E2E, start of 3D) ───────────────────────────────────────────────────┼───────────────────────────────────┘
+```
+
+TASK-007 can proceed in parallel with 3A–3C as soon as its install is approved.
+
+### TASK-009 — Record the Phase 3 evaluation protocol before any baseline result            [status: todo]
+Area: evaluation · docs
+Goal: fix the model list, slice, references, normalisation and decode settings in writing before any baseline runs,
+so nothing can be tuned to the results.
+Acceptance criteria:
+- GIVEN `docs/EVAL_METHODOLOGY.md` THEN a Phase 3 section names each model with its Hub repo id, pinned revision SHA
+  and licence. Presumed ids, to be confirmed: `Salesforce/blip-image-captioning-base`,
+  `nlpconnect/vit-gpt2-image-captioning`, `microsoft/git-base-coco`; plus the CNN + Transformer at `v2.0.0`.
+- The slice is the 500 images and references of `results/stabilized-greedy/predictions.jsonl`, in that order, with
+  no re-sampling.
+- Normalisation: baseline output goes through `preprocess_caption`, then `strip_sentinels`. The metric code is
+  unchanged.
+- Decode settings for each baseline, and whether the CNN + Transformer is compared greedy, beam or both, are fixed
+  before any run.
+- Each baseline's COCO training-data overlap is stated from its model card, with the caveat that scores aren't a
+  held-out comparison.
+- ADR-019 records where the baseline code lives; that it is imported lazily (`[hf]` stays optional; nothing in
+  `backend/` or CI imports `transformers` or `torch`); and that the `tensorflow-cpu==2.15.0` pin is unchanged.
+- This protocol is committed before any baseline results directory exists.
+Verification: review; `git log -- docs/EVAL_METHODOLOGY.md results/` shows the protocol commit first; pre-commit on
+the changed docs.
+Depends on: none.
+Owns: `docs/EVAL_METHODOLOGY.md` (new section), `docs/DECISIONS.md` (ADR-019), `docs/TASKS.md`.
+Out of scope: code; 5-reference scoring of baselines; the latency protocol (TASK-015).
+
+### TASK-010 — Load the evaluation slice from a committed run            [status: todo]
+Area: evaluation
+Goal: one function returns the exact image list and references of an existing run, with image paths remapped to a
+local images directory.
+Acceptance criteria:
+- GIVEN `results/stabilized-greedy/predictions.jsonl` and an images directory THEN it returns 500 entries in file
+  order, references byte-identical, and paths of the form `images_dir/<basename>`.
+- GIVEN the two committed runs THEN their slices compare equal (regression guard).
+- No TensorFlow or `transformers` import, and no existence check on image files (the runner checks those).
+Verification: `pytest tests/unit/test_eval_slice.py -q`; full suite; ruff; mypy; parity audit and notebook freeze
+(`src/` change).
+Depends on: TASK-009.
+Owns: `src/captioning/evaluation/slice.py`, `tests/unit/test_eval_slice.py`, the `captioning.evaluation` export.
+Out of scope: changing how `scripts/evaluate.py` builds its slice; downloading COCO.
+
+### TASK-011 — Add a common captioner interface with Hugging Face adapters behind `[hf]`            [status: todo]
+Area: ml-core · evaluation
+Goal: every compared model captions images through one interface, so 3B scores and 3C times them through the same
+code.
+Acceptance criteria:
+- The interface takes a batch of image paths and returns normalised captions, plus the model's identity (model id,
+  Hub id and revision, decode settings) for `run_meta.json`.
+- The CNN + Transformer adapter wraps `CaptionPredictor` without changing it.
+- One Hugging Face adapter, parametrised by Hub id and revision, covers the three baselines (or one adapter each if
+  they can't share a loading path).
+- Model ids, revisions and decode settings come from a new config section (`schema.py` + YAML, `extra="forbid"`),
+  with defaults that leave parity unchanged.
+- `transformers`/`torch` are imported only inside the adapter. Without `[hf]`, the package still imports, and a
+  clear error names `pip install -e ".[hf]"`.
+- Tests use fakes: no downloads and no `torch` import. Nothing changes in `backend/`, the `Dockerfile` or
+  `requirements.txt`.
+Verification: `pytest tests/unit/test_captioners.py -q`; a check that importing the package leaves `torch` out of
+`sys.modules`; full suite; parity audit and notebook freeze; ruff; mypy (add `torch.*` to the mypy ignore list if it
+is imported).
+Depends on: TASK-009.
+Owns: the new baseline package (location per ADR-019), `tests/unit/test_captioners.py`, the config schema section
+and YAML, the mypy override, the `CLAUDE.md` layout line and `.claude/context/repo-map.md`.
+Out of scope: serving baselines; fine-tuning; changing the CNN + Transformer's decoding. A real one-image smoke run
+is optional and needs download approval.
+
+### TASK-012 — Add the comparison runner that writes one results directory per model            [status: todo]
+Area: evaluation
+Goal: `scripts/compare_models.py` captions the slice with each selected model and writes `results/<run_id>/`
+through the existing `write_run_artifacts`.
+Acceptance criteria:
+- Each model gets one directory containing the five standard files. Image order and references match the slice, and
+  metrics come from the unchanged `compute_all_metrics`.
+- `run_meta.json` records the model id, Hub id and revision, decode settings, sample count and max length.
+- The runner refuses to overwrite an existing directory, checks every image exists before loading any model, and
+  seeds all random generators.
+- An end-to-end test with a fake captioner and a 3-image fixture produces valid files offline.
+Verification: `pytest tests/unit/test_compare_models.py -q`; `python -m scripts.compare_models --help`; full suite;
+ruff; mypy. If a Make target is added: `mingw32-make -n compare` and `tests/unit/test_makefile.py`.
+Depends on: TASK-010, TASK-011.
+Owns: `scripts/compare_models.py`, `tests/unit/test_compare_models.py`, an optional Make target.
+Out of scope: real runs (TASK-014); the cross-model table (TASK-013).
+
+### TASK-013 — Build the cross-model comparison summary with a slice-identity check            [status: todo]
+Area: evaluation
+Goal: join per-model results directories into one table, refusing to compare runs whose slice or references differ.
+Acceptance criteria:
+- GIVEN directories with identical image lists and references THEN it writes JSON and Markdown with each model's
+  BLEU-1..4, METEOR, ROUGE-L, CIDEr, sample count, decode settings and run id. Values are copied verbatim from
+  `metrics.json`.
+- GIVEN any mismatch (image set, order, references, sample count) THEN it exits non-zero, names the differing run,
+  and writes nothing.
+- The output states the slice (500 images, about 1.46 references per image) and the overlap caveat from TASK-009.
+- It passes on the two committed CNN + Transformer runs.
+Verification: `pytest tests/unit/test_compare_runs.py -q`; a run over the two committed runs; full suite; ruff; mypy.
+Depends on: TASK-009, TASK-010.
+Owns: the comparison module or script and `tests/unit/test_compare_runs.py`.
+Out of scope: running models; latency; the dashboard.
+
+### TASK-014 — Run the baselines on the shared slice and publish the 3B results            [status: todo] (owner-run)
+Area: evaluation · docs
+Goal: produce and commit the per-model results directories and the comparison summary.
+Acceptance criteria:
+- GIVEN Kaggle with the same COCO 2017 dataset as the existing runs THEN there is one new `results/<run_id>/` per
+  baseline.
+- A CNN + Transformer greedy run through the harness reproduces the committed `stabilized-greedy` predictions; any
+  differences are listed, not hidden.
+- TASK-013's check passes over all runs, and the summary is committed.
+- `README.md` and `EVAL_METHODOLOGY.md` cite the exact run ids, state the overlap caveat, and make no claims of
+  superiority beyond the stated setup.
+- Existing `results/*` stays untouched, and README edits are limited to its results section.
+Verification: the Kaggle logs; `git diff --stat` shows only new results directories and docs; the comparison check
+exits 0; pre-commit.
+Depends on: TASK-012, TASK-013; approvals for the checkpoint downloads and the Kaggle session.
+Owns: the new results directories, the comparison summary, the README and `EVAL_METHODOLOGY.md` results sections.
+Out of scope: 5-reference rescoring; fine-tuning; retraining.
+
+### TASK-015 — Add a latency benchmark for all compared models            [status: todo]
+Area: evaluation
+Goal: measure per-model caption latency for single images and batches on a named device, through the TASK-011
+interface, and save it as a run artefact.
+Acceptance criteria:
+- Writes `results/<run_id>/latency.json` plus metadata: model and revision, device, batch sizes,
+  TensorFlow/`torch`/`transformers` versions, warmup and repeat counts, and the reported statistics (chosen and
+  documented in this task, before any run).
+- Warmup is excluded, a monotonic clock is used, model load time is recorded separately, and every model gets the
+  same inputs (the first N slice images).
+- An offline test with a fake captioner and an injected clock checks the statistics and file shape.
+- The addition to the artefact contract is documented in `EVAL_METHODOLOGY.md` and a `DECISIONS.md` entry.
+Verification: `pytest tests/unit/test_latency_benchmark.py -q`; `--help`; full suite; ruff; mypy.
+Depends on: TASK-010, TASK-011.
+Owns: the benchmark script or module, `tests/unit/test_latency_benchmark.py`, the methodology section.
+Out of scope: Space serving latency (`PredictorService` already reports it); Prometheus (Phase 4B); load testing.
+
+### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: todo] (owner-run)
+Area: evaluation · docs
+Goal: commit latency results for all four models on CPU and GPU.
+Acceptance criteria:
+- A named CPU environment and a Kaggle GPU each produce a single-image and a batch run per model, committed as new
+  directories.
+- The CNN + Transformer on GPU uses `tensorflow==2.15.0` (the GPU build of the same version) in that Kaggle
+  environment only. The repository pin stays `tensorflow-cpu==2.15.0`.
+- No cross-device claims beyond the measured setups.
+Verification: the Kaggle logs; only new results directories in the diff; pre-commit.
+Depends on: TASK-015; approvals for the Kaggle GPU session and the checkpoint downloads.
+Owns: the new latency results directories.
+Out of scope: latency on the HF Space.
+
+### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (first task of Phase 3D; awaiting approval to install)
+Area: frontend · deployment
+Goal: promote the manual browser check in `TEST_PLAN.md` into a committed Playwright spec that mocks
+`/healthz` and `/v1/captions` with `page.route` (no backend, no TensorFlow), run in the CI `frontend` job.
+Acceptance criteria: GIVEN a mocked healthy API WHEN a PNG is uploaded and Generate clicked THEN the caption card
+renders; GIVEN a disallowed file THEN an inline error shows and no request is sent; GIVEN the API is unreachable THEN
+"Cannot reach backend" shows; zero console errors in each case.
+Needs: `@playwright/test` devDependency + Chromium download (local and CI).
+Depends on: approval to install `@playwright/test` and download Chromium, locally and in CI.
+Owns: the Playwright config, `frontend/e2e/`, the `package.json` devDependency, the `ci.yml` frontend step, and the
+`TEST_PLAN.md` frontend row.
+Out of scope: dashboard specs (TASK-018).
+
+### TASK-017 — Export dashboard data from committed results            [status: todo]
+Area: evaluation · frontend
+Goal: one script turns the 3B summary and the 3C latency results into a single static JSON file that the SPA
+imports at build time.
+Acceptance criteria:
+- The JSON lists, per model: display name, Hub id and revision, metrics, latency per device and batch size, source
+  run ids, the slice description and the overlap caveat.
+- A test regenerates the JSON from the committed results and fails if the committed file has drifted.
+- An ADR records the choice: static data in the SPA, with no backend endpoint and no live comparison. This keeps
+  ADR-013 intact, since the Space image has neither `torch` nor `results/`.
+Verification: the exporter's pytest; `npm run lint` and `npm run build`; full suite; ruff; mypy.
+Depends on: TASK-013, TASK-015 (formats); the real data needs TASK-014 and TASK-016.
+Owns: the export script, its test, the generated JSON (the frontend lane only reads it), the ADR.
+Out of scope: backend endpoints; API contract changes.
+
+### TASK-018 — Add the comparison dashboard to the SPA            [status: todo]
+Area: frontend
+Goal: a view in the existing SPA that renders the exported metrics and latency tables, every value traceable to its
+run id, with the caveats visible.
+Acceptance criteria:
+- All models' metrics and their latency per device and batch size render; missing values show "n/a".
+- The caption flow is unchanged, and the TASK-007 spec still passes.
+- No new runtime dependency (no router or chart library without separate approval), and no network request is
+  needed to render the dashboard.
+- A Playwright spec covers the dashboard with zero console errors. Without TASK-007, it is checked manually and
+  reported as not end-to-end verified.
+- `TEST_PLAN.md` is updated.
+Verification: `npm run lint`; `npm run build`; `npx playwright test`.
+Depends on: TASK-017, TASK-007.
+Owns: the dashboard components, the view switch in `App.jsx`, the dashboard spec, the `TEST_PLAN.md` frontend row.
+Out of scope: live per-image comparison; a gallery of slice images; backend changes.
