@@ -1,0 +1,168 @@
+{
+  "protocol": "docs/EVAL_METHODOLOGY.md § 8",
+  "normalisation": "preprocess_caption -> strip_sentinels",
+  "slice": {
+    "fingerprint_sha256": "6b5628bfa410ed233ef9603beed3c05c9e63acebc8bfa31d7e63e634f9e25116",
+    "images": 500,
+    "references": 732,
+    "references_per_image": 1.46
+  },
+  "caveat": "The slice comes from COCO train2017. The CNN + Transformer held these images out of training; the Hugging Face baselines were fine-tuned on COCO training data (ViT-GPT2 possibly), so they may have seen them. These scores are not a held-out, like-for-like comparison (docs/EVAL_METHODOLOGY.md § 8.5).",
+  "metric_keys": [
+    "bleu1",
+    "bleu2",
+    "bleu3",
+    "bleu4",
+    "rouge_l",
+    "meteor",
+    "cider"
+  ],
+  "rows": [
+    {
+      "run_id": "phase3-blip-base-greedy",
+      "kind": "phase3",
+      "model_id": "blip-base",
+      "backend": "huggingface",
+      "captioner": "HFCaptioner",
+      "hub_repo": "Salesforce/blip-image-captioning-base",
+      "revision": "82a37760796d32b1411fe092ab5d4e227313294b",
+      "weights_path": "Salesforce/blip-image-captioning-base@82a37760796d32b1411fe092ab5d4e227313294b",
+      "decode_strategy": "greedy",
+      "decode_settings": {
+        "num_beams": 1,
+        "do_sample": false,
+        "max_new_tokens": 40,
+        "repetition_penalty": 1.0,
+        "no_repeat_ngram_size": 0,
+        "precision": "float32"
+      },
+      "n_samples": 500,
+      "metrics": {
+        "bleu1": 56.60798221374851,
+        "bleu2": 39.69575689015959,
+        "bleu3": 27.864081426137425,
+        "bleu4": 19.8786337418786,
+        "rouge_l": 42.126247109844954,
+        "meteor": 17.232682230647008,
+        "cider": 1.0568021647751102
+      },
+      "metric_errors": {}
+    },
+    {
+      "run_id": "phase3-git-base-coco-greedy",
+      "kind": "phase3",
+      "model_id": "git-base-coco",
+      "backend": "huggingface",
+      "captioner": "HFCaptioner",
+      "hub_repo": "microsoft/git-base-coco",
+      "revision": "a13141da42abd4a8cbf283601a8104265f537cee",
+      "weights_path": "microsoft/git-base-coco@a13141da42abd4a8cbf283601a8104265f537cee",
+      "decode_strategy": "greedy",
+      "decode_settings": {
+        "num_beams": 1,
+        "do_sample": false,
+        "max_new_tokens": 40,
+        "repetition_penalty": 1.0,
+        "no_repeat_ngram_size": 0,
+        "precision": "float32"
+      },
+      "n_samples": 500,
+      "metrics": {
+        "bleu1": 51.59291275699312,
+        "bleu2": 36.551978928976176,
+        "bleu3": 26.049663045465223,
+        "bleu4": 18.825424051708477,
+        "rouge_l": 47.075176126963726,
+        "meteor": 21.920366933777398,
+        "cider": 1.4561785325819074
+      },
+      "metric_errors": {}
+    },
+    {
+      "run_id": "stabilized-beam-w4-lp07-rp12",
+      "kind": "reference",
+      "model_id": "inceptionv3-transformer-stabilized",
+      "backend": null,
+      "captioner": null,
+      "hub_repo": null,
+      "revision": null,
+      "weights_path": "models/v1.0.0/model.h5",
+      "decode_strategy": "beam",
+      "decode_settings": {
+        "beam_width": 4,
+        "length_penalty": 0.7,
+        "repetition_penalty": 1.2,
+        "max_length": 40
+      },
+      "n_samples": 500,
+      "metrics": {
+        "bleu1": 41.92993161784126,
+        "bleu2": 25.407254877413084,
+        "bleu3": 16.009033427971406,
+        "bleu4": 10.388352276291533,
+        "rouge_l": 36.84029057315173,
+        "meteor": 15.56136011285077,
+        "cider": 0.8260395027190287
+      },
+      "metric_errors": {}
+    },
+    {
+      "run_id": "stabilized-greedy",
+      "kind": "reference",
+      "model_id": "inceptionv3-transformer-stabilized",
+      "backend": null,
+      "captioner": null,
+      "hub_repo": null,
+      "revision": null,
+      "weights_path": "models/v1.0.0/model.h5",
+      "decode_strategy": "greedy",
+      "decode_settings": {
+        "beam_width": null,
+        "length_penalty": null,
+        "repetition_penalty": 1.0,
+        "max_length": 40
+      },
+      "n_samples": 500,
+      "metrics": {
+        "bleu1": 42.196743776968695,
+        "bleu2": 26.0895810249633,
+        "bleu3": 16.519095802602447,
+        "bleu4": 10.565569657054366,
+        "rouge_l": 37.571303951091465,
+        "meteor": 15.447442354081048,
+        "cider": 0.7891216278499353
+      },
+      "metric_errors": {}
+    },
+    {
+      "run_id": "phase3-vit-gpt2-greedy",
+      "kind": "phase3",
+      "model_id": "vit-gpt2",
+      "backend": "huggingface",
+      "captioner": "HFCaptioner",
+      "hub_repo": "nlpconnect/vit-gpt2-image-captioning",
+      "revision": "dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+      "weights_path": "nlpconnect/vit-gpt2-image-captioning@dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+      "decode_strategy": "greedy",
+      "decode_settings": {
+        "num_beams": 1,
+        "do_sample": false,
+        "max_new_tokens": 40,
+        "repetition_penalty": 1.0,
+        "no_repeat_ngram_size": 0,
+        "precision": "float32"
+      },
+      "n_samples": 500,
+      "metrics": {
+        "bleu1": 49.12276232739276,
+        "bleu2": 33.41039138807018,
+        "bleu3": 22.91337848185665,
+        "bleu4": 15.84152396302579,
+        "rouge_l": 44.509803731649235,
+        "meteor": 19.782713178028878,
+        "cider": 1.2629916931297422
+      },
+      "metric_errors": {}
+    }
+  ]
+}
