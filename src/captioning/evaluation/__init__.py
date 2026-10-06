@@ -18,6 +18,13 @@ from captioning.evaluation.bleu import (
     corpus_bleu_score,
 )
 from captioning.evaluation.cider import MIN_SAMPLES_FOR_CIDER, corpus_cider_score
+from captioning.evaluation.comparison import (
+    ComparisonError,
+    RunRecord,
+    build_summary,
+    load_run,
+    render_markdown,
+)
 from captioning.evaluation.inspection import (
     SampleDiagnostics,
     diagnose_many,
@@ -33,10 +40,13 @@ from captioning.evaluation.slice import EvalSlice, load_eval_slice, slice_finger
 __all__ = [
     "MIN_SAMPLES_FOR_CIDER",
     "BleuBreakdown",
+    "ComparisonError",
     "EvalSlice",
     "MetricsReport",
     "RunMeta",
+    "RunRecord",
     "SampleDiagnostics",
+    "build_summary",
     "compute_all_metrics",
     "corpus_bleu_breakdown",
     "corpus_bleu_score",
@@ -47,6 +57,8 @@ __all__ = [
     "diagnose_sample",
     "format_diagnostic_row",
     "load_eval_slice",
+    "load_run",
+    "render_markdown",
     "slice_fingerprint",
     "write_diagnostics_jsonl",
     "write_run_artifacts",
