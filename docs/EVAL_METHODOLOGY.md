@@ -313,3 +313,108 @@ with `set_global_seed(config.train.seed)`, as in `scripts/evaluate.py`.
   to §§ 8.1–8.6 is a dated amendment that gives its reason. Runs made under the
   changed settings go to new run directories and aren't compared with runs made
   under these settings.
+
+### 8.8 Results (TASK-014, 2026-10-06)
+
+These are the first runs under §§ 8.1–8.6. Nothing in the protocol was changed.
+
+**Runs.** Each was written by `scripts/compare_models.py`, one invocation per
+model:
+
+| `model_id` | Run directory | Revision |
+|---|---|---|
+| `blip-base` | [`results/phase3-blip-base-greedy/`](../results/phase3-blip-base-greedy/) | `82a37760796d32b1411fe092ab5d4e227313294b` |
+| `vit-gpt2` | [`results/phase3-vit-gpt2-greedy/`](../results/phase3-vit-gpt2-greedy/) | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` |
+| `git-base-coco` | [`results/phase3-git-base-coco-greedy/`](../results/phase3-git-base-coco-greedy/) | `a13141da42abd4a8cbf283601a8104265f537cee` |
+| `inceptionv3-transformer-stabilized` (harness reproduction) | [`results/phase3-inceptionv3-transformer-stabilized-greedy/`](../results/phase3-inceptionv3-transformer-stabilized-greedy/) | `59d93b4babb16b0ac81eef598f3abc271a355cbf` (tag `v2.0.0`) |
+
+**Execution.**
+
+- **Host:** local CPU (Windows 11, Python 3.10.11) with `tensorflow-cpu`
+  2.15.0, `torch` 2.3.0+cpu and `transformers` 4.41.2. METEOR ran through
+  `pycocoevalcap` on Java 25.
+- **Settings:** float32, batch size 1, device `cpu`, seed 42, with the § 8.4
+  decode settings. Each run's `comparison_meta.json` records these values.
+- **Host vs. plan:** `TASKS.md` planned a Kaggle session. §§ 8.1–8.6 don't fix
+  the execution host, so running locally is not a protocol change.
+- **Images:**
+  - The 500 slice files were fetched by file name, through the Kaggle API, from
+    the dataset the committed runs read (`awsaf49/coco-2017-dataset`,
+    `coco2017/train2017/`). They were placed in `data/coco2017/train2017/`,
+    which is not committed.
+  - All 500 decode.
+  - SHA-256 over the lines `<file name>\t<sha256 of file>\n`, taken in slice
+    order: `ec40c17ad928548875817c5a54b78ba977b8843ae42b7f06febba70fa73eea0b`.
+- **Baseline revisions:** before the runs, each baseline was loaded once at its
+  pinned revision. In each case the loaded config's `_commit_hash` equalled the
+  § 8.1 SHA, the weights were float32, and the classes were
+  `BlipForConditionalGeneration`, `VisionEncoderDecoderModel` and
+  `GitForCausalLM`.
+- **CNN + Transformer weights:**
+  - Source: Hub commit `59d93b4`, materialised under
+    `outputs/hub/apoorvrajdev/captioning-inceptionv3-transformer@59d93b4…/`
+    (the `weights_path` in its `run_meta.json`).
+  - `model.h5` SHA-256:
+    `74963a3f7cd01b16f44cd179f1e21e9eb8d60b52d460e517cdcf38c015689b07`.
+  - The local `models/v1.0.0/` holds the development scaffold, not this
+    checkpoint, so it wasn't used.
+
+**CNN + Transformer reproduction (§ 8.4).**
+
+- The harness run reproduces
+  [`results/stabilized-greedy/`](../results/stabilized-greedy/) exactly:
+  - all 500 predictions are identical strings, in the same order, with the same
+    references;
+  - all seven metrics are bit-identical.
+
+  The committed run was made on Kaggle; the harness run was made on the local
+  CPU.
+- Rescoring the committed predictions with the local metric code:
+  - reproduces the greedy metrics exactly;
+  - reproduces the beam metrics to within 1e-14 (floating-point summation
+    order).
+- The two greedy runs share a model and decoding, so TASK-013 accepts only one
+  of them per summary. The summary uses `results/stabilized-greedy/`, as § 8.4
+  specifies. The harness run is kept as the reproduction record.
+
+**Comparison summary.**
+[`results/phase3-comparison/`](../results/phase3-comparison/) holds
+`comparison.json` (exact values) and `comparison.md` (two decimals). It was
+written by:
+
+```bash
+python -m scripts.compare_runs \
+    results/phase3-blip-base-greedy results/phase3-vit-gpt2-greedy \
+    results/phase3-git-base-coco-greedy \
+    --reference-run results/stabilized-greedy \
+    --reference-run results/stabilized-beam-w4-lp07-rp12 \
+    --output-dir results/phase3-comparison
+```
+
+- **Slice check:** passed for all five runs: 500 images, 732 references,
+  fingerprint `6b5628bf…`.
+- **Determinism:** the output is byte-identical when the runs are given in a
+  different order.
+
+The table below is copied from `comparison.md`:
+
+> Not a held-out comparison (§ 8.5). The slice comes from COCO `train2017`. The
+> CNN + Transformer held these images out. BLIP-base and GIT-base-coco state COCO
+> training, and ViT-GPT2 is treated as possibly COCO-trained. The baselines may
+> have seen these images, so their scores here are not a held-out,
+> like-for-like comparison with the CNN + Transformer and must not be presented
+> as one.
+
+| Run | Model | Decoding | Revision | Samples | BLEU-1 | BLEU-2 | BLEU-3 | BLEU-4 | ROUGE-L | METEOR | CIDEr |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| `phase3-blip-base-greedy` | blip-base | greedy | `82a3776` | 500 | 56.61 | 39.70 | 27.86 | 19.88 | 42.13 | 17.23 | 1.06 |
+| `phase3-git-base-coco-greedy` | git-base-coco | greedy | `a13141d` | 500 | 51.59 | 36.55 | 26.05 | 18.83 | 47.08 | 21.92 | 1.46 |
+| `stabilized-beam-w4-lp07-rp12` (reference) | inceptionv3-transformer-stabilized | beam | — | 500 | 41.93 | 25.41 | 16.01 | 10.39 | 36.84 | 15.56 | 0.83 |
+| `stabilized-greedy` (reference) | inceptionv3-transformer-stabilized | greedy | — | 500 | 42.20 | 26.09 | 16.52 | 10.57 | 37.57 | 15.45 | 0.79 |
+| `phase3-vit-gpt2-greedy` | vit-gpt2 | greedy | `dc68f91` | 500 | 49.12 | 33.41 | 22.91 | 15.84 | 44.51 | 19.78 | 1.26 |
+
+- **Single-reference scoring:** every row is scored against the slice's stored
+  references (1.46 per image). This is not the five-reference COCO setup, so
+  these numbers can't be compared with published COCO results.
+- **The beam row:** it is a labelled reference (§ 8.4). It isn't compared with
+  the greedy baselines.
