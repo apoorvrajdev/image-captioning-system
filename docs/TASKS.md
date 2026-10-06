@@ -396,7 +396,7 @@ Outcome:
   - No `src/` or `configs/` change, so the parity audit and freeze don't apply.
 - Not run, by design: any real model; TASK-014 is the first real run. No Make target was added.
 
-### TASK-013 — Build the cross-model comparison summary with a slice-identity check            [status: todo]
+### TASK-013 — Build the cross-model comparison summary with a slice-identity check            [status: done] (2026-10-06)
 Area: evaluation
 Goal: join per-model results directories into one table, refusing to compare runs whose slice or references differ.
 Acceptance criteria:
@@ -411,6 +411,38 @@ Verification: `pytest tests/unit/test_compare_runs.py -q`; a run over the two co
 Depends on: TASK-009, TASK-010.
 Owns: the comparison module or script and `tests/unit/test_compare_runs.py`.
 Out of scope: running models; latency; the dashboard.
+Outcome:
+- `captioning.evaluation.comparison` (`7e5f5b5`) provides `load_run` and `build_summary`.
+  - The slice fingerprint is recomputed from each run's `predictions.jsonl`; `slice_fingerprint` moved into the slice
+    module (`7885850`, no behaviour change).
+  - It's checked against the run's `comparison_meta.json` (fingerprint, image and reference counts, model id) and
+    against `run_meta.json` `n_samples` and `metrics.json` `n_examples`.
+  - All runs must then share image count, reference count and fingerprint. Runner outputs must also share protocol and
+    normalisation, and no two runs may share a model and decoding.
+  - Any failure raises a `ComparisonError` naming the run and the mismatch. Nothing is repaired.
+- `python -m scripts.compare_runs RUN_DIR... [--reference-run DIR] --output-dir DIR` (`f1a5ab7`) writes
+  `comparison.json` and `comparison.md`.
+  - `comparison.json` holds exact metric values copied from `metrics.json`; `comparison.md` is the two-decimal table.
+  - Rows are sorted by model id, decoding and run id. The output has no timestamps.
+  - The output states the slice (counts, about 1.46 references per image, fingerprint) and the § 8.5 overlap caveat.
+  - It refuses an existing output directory, and writes nothing if any check fails.
+- Positional runs must have `comparison_meta.json`. The committed pre-harness runs (§ 8.4's CNN + Transformer rows)
+  are accepted only through `--reference-run`.
+  - They're labelled `reference`, with Hub repo and revision left null rather than inferred.
+  - They're checked by the same fingerprint.
+- `tests/unit/test_compare_runs.py` (`7d2b228`, 18 tests) uses run directories written by the real TASK-012 runner
+  with its fake captioner. It covers:
+  - the summary contents and verbatim metrics;
+  - independence from argument order;
+  - the committed reference runs, with pinned fingerprint and counts;
+  - rejection of a changed fingerprint, counts, protocol, normalisation, references, slice, or a missing or
+    malformed file;
+  - duplicates;
+  - the output-collision policy.
+- Verification:
+  - Focused 18 passed; full suite 164 passed (1 existing warning).
+  - ruff lint and format clean; mypy 0 issues (79 files); parity audit 4/4; notebook freeze OK; pre-commit passed.
+  - The run over the two committed runs passes (500 images, 732 references, fingerprint `6b5628bf…`).
 
 ### TASK-014 — Run the baselines on the shared slice and publish the 3B results            [status: todo] (owner-run)
 Area: evaluation · docs

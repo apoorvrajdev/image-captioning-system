@@ -12,8 +12,8 @@ _Last updated: 2026-10-05_
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup.
 - **Next:** Phase 3 — multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
-  The slice loader (TASK-010), captioner adapters (TASK-011) and comparison runner (TASK-012) exist; no baseline
-  results exist yet.
+  The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
+  (TASK-013) exist; no baseline results exist yet.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -22,7 +22,7 @@ _Last updated: 2026-10-05_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 146 passed on 2026-10-06, after TASK-012 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 164 passed on 2026-10-06, after TASK-013 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -43,6 +43,12 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
 
 ## Recent changes
 
+- 2026-10-06 cross-run summary (TASK-013, done):
+  - `scripts/compare_runs.py` joins Phase 3 run directories into `comparison.json` and `comparison.md`.
+  - It refuses any run whose slice fingerprint, counts, protocol or normalisation differ, or whose files are missing or
+    malformed.
+  - The committed CNN + Transformer runs enter only as `--reference-run` rows.
+  - Committed as `7885850`..`7d2b228`.
 - 2026-10-06 comparison runner (TASK-012, done):
   - `scripts/compare_models.py` captions the committed slice with selected `config.compare` models.
   - It writes one new `results/phase3-<model_id>-<decoding>/` per model: the five standard files plus
