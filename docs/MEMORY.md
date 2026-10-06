@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-05_
+_Last updated: 2026-10-06_
 
 ## Current phase
 
@@ -13,7 +13,8 @@ _Last updated: 2026-10-05_
 - **Next:** Phase 3 — multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
-  (TASK-013) exist; no baseline results exist yet.
+  (TASK-013) exist. The first baseline results are committed (TASK-014): `results/phase3-comparison/`, recorded in
+  `EVAL_METHODOLOGY.md` § 8.8.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -22,7 +23,7 @@ _Last updated: 2026-10-05_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 164 passed on 2026-10-06, after TASK-013 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 164 passed on 2026-10-06, after TASK-014 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -39,10 +40,20 @@ SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
 `apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
 (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
-(beam CIDEr 0.826; 5-ref BLEU-4 25.91).
+(beam CIDEr 0.826; 5-ref BLEU-4 25.91). The Phase 3 baseline comparison is `results/phase3-comparison/`. It is not a
+held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-06 Phase 3 baseline runs (TASK-014, done):
+  - Real greedy runs, under the unchanged § 8 protocol, of BLIP-base, ViT-GPT2 and GIT-base-coco at their pinned
+    revisions: `results/phase3-{blip-base,vit-gpt2,git-base-coco}-greedy/`.
+  - `results/phase3-inceptionv3-transformer-stabilized-greedy/` re-runs the CNN + Transformer (Hub `v2.0.0`) through
+    the harness. It reproduces `results/stabilized-greedy/` exactly: 500/500 predictions, with bit-identical metrics.
+  - `results/phase3-comparison/` passes the slice check (500 images, 732 references, `6b5628bf…`) and states the
+    overlap caveat. `EVAL_METHODOLOGY.md` § 8.8 has the details.
+  - Run on a local CPU, with the slice images fetched from the same Kaggle COCO 2017 dataset.
+  - Committed as `a1ab352`..`ba888b3`.
 - 2026-10-06 cross-run summary (TASK-013, done):
   - `scripts/compare_runs.py` joins Phase 3 run directories into `comparison.json` and `comparison.md`.
   - It refuses any run whose slice fingerprint, counts, protocol or normalisation differ, or whose files are missing or
@@ -102,6 +113,7 @@ is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Bot
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
   `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).
+- `README.md` doesn't cite the Phase 3 results yet. TASK-014 left it untouched because it holds owner-staged edits.
 
 ## Before coding, know this
 

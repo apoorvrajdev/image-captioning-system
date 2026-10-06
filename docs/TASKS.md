@@ -444,7 +444,7 @@ Outcome:
   - ruff lint and format clean; mypy 0 issues (79 files); parity audit 4/4; notebook freeze OK; pre-commit passed.
   - The run over the two committed runs passes (500 images, 732 references, fingerprint `6b5628bf…`).
 
-### TASK-014 — Run the baselines on the shared slice and publish the 3B results            [status: todo] (owner-run)
+### TASK-014 — Run the baselines on the shared slice and publish the 3B results            [status: done] (2026-10-06)
 Area: evaluation · docs
 Goal: produce and commit the per-model results directories and the comparison summary.
 Acceptance criteria:
@@ -461,6 +461,51 @@ exits 0; pre-commit.
 Depends on: TASK-012, TASK-013; approvals for the checkpoint downloads and the Kaggle session.
 Owns: the new results directories, the comparison summary, the README and `EVAL_METHODOLOGY.md` results sections.
 Out of scope: 5-reference rescoring; fine-tuning; retraining.
+Outcome:
+- Runs: one `scripts/compare_models.py --config configs/base.yaml --images-dir data/coco2017/train2017 --model <id>`
+  invocation per model, with no protocol change.
+
+  | Run directory | Revision | Commit |
+  |---|---|---|
+  | `results/phase3-blip-base-greedy/` | `82a37760796d32b1411fe092ab5d4e227313294b` | `cc71c5f` |
+  | `results/phase3-vit-gpt2-greedy/` | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | `2a5ee2b` |
+  | `results/phase3-git-base-coco-greedy/` | `a13141da42abd4a8cbf283601a8104265f537cee` | `e7c82c4` |
+  | `results/phase3-inceptionv3-transformer-stabilized-greedy/` (CNN + Transformer reproduction) | `59d93b4` (tag `v2.0.0`) | `a1ab352` |
+
+- What each run's `comparison_meta.json` records:
+  - protocol § 8 and normalisation `preprocess_caption -> strip_sentinels`;
+  - slice fingerprint `6b5628bf…`, 500 images, 732 references;
+  - the § 8.4 decode settings, float32, batch size 1, device `cpu`, seed 42.
+- Each baseline loaded at its pinned revision: the loaded config's `_commit_hash` equalled the § 8.1 SHA.
+- CNN + Transformer reproduction:
+  - Matches `results/stabilized-greedy/` exactly: 500/500 identical predictions, and all seven metrics bit-identical.
+  - The weights were Hub commit `59d93b4`, with `model.h5` SHA-256 `74963a3f…`, materialised under
+    `outputs/hub/…@59d93b4…/`. The local `models/v1.0.0/` is the development scaffold and wasn't used.
+- Summary (`8993343`):
+  - `results/phase3-comparison/` was written by `scripts/compare_runs.py` over the three baseline runs, with
+    `results/stabilized-greedy/` and `results/stabilized-beam-w4-lp07-rp12/` as reference rows (§ 8.4).
+  - The check passes over all five runs, and the output is byte-identical whatever order the runs are given in.
+  - Passing the reproduction run alongside `stabilized-greedy` is rejected as a duplicate, as designed. The
+    reproduction run is therefore kept as the record of the check, not as a comparison row.
+- Docs (`ba888b3`): `EVAL_METHODOLOGY.md` § 8.8 records the run ids and revisions, the execution, the reproduction and
+  the summary table, under the § 8.5 overlap caveat. It makes no held-out or superiority claim.
+- Execution: on a local CPU instead of a Kaggle session (§§ 8.1–8.6 don't fix the host).
+  - Images: the 500 slice files were fetched by file name, through the Kaggle API, from the dataset the committed runs
+    read (`awsaf49/coco-2017-dataset`). All 500 decode; the image-bytes digest is in § 8.8.
+  - Metric environment: rescoring the committed greedy predictions locally reproduces their metrics exactly.
+- Artefact normalisation:
+  - pre-commit converted the new files to LF and appended the final newline that `write_run_artifacts` omits from
+    `metrics.json` and `run_meta.json`. The committed runs carry the same final newline.
+  - No other byte changed: the Git blob hashes were checked before and after. The summary regenerates byte-identically.
+- Not done: `README.md` doesn't cite the run ids yet. It holds owner-staged edits, so it was left untouched at the
+  owner's request. Citing the results there is a follow-up.
+- Verification:
+  - Focused tests (`test_compare_models`, `test_compare_runs`, `test_eval_slice`, `test_captioners`): 60 passed.
+  - Full suite: 164 passed (1 existing warning).
+  - ruff lint and format clean; mypy 0 issues (79 files); notebook freeze OK.
+  - pre-commit passed on every commit.
+  - `git diff --stat 7d9e0f3` shows only additions: the new results directories and docs.
+  - No `src/` or `configs/` change, so the parity audit doesn't apply.
 
 ### TASK-015 — Add a latency benchmark for all compared models            [status: todo]
 Area: evaluation
