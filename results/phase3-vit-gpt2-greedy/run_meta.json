@@ -1,0 +1,12 @@
+{
+  "model_id": "vit-gpt2",
+  "decode_strategy": "greedy",
+  "weights_path": "nlpconnect/vit-gpt2-image-captioning@dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+  "tokenizer_dir": "nlpconnect/vit-gpt2-image-captioning@dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+  "n_samples": 500,
+  "max_length": 40,
+  "beam_width": null,
+  "length_penalty": null,
+  "repetition_penalty": 1.0,
+  "timestamp_utc": "2026-10-06T14:46:39.934422+00:00"
+}
