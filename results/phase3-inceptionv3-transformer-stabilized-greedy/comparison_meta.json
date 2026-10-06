@@ -1,0 +1,30 @@
+{
+  "protocol": "docs/EVAL_METHODOLOGY.md § 8",
+  "model_id": "inceptionv3-transformer-stabilized",
+  "backend": "cnn",
+  "captioner": "CNNCaptioner",
+  "hub_repo": "apoorvrajdev/captioning-inceptionv3-transformer",
+  "revision": "59d93b4babb16b0ac81eef598f3abc271a355cbf",
+  "decode_settings": {
+    "decode_strategy": "greedy",
+    "beam_width": null,
+    "length_penalty": null,
+    "repetition_penalty": 1.0,
+    "no_repeat_ngram_size": 0,
+    "max_length": 40
+  },
+  "normalisation": "preprocess_caption -> strip_sentinels",
+  "slice": {
+    "source": "results/stabilized-greedy/predictions.jsonl",
+    "fingerprint_sha256": "6b5628bfa410ed233ef9603beed3c05c9e63acebc8bfa31d7e63e634f9e25116",
+    "images": 500,
+    "references": 732
+  },
+  "batch_size": 1,
+  "device": null,
+  "seed": 42,
+  "metrics": {
+    "meteor": true,
+    "cider": true
+  }
+}
