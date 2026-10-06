@@ -28,7 +28,6 @@ every slice image is present.
 
 from __future__ import annotations
 
-import hashlib
 import json
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -40,11 +39,11 @@ import click
 from captioning.baselines import Captioner, CaptionerIdentity, CNNCaptioner, HFCaptioner
 from captioning.config import AppConfig, BaselineDecodeConfig, ComparedModelConfig, load_config
 from captioning.evaluation import (
-    EvalSlice,
     RunMeta,
     compute_all_metrics,
     diagnose_many,
     load_eval_slice,
+    slice_fingerprint,
     write_run_artifacts,
 )
 from captioning.utils import configure_logging, get_logger, set_global_seed
@@ -67,20 +66,6 @@ class ModelSpec:
     backend: Backend
     decode_strategy: str
     run_dir: Path
-
-
-def slice_fingerprint(eval_slice: EvalSlice) -> str:
-    """SHA-256 of the slice's image file names and references, in order.
-
-    Hashes the parsed content rather than the file bytes, so line endings and
-    the machine-specific image directory don't change the identity.
-    """
-    payload = [
-        [path.name, list(refs)]
-        for path, refs in zip(eval_slice.image_paths, eval_slice.references, strict=True)
-    ]
-    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def resolve_models(

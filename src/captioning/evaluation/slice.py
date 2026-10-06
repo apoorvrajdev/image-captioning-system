@@ -14,6 +14,7 @@ runner checks them before any model loads.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -71,6 +72,20 @@ def load_eval_slice(predictions_path: str | Path, images_dir: str | Path) -> Eva
             references.append(tuple(refs))
 
     return EvalSlice(source=source, image_paths=tuple(image_paths), references=tuple(references))
+
+
+def slice_fingerprint(eval_slice: EvalSlice) -> str:
+    """SHA-256 of the slice's image file names and references, in order.
+
+    Hashes the parsed content rather than the file bytes, so line endings and
+    the machine-specific image directory don't change the identity.
+    """
+    payload = [
+        [path.name, list(refs)]
+        for path, refs in zip(eval_slice.image_paths, eval_slice.references, strict=True)
+    ]
+    encoded = json.dumps(payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
 
 
 def _file_name(stored_path: str) -> str:

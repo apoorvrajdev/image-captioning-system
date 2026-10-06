@@ -28,7 +28,7 @@ from captioning.evaluation.inspection import (
 from captioning.evaluation.meteor import corpus_meteor_score
 from captioning.evaluation.rouge import corpus_rouge_l_score
 from captioning.evaluation.runner import MetricsReport, compute_all_metrics
-from captioning.evaluation.slice import EvalSlice, load_eval_slice
+from captioning.evaluation.slice import EvalSlice, load_eval_slice, slice_fingerprint
 
 __all__ = [
     "MIN_SAMPLES_FOR_CIDER",
@@ -47,6 +47,7 @@ __all__ = [
     "diagnose_sample",
     "format_diagnostic_row",
     "load_eval_slice",
+    "slice_fingerprint",
     "write_diagnostics_jsonl",
     "write_run_artifacts",
 ]
