@@ -1,0 +1,12 @@
+{
+  "model_id": "blip-base",
+  "decode_strategy": "greedy",
+  "weights_path": "Salesforce/blip-image-captioning-base@82a37760796d32b1411fe092ab5d4e227313294b",
+  "tokenizer_dir": "Salesforce/blip-image-captioning-base@82a37760796d32b1411fe092ab5d4e227313294b",
+  "n_samples": 500,
+  "max_length": 40,
+  "beam_width": null,
+  "length_penalty": null,
+  "repetition_penalty": 1.0,
+  "timestamp_utc": "2026-10-06T14:38:43.465414+00:00"
+}

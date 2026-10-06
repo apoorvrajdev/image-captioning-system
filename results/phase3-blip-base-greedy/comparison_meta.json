@@ -1,0 +1,30 @@
+{
+  "protocol": "docs/EVAL_METHODOLOGY.md § 8",
+  "model_id": "blip-base",
+  "backend": "huggingface",
+  "captioner": "HFCaptioner",
+  "hub_repo": "Salesforce/blip-image-captioning-base",
+  "revision": "82a37760796d32b1411fe092ab5d4e227313294b",
+  "decode_settings": {
+    "num_beams": 1,
+    "do_sample": false,
+    "max_new_tokens": 40,
+    "repetition_penalty": 1.0,
+    "no_repeat_ngram_size": 0,
+    "precision": "float32"
+  },
+  "normalisation": "preprocess_caption -> strip_sentinels",
+  "slice": {
+    "source": "results/stabilized-greedy/predictions.jsonl",
+    "fingerprint_sha256": "6b5628bfa410ed233ef9603beed3c05c9e63acebc8bfa31d7e63e634f9e25116",
+    "images": 500,
+    "references": 732
+  },
+  "batch_size": 1,
+  "device": "cpu",
+  "seed": 42,
+  "metrics": {
+    "meteor": true,
+    "cider": true
+  }
+}
