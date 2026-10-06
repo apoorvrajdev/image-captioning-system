@@ -1,0 +1,12 @@
+{
+  "model_id": "git-base-coco",
+  "decode_strategy": "greedy",
+  "weights_path": "microsoft/git-base-coco@a13141da42abd4a8cbf283601a8104265f537cee",
+  "tokenizer_dir": "microsoft/git-base-coco@a13141da42abd4a8cbf283601a8104265f537cee",
+  "n_samples": 500,
+  "max_length": 40,
+  "beam_width": null,
+  "length_penalty": null,
+  "repetition_penalty": 1.0,
+  "timestamp_utc": "2026-10-06T15:17:40.674558+00:00"
+}
