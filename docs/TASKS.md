@@ -340,7 +340,7 @@ Outcome:
 - Not run, by design: real baseline inference, checkpoint downloads, a Hugging Face smoke test. TASK-014 is the
   first to exercise the real loading path.
 
-### TASK-012 — Add the comparison runner that writes one results directory per model            [status: todo]
+### TASK-012 — Add the comparison runner that writes one results directory per model            [status: done] (2026-10-06)
 Area: evaluation
 Goal: `scripts/compare_models.py` captions the slice with each selected model and writes `results/<run_id>/`
 through the existing `write_run_artifacts`.
@@ -356,6 +356,45 @@ ruff; mypy. If a Make target is added: `mingw32-make -n compare` and `tests/unit
 Depends on: TASK-010, TASK-011.
 Owns: `scripts/compare_models.py`, `tests/unit/test_compare_models.py`, an optional Make target.
 Out of scope: real runs (TASK-014); the cross-model table (TASK-013).
+Outcome:
+- `python -m scripts.compare_models --config … --images-dir … --model <id> [--model …]` (`c7d71f9`):
+  - Loads the slice with `load_eval_slice` (default `results/stabilized-greedy/predictions.jsonl`).
+  - Builds each selected model from `config.compare` through the TASK-011 adapters, captions the slice in file
+    order (`--batch-size`, default 1), and scores it with the unchanged `compute_all_metrics`.
+  - Writes a new `results/<prefix><model_id>-<decoding>/` (default prefix `phase3-`) per model, through
+    `write_run_artifacts`.
+- `run_meta.json` follows § 8.6: for baselines, `weights_path` and `tokenizer_dir` are `<hub repo>@<revision>`,
+  `max_length` is 40, and `decode_strategy` is greedy.
+- Each run directory also gets `comparison_meta.json`, recording:
+  - the protocol reference, backend and captioner class, Hub repo, revision, and full decode settings;
+  - the normalisation path;
+  - the slice source, content fingerprint (SHA-256 of image file names plus references, independent of line
+    endings and the images directory), image count and reference count;
+  - batch size, device, seed, and which metrics ran.
+- Before any model loads, the runner fails if:
+  - the slice isn't 500 images and 732 references (`--expected-*`);
+  - a model id is unknown or selected twice;
+  - the baseline decode settings sample;
+  - the CNN lacks `--cnn-weights` / `--cnn-tokenizer-dir`;
+  - a run directory already exists (never overwritten);
+  - any slice image is missing.
+- Per model, it also fails if the captioner's identity doesn't match the config.
+- Seeds come from `set_global_seed(config.train.seed)`, as in `scripts/evaluate.py`. `torch` isn't seeded here
+  (ADR-019 keeps it out of the runner), and the protocol decoding draws no random numbers.
+- `tests/unit/test_compare_models.py` (`445c183`, 11 tests, fakes on the real `HFCaptioner` identity, a 3-image
+  fixture, offline). It covers:
+  - one contract directory per model, with order, references, normalisation, `run_meta.json` and
+    `comparison_meta.json` checked;
+  - batching, and isolation between models;
+  - the committed slice as the default, with its pinned fingerprint `6b5628bf…`, matching the beam run;
+  - each pre-run failure;
+  - config propagation;
+  - that importing the runner loads no `torch`, `transformers` or `tensorflow`.
+- Verification:
+  - Focused 11 passed; full suite 146 passed (1 existing warning).
+  - ruff lint and format clean; mypy 0 issues (77 files); `--help` exits 0; pre-commit passed.
+  - No `src/` or `configs/` change, so the parity audit and freeze don't apply.
+- Not run, by design: any real model; TASK-014 is the first real run. No Make target was added.
 
 ### TASK-013 — Build the cross-model comparison summary with a slice-identity check            [status: todo]
 Area: evaluation
