@@ -16,7 +16,7 @@
 <p align="center">
   <img alt="Ruff"             src="https://img.shields.io/badge/lint-ruff-261230?style=flat-square&logo=ruff&logoColor=white">
   <img alt="mypy"             src="https://img.shields.io/badge/typed-mypy-1F5082?style=flat-square">
-  <img alt="Tests"            src="https://img.shields.io/badge/tests-94%20passing-brightgreen?style=flat-square">
+  <img alt="Tests"            src="https://img.shields.io/badge/tests-238%20pytest%20%2B%2014%20E2E%20passing-brightgreen?style=flat-square">
   <img alt="Pre-commit"       src="https://img.shields.io/badge/pre--commit-enabled-FAB040?style=flat-square&logo=pre-commit&logoColor=white">
   <img alt="IEEE Published"   src="https://img.shields.io/badge/IEEE-published-00629B?style=flat-square&logo=ieee&logoColor=white">
   <img alt="License: MIT"     src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -198,8 +198,8 @@ The notebook is preserved verbatim as the canonical research artefact. Improveme
 | Training set | ~120k captions sampled from COCO 2017 | `data.sample_size` in [`configs/base.yaml`](configs/base.yaml) |
 | Image resolution | 299 × 299 (InceptionV3) | [`preprocessing/image.py`](src/captioning/preprocessing/image.py) |
 | Max caption length | 40 tokens | `model.max_length` in [`configs/base.yaml`](configs/base.yaml) |
-| Backend test suite | 12 tests · 0.3 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
-| Full suite | **90 tests passing** | `pytest` (unit + backend + parity) |
+| Backend test suite | 18 tests · 0.2 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
+| Full suite | **238 tests passing** | `pytest` (unit + backend + parity) |
 
 > Corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L for the stabilized checkpoint are published in [Model quality](#-model-quality--stabilized-training-results) below, produced by the harnesses under [`evaluation/`](src/captioning/evaluation/).
 
@@ -447,7 +447,7 @@ image-captioning-system/
 │       ├── schemas/                             # Pydantic request/response models
 │       ├── services/predictor_service.py        # bytes → caption + latency (anyio thread offload)
 │       ├── utils/image.py                       # Content-type allow-list + ImageDecodeError
-│       └── tests/                               # Phase 2C WS-D — 12 route tests, no TF loaded
+│       └── tests/                               # 18 tests (14 route + 4 weights-loader), no TF loaded — from Phase 2C WS-D
 │
 ├── frontend/                                    # Phase 2B — React 19 + Vite 8 + Tailwind v4 SPA
 │   ├── vite.config.js · eslint.config.js · package.json · .env.example
@@ -479,7 +479,7 @@ image-captioning-system/
 │   └── notebook_module_audit.py                 # 4-stage parity gate vs. notebook
 │
 ├── results/                                     # Committed evaluation artefact sets (append-only): stabilized-*, phase3-*, phase3-latency-*, phase3-comparison
-├── tests/unit/                                  # 78 unit tests (parity, tokenizer, eval, splits, …)
+├── tests/unit/                                  # 220 unit tests (parity, tokenizer, eval, splits, …)
 ├── docs/                                        # phase notes · runbooks · EVAL_METHODOLOGY · CI
 │                                                # + living docs: MEMORY · TASKS · DECISIONS · TEST_PLAN · SECURITY
 ├── pyproject.toml · requirements*.txt · Makefile
@@ -540,7 +540,7 @@ The SPA is live at **http://localhost:5173** (Vite picks the next free port if 5
 ### Tests
 
 ```bash
-pytest -q                          # All 90 tests (unit + backend + parity)
+pytest -q                          # All 238 tests (unit + backend + parity)
 pytest backend/app/tests/ -v       # Backend route tests only (0.3 s, no TF loaded)
 make freeze-paper-notebook         # Asserts the IEEE notebook SHA-256 has not changed
 ```
@@ -671,7 +671,7 @@ Schema in [`src/captioning/config/schema.py`](src/captioning/config/schema.py); 
 ## 🧪 Testing & code quality
 
 ```bash
-make test            # pytest — 90/90 (unit + backend route tests + parity)
+make test            # pytest — 238/238 (unit + backend route tests + parity)
 make lint            # Ruff lint (CI also runs ruff format --check)
 make typecheck       # mypy on src/captioning + backend/app + scripts
 make pre-commit      # All hooks across all files
@@ -682,7 +682,7 @@ make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 |---|---|---|
 | Lint + format | [Ruff](https://docs.astral.sh/ruff/) (replaces black + isort + flake8) | ✅ clean |
 | Type-check | [mypy](https://mypy.readthedocs.io/) with `pandas-stubs`, `types-PyYAML`, `types-requests` | ✅ 0 errors |
-| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 90 passing |
+| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 238 passing |
 | Notebook hygiene | [`nbstripout`](https://github.com/kynan/nbstripout) (pre-commit) | ✅ outputs stripped on commit |
 | Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) (pre-commit) | ✅ enabled |
 | Notebook integrity | SHA-256 freeze via [`make freeze-paper-notebook`](Makefile) | ✅ locked |
@@ -797,7 +797,7 @@ The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-02
 - [ ] **4C** — DagsHub-hosted MLflow tracking link surfaced in the README
 - [ ] **4D** — Architecture Decision Records (`docs/adr/`) — every non-trivial choice (TF version pin, anyio offload, env-var prefix separation, etc.) gets a one-page ADR
 
-Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md) · [Stabilized training runbook](docs/STABILIZED_TRAINING_RUNBOOK.md).
+Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md) · [Stabilized training runbook](docs/STABILIZED_TRAINING_RUNBOOK.md) · [Evaluation-methodology audit](docs/EVAL_METHODOLOGY.md).
 
 ---
 
