@@ -134,12 +134,12 @@ Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Script
 | typecheck | `MYPYPATH="src;backend" mypy --explicit-package-bases --namespace-packages src/captioning backend/app scripts` |
 | parity audit | `python -m scripts.notebook_module_audit` (4 stages, must print `[OK] 4/4`) |
 | notebook freeze | `python -c "import hashlib;print(hashlib.sha256(open('notebooks/01_ieee_inceptionv3_transformer.ipynb','rb').read()).hexdigest())"` must equal `.paper-notebook.sha256` |
-| frontend checks | `cd frontend && npm run lint && npm run build` |
+| frontend checks | `cd frontend && npm run lint && npm run build && npm run test:e2e` (Playwright E2E; once per machine: `npx playwright install chromium`) |
 | pre-commit (all hooks) | `SKIP=mypy .venv/Scripts/pre-commit.exe run --all-files` (rewrites files on failure; review the diff) |
 | refresh code index | `.venv/Scripts/python.exe .claude/context/build_index.py` (also runs at session start) |
 | make dry run | `mingw32-make -n <target>` (prints the commands, runs nothing) |
 
-CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build. Local DoD = these.
+CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build + Playwright E2E. Local DoD = these.
 
 ## Invariants — never break silently
 
@@ -191,7 +191,7 @@ No refactors while debugging. No loosened assertions, skipped tests, or widened 
 
 A task is done only when every check from its skill's DoD ran green **in this session**, with the output quoted as proof:
 the relevant tests, ruff lint + format, mypy (Python changes), parity audit + notebook freeze (any `src/captioning/` or `configs/` change),
-frontend lint + build (any `frontend/` change), and the pre-commit hooks on the changed files. Then update `docs/MEMORY.md` (state) and `docs/TASKS.md` (status), add a `docs/DECISIONS.md` entry if a permanent decision was made,
+frontend lint + build + `npm run test:e2e` (any `frontend/` change), and the pre-commit hooks on the changed files. Then update `docs/MEMORY.md` (state) and `docs/TASKS.md` (status), add a `docs/DECISIONS.md` entry if a permanent decision was made,
 and end with the proposed commit sequence. If a check can't run, say so. That box is not ticked.
 
 ## Orchestration (multi-lane tasks)

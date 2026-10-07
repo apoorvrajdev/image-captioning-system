@@ -36,11 +36,12 @@ Backend contract source of truth: `backend/app/schemas/caption.py`.
 |---|---|---|
 | static | `npm run lint` | hooks rules, unused vars |
 | build | `npm run build` | Vite production build |
-| browser | browser loop below | the changed user flow |
-(No JS unit/e2e runner exists yet. Adding one is a deliberate task, not a side effect.)
+| e2e | `npm run test:e2e` (Playwright, Chromium, mocked API; ADR-023) | `e2e/caption-flow.spec.js`, `e2e/phase3-dashboard.spec.js`, zero console errors |
+| browser | browser loop below | a changed flow the specs don't cover yet |
+New UI behaviour gets a spec in `frontend/e2e/`, using the `api` and `consoleErrors` fixtures from `e2e/support.js`. There are no JS unit tests.
 
 ## Browser verification loop (UI changes)
-If the Playwright MCP is connected (`/mcp`), use it. Otherwise ask the user to run the flow manually and report back.
+First choice: a spec in `frontend/e2e/`. For exploration, use the Playwright MCP if it is connected (`/mcp`). Otherwise ask the user to run the flow manually and report back.
 1. Start backend (`uvicorn app.main:app --app-dir backend --port 8000`) and `npm run dev`.
 2. Navigate to http://localhost:5173 and take an accessibility snapshot (not screenshots).
 3. Drive the changed flow: upload → Generate → result, plus one error path (bad type / backend stopped). Dashboard changes: switch views, check the tables and caveats, and that the switch makes no request.
@@ -51,14 +52,16 @@ A UI change with no browser run is reported as **"not browser-verified"**, never
 ## Definition of done — ALL must pass
 - [ ] All HTTP calls live in `src/services/api.js`. Components never call `fetch`.
 - [ ] Loading, error, and empty states handled for every new async surface.
-- [ ] `cd frontend && npm run lint && npm run build` exit 0.
-- [ ] Browser loop run, or explicitly reported as not run.
+- [ ] `cd frontend && npm run lint && npm run build && npm run test:e2e` exit 0.
+- [ ] The changed flow is covered by a spec, or the browser loop was run, or it is explicitly reported as not run.
 - [ ] Contract fields read here match `backend/app/schemas/caption.py`.
 - [ ] No new dependency without justification. `package-lock.json` updated with it.
 
 ## Verification commands
 ```bash
 cd frontend && npm run lint && npm run build
+npx playwright install chromium   # once per machine
+npm run test:e2e
 ```
 
 ## Non-negotiables

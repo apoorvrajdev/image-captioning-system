@@ -12,7 +12,7 @@ Triggered on every push and pull request to `main`. Five parallel jobs:
 | `python-tests` | `pytest` matrix on Python **3.10 / 3.11**, then the 4-stage notebook parity audit (`python -m scripts.notebook_module_audit`) | Confirm the package keeps working on every supported interpreter and still matches the notebook |
 | `notebook-freeze` | `make freeze-paper-notebook` (SHA-256 check) | Fail if the IEEE notebook is mutated — it is the canonical research artefact |
 | `pre-commit` | `pre-commit run --all-files` with the repo's pinned hooks (`SKIP=mypy`, which `python-quality` covers) | Enforce the same hygiene, nbstripout, prettier, and secret-scan hooks as local commits, including commits made without hooks installed |
-| `frontend` | `npm install`, `npm run lint`, `npm run build` on Node 20 | Catch ESLint + Vite build regressions in the SPA |
+| `frontend` | `npm install`, `npm run lint`, `npm run build`, then Playwright Chromium (`npx playwright install --with-deps --only-shell chromium`) and `npm run test:e2e` on Node 20; traces uploaded as `playwright-test-results` on failure | Catch ESLint + Vite build regressions, and break the caption flow or Phase 3 dashboard in a real browser against the production bundle with a mocked API (ADR-023) |
 
 Caching:
 - pip via `actions/setup-python` (key derived from `requirements*.txt` + `pyproject.toml`)
@@ -78,4 +78,6 @@ SKIP=mypy pre-commit run --all-files   # same hooks as the pre-commit job
 
 cd frontend
 npm ci && npm run lint && npm run build
+npx playwright install chromium   # once per machine
+npm run test:e2e                  # builds, serves with vite preview, runs e2e/ on Chromium
 ```

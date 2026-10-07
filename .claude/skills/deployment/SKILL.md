@@ -11,7 +11,7 @@ description: Acceptance criteria and definition of done for CI/CD, the Docker im
 `frontend/.env.example`, `docs/CI.md`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`, `Makefile`.
 
 ## Topology (current)
-GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · frontend lint+build)
+GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · frontend lint+build+Playwright E2E)
 → on green `deploy-backend.yml` pushes to HF Space `apoorvrajdev/image-captioning-api` (Docker SDK, cpu-basic, port 7860, 1 worker)
 → lifespan pulls weights from HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` at a pinned tag.
 Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS comes from the `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` Space variable.

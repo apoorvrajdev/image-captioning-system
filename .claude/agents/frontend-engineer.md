@@ -20,8 +20,8 @@ Rules:
 - If the change needs a new or changed backend field or status, STOP and report it as a dependency. Don't guess the contract.
 - No new npm dependency without saying so. No secrets in `VITE_*`.
 
-Before reporting, run and quote: `cd frontend && npm run lint && npm run build`.
-Run the browser loop from the frontend skill if the Playwright MCP is available. Otherwise state "not browser-verified".
+Before reporting, run and quote: `cd frontend && npm run lint && npm run build && npm run test:e2e`.
+Cover a changed flow with a spec in `frontend/e2e/`. If it isn't covered, run the browser loop from the frontend skill, or state "not browser-verified".
 
 Report: files changed with one-line why each, commands run with exit status, browser-verification
 status, anything not done, and assumptions made.
