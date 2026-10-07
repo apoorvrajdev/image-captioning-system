@@ -138,7 +138,7 @@ Outcome:
 
 ---
 
-## Phase 3 — Multimodal baselines (done 2026-10-07; TASK-007 still blocked, see 3D)
+## Phase 3 — Multimodal baselines (done 2026-10-07)
 
 Constraints already fixed: baselines live in the optional `[hf]` extra (`transformers==4.41.2`,
 `torch==2.3.0`) and must not unpin the research pipeline (`tensorflow-cpu==2.15.0`). Every baseline
@@ -151,7 +151,7 @@ tokenisation** as the existing runs.
   → TASK-013, TASK-014
 - [x] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs GPU) → TASK-015, TASK-016
 - [x] **3D** — Comparison-result dashboard exposed through the existing SPA → TASK-007, TASK-017, TASK-018
-  (the dashboard ships; TASK-007, the Playwright E2E, is still blocked on install approval, so it was checked manually)
+  (TASK-007 added the Playwright E2E, covering the caption flow and the dashboard, on 2026-10-07)
 
 Facts the tasks rely on (checked 2026-10-05):
 - Slice: both committed runs (`stabilized-greedy`, `stabilized-beam-w4-lp07-rp12`) score the same 500 images in the
@@ -177,7 +177,7 @@ Approvals needed before implementation:
 | Read-only Hugging Face API lookups to pin revision SHAs | TASK-009 |
 | Downloads of the three baseline checkpoints (about 0.7–1 GB each) | TASK-014, TASK-016 (optional TASK-011 smoke run) |
 | Owner-run Kaggle CPU and GPU sessions with COCO 2017 | TASK-014, TASK-016 |
-| `@playwright/test` and a Chromium download, locally and in CI | TASK-007, then TASK-018 |
+| `@playwright/test` and a Chromium download, locally and in CI | TASK-007, then TASK-018 (granted 2026-10-07) |
 
 Not needed: changes to `requirements.txt`, the `Dockerfile` or the Space; new runtime dependencies; any change to
 the `tensorflow-cpu` pin.
@@ -673,7 +673,7 @@ Outcome, GPU half (same protocol, same 32 images):
   - No quality run, CPU latency run or `phase3-comparison/` file changed.
   - pre-commit passed on every commit. No code changed.
 
-### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (first task of Phase 3D; awaiting approval to install)
+### TASK-007 — Committed browser E2E for the caption flow            [status: done] (2026-10-07)
 Area: frontend · deployment
 Goal: promote the manual browser check in `TEST_PLAN.md` into a committed Playwright spec that mocks
 `/healthz` and `/v1/captions` with `page.route` (no backend, no TensorFlow), run in the CI `frontend` job.
@@ -685,6 +685,63 @@ Depends on: approval to install `@playwright/test` and download Chromium, locall
 Owns: the Playwright config, `frontend/e2e/`, the `package.json` devDependency, the `ci.yml` frontend step, and the
 `TEST_PLAN.md` frontend row.
 Out of scope: dashboard specs (TASK-018).
+Outcome:
+- Install, approved 2026-10-07:
+  - `@playwright/test` ^1.63.0 is a devDependency (`e8896d2`). The lock adds only `@playwright/test`, `playwright` and
+    `playwright-core` 1.63.0, which need Node >= 20; CI uses 20.
+  - Chromium only: Chrome for Testing 153.0.8010.12, the full build locally and only the headless shell in CI.
+  - The committed lock already failed `npm ci`: it had no entries for the `@emnapi/core` and `@emnapi/runtime`
+    1.10.0 pinned by the optional `@rolldown/binding-wasm32-wasi`. It was resynced first, as its own commit
+    (`a26e730`). Only optional wasm32 entries changed.
+- Setup (`3595599`, ADR-023):
+  - `frontend/playwright.config.js` builds the SPA and serves it with `npm run preview`, so the specs test the
+    production bundle. One Chromium project, no retries; traces are kept on failure.
+  - `frontend/e2e/support.js` has two auto-fixtures:
+    - `api` answers every off-origin request. `/healthz` and `/v1/captions` get bodies shaped like
+      `backend/app/schemas/caption.py`, or a refused connection when a test sets `api.down`. Any other off-origin
+      request fails the test.
+    - `consoleErrors` fails a test on any console error or uncaught page error. While `api.down` is set, Chromium's
+      exact `Failed to load resource: net::ERR_CONNECTION_REFUSED` line is allowed for the two API URLs.
+  - The test image is a 1×1 PNG built in memory, so no binary fixture is committed.
+  - ESLint gets Node globals for these files, Playwright output is gitignored, and `npm run test:e2e` runs the suite.
+- `e2e/caption-flow.spec.js` (`bafd4fa`) covers the criteria, 3 tests:
+  - healthy API: PNG upload, then Generate, shows the caption card with version, strategy, latency and request ID;
+  - a `.txt` file and a >10 MB file are each rejected inline, with no request;
+  - API unreachable: the badge goes offline and "Cannot reach backend" shows.
+- TASK-018's deferred dashboard spec landed with this task, as its own commit. TASK-007 had ruled it out of scope;
+  the owner asked for it here. `e2e/phase3-dashboard.spec.js` (`366383e`) has 11 tests:
+  - the view switch makes no request;
+  - every quality and CPU/GPU latency cell equals the committed JSON, both the exact value and its display rounding;
+  - provenance, the slice, the caveats (shown ahead of the tables) and every note;
+  - "n/a" for the data's null revisions and decode settings;
+  - the exact-values toggle;
+  - the dashboard renders with the API down;
+  - the caption state survives a view switch;
+  - layout at 390 and 1280 px: no sideways page scroll, and no table cut off.
+- CI (`1672472`): the `frontend` job, now "Frontend (lint + build + e2e)", installs the headless shell with its system
+  dependencies, runs `npm run test:e2e`, and uploads traces only on failure.
+- Docs: ADR-023 (`f793e4d`), `TEST_PLAN.md` (`334fa21`), the commands in `CI.md`, `CLAUDE.md`, the skills, the
+  frontend lane and the repo map (`9e7ee7a`). The deployment skill's YAML check now reads files as UTF-8, because it
+  failed on Windows (`4dec153`).
+- Verification:
+  - Local: 14 passed. Mutations were each caught by the right test, and every source file was then restored:
+    - rounding metrics to 3 decimals → 2 tests failed;
+    - a runtime fetch in the dashboard → the no-request test failed;
+    - a `console.error` → all 14 failed;
+    - removing the "Not a ranking" caveat → the caveat test failed.
+  - `npm run lint` clean, `npm run build` OK, `npm ci` OK.
+  - Full pytest 238 passed. Both workflows parse. Pre-commit passed on every changed file.
+  - CI run `37645312836` on `4dec153`: all 6 jobs green. The frontend job ran 14 passed (10.1 s) on Linux.
+  - Vercel deployed. The automatic backend deploy `37645500471` succeeded: Space `RUNNING`, healthy, `v2.0.0`.
+  - No change under `frontend/src/`, `results/`, `notebooks/`, `models/`, `backend/`, `configs/` or `src/`, and none
+    to `README.md`.
+- Not done, by scope:
+  - Other browsers.
+  - JS unit tests.
+  - A test that a missing metric or latency renders "n/a": the real data has none, and the specs use only the
+    committed file.
+  - Asserting that every column fits at 1280 px, which depends on the platform's fonts (slack 5.6–10.9 % with Windows
+    fonts).
 
 ### TASK-017 — Export dashboard data from committed results            [status: done] (2026-10-07)
 Area: evaluation · frontend
@@ -743,7 +800,7 @@ Outcome:
     none to existing frontend code, and none to `README.md`.
 - Not done, by scope: any UI (TASK-018), a Make target, or a CI step beyond the pytest drift test.
 
-### TASK-018 — Add the comparison dashboard to the SPA            [status: done] (2026-10-07; manually browser-checked, not end-to-end verified)
+### TASK-018 — Add the comparison dashboard to the SPA            [status: done] (2026-10-07; end-to-end spec added with TASK-007)
 Area: frontend
 Goal: a view in the existing SPA that renders the exported metrics and latency tables, every value traceable to its
 run id, with the caveats visible.
@@ -802,3 +859,5 @@ Outcome:
   - No change under `results/`, `configs/`, `notebooks/`, `models/`, `backend/` or `src/`, and none to `README.md`.
 - Not done, by scope: the Playwright dashboard spec (needs TASK-007), a URL for each view, and the README Phase 3
   results (README holds owner-staged edits).
+- Addendum, 2026-10-07: TASK-007 added the Playwright dashboard spec, `e2e/phase3-dashboard.spec.js` (`366383e`),
+  with zero console errors. It runs in CI, so the dashboard is now end-to-end verified.

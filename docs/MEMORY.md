@@ -10,10 +10,9 @@ _Last updated: 2026-10-07_
 - **Completed:** Phase 0 (bootstrap), Phase 1 (modularisation), Phase 1b (training stabilisation +
   metric suite + stabilized checkpoint), Phase 2A (FastAPI), Phase 2B (SPA), Phase 2C (public deployment),
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup,
-  Phase 3 (multimodal baselines, 3A–3D: TASK-009 – TASK-018, done 2026-10-07).
-- **Phase 3 is complete except TASK-007.** TASK-007 (the Playwright E2E) is still blocked on install approval, so
-  the SPA's caption flow and dashboard were checked manually, not end to end. No task after Phase 3 is defined in
-  [`TASKS.md`](TASKS.md).
+  Phase 3 (multimodal baselines, 3A–3D: TASK-007, TASK-009 – TASK-018, done 2026-10-07).
+- **Phase 3 is complete.** TASK-007 added Playwright E2E, so the SPA's caption flow and Phase 3 dashboard are now
+  verified end to end in CI (ADR-023). No task after Phase 3 is defined in [`TASKS.md`](TASKS.md).
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -26,25 +25,25 @@ _Last updated: 2026-10-07_
   - The CNN's batch-8 figures are sequential single-image calls.
   - TASK-017 is done: `python -m scripts.export_dashboard_data` writes the SPA's static
     `frontend/src/generated/phase3-dashboard.json` from those results (ADR-021), and a test fails if it drifts.
-  - TASK-018 is done: the SPA's "Phase 3 comparison" view renders that file (ADR-022). TASK-007 (Playwright) still
-    awaits install approval.
+  - TASK-018 is done: the SPA's "Phase 3 comparison" view renders that file (ADR-022). TASK-007 is done: Playwright
+    E2E covers that view and the caption flow.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
-  deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
+  deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
 
 ## System status (verified 2026-10-03, local Windows, Python 3.10.11)
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 238 passed on 2026-10-07, after TASK-017 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 238 passed on 2026-10-07, after TASK-007 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (103 files, 2026-10-07) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 83 files (2026-10-07) |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
-| Frontend browser check (manual, headless Chrome, mocked API) | caption flow + Phase 3 dashboard, 40/40, zero console errors (2026-10-07); not end-to-end (TASK-007) |
-| CI on `main` for `915112b` (run `37140358717`) | green, all 6 jobs incl. `pre-commit` |
+| Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
+| CI on `main` for `4dec153` (run `37645312836`) | green, all 6 jobs incl. `pre-commit` and the frontend E2E |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
 | `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
@@ -59,6 +58,21 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-07 Playwright E2E (TASK-007, done; Phase 3 complete):
+  - `@playwright/test` 1.63.0 is a devDependency, with Chromium only. The lock was first resynced, because the
+    committed one failed `npm ci` (optional wasm32 `@emnapi` entries).
+  - `npm run test:e2e` builds the SPA and serves it with `vite preview`, then runs `frontend/e2e/` on Chromium. The
+    `frontend` CI job runs it too, with the headless shell only.
+  - `e2e/support.js` mocks `/healthz` and `/v1/captions`, fails a test on any other off-origin request, and fails it
+    on console or page errors. The one allowance is Chromium's refused-connection line for the API URLs while a test
+    has the API down.
+  - Specs:
+    - `caption-flow.spec.js` covers TASK-007's three cases;
+    - `phase3-dashboard.spec.js` is TASK-018's deferred spec. It checks every value against the committed JSON, plus
+      caveats, provenance, "n/a", the exact-values toggle, no requests, and layout at 390 and 1280 px.
+  - Mutation checks failed the right tests. CI run `37645312836` is green, and Vercel and the backend auto-deploy
+    succeeded.
+  - Committed as `a26e730`..`4dec153`, plus the closing docs. ADR-023.
 - 2026-10-07 Phase 3 dashboard in the SPA (TASK-018, done; Phase 3 complete except TASK-007):
   - A "Caption an image" / "Phase 3 comparison" switch in `App.jsx` (state only, no router). The caption flow stays
     mounted behind `hidden` and is unchanged.
@@ -182,7 +196,7 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Known issues / open debt
 
-- No frontend tests / e2e (TASK-007; the caption flow and the Phase 3 dashboard are checked manually only), no
+- No frontend unit tests (Playwright E2E only, Chromium only), no
   coverage measured in CI, no dependency-vulnerability scanning,
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
