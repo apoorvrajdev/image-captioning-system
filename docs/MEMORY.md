@@ -12,7 +12,11 @@ _Last updated: 2026-10-07_
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup,
   Phase 3 (multimodal baselines, 3A–3D: TASK-007, TASK-009 – TASK-018, done 2026-10-07).
 - **Phase 3 is complete.** TASK-007 added Playwright E2E, so the SPA's caption flow and Phase 3 dashboard are now
-  verified end to end in CI (ADR-023). No task after Phase 3 is defined in [`TASKS.md`](TASKS.md).
+  verified end to end in CI (ADR-023). The README's Phase 3 section cites the run ids, the quality and latency
+  results and the dashboard (`7e7464d`, `53add09`).
+- **Phase 4 is planned:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
+  [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is next and must land before 2026-10-19, when GitHub moves
+  `ubuntu-latest` to Ubuntu 26.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -201,7 +205,6 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
   `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).
-- `README.md` doesn't cite the Phase 3 results yet. TASK-014 left it untouched because it holds owner-staged edits.
 
 ## Before coding, know this
 

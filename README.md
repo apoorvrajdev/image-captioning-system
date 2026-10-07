@@ -790,12 +790,15 @@ The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-02
 - [x] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs. GPU). It covers the § 9 protocol and tool, CPU runs on a local laptop and GPU runs on a Kaggle Tesla T4 (TASK-015, TASK-016). Each device ran on its own host, so this is not a controlled CPU-vs-GPU comparison.
 - [x] **3D** — Comparison-result dashboard exposed through the existing SPA. It covers the static build-time JSON export with a drift test, the **Phase 3 comparison** view, and Playwright E2E for the caption flow and the dashboard, run in CI (TASK-017, TASK-018, TASK-007).
 
-### Phase 4 — Observability ⏳ (planned)
+### Phase 4 — Production hardening and supply-chain reliability ⏳ (planned)
 
-- [ ] **4A** — Sentry error tracking on backend + frontend
-- [ ] **4B** — Prometheus metrics (per-route latency histograms, predictor cache hits, lifespan boot duration)
-- [ ] **4C** — DagsHub-hosted MLflow tracking link surfaced in the README
-- [ ] **4D** — Architecture Decision Records (`docs/adr/`) — every non-trivial choice (TF version pin, anyio offload, env-var prefix separation, etc.) gets a one-page ADR
+Phase 4 hardens the system that already ships rather than adding features. Each item is one task in [`docs/TASKS.md`](docs/TASKS.md), done in this order.
+
+- [ ] **4A** — CI platform currency (TASK-019): pin the runner to an explicit supported image (proposed `ubuntu-24.04`) before GitHub moves `ubuntu-latest` to Ubuntu 26 on 2026-10-19. Clear the GitHub Actions Node 20 deprecation, move the frontend job off Node 20, and record the Python 3.10 end-of-life decision.
+- [ ] **4B** — Serving dependency security (TASK-020): patch FastAPI / Starlette / `python-multipart`, and Pillow where appropriate, without moving the `tensorflow-cpu==2.15.0` pin. The backend contract tests are the safety net. Also reassess the full-body upload buffering gap in [`docs/SECURITY.md`](docs/SECURITY.md).
+- [ ] **4C** — Dependency and secret scanning in CI (TASK-021): `pip-audit`, `npm audit` on production dependencies, and a full-history `gitleaks` scan. They become a blocking gate only after TASK-020 leaves a clean baseline.
+- [ ] **4D** — Deploy only when the production image changes (TASK-022): skip the Space rebuild for commits that can't change the image. `README.md` is copied into the image, so it is part of that decision. Needs an ADR revising [ADR-017](docs/DECISIONS.md).
+- [ ] **4E** — Real-model post-deploy smoke test (TASK-023): one real caption request against the live Space and a CORS check from the Vercel origin, tolerant of Space cold starts. Builds on the TASK-022 deploy workflow.
 
 Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md) · [Stabilized training runbook](docs/STABILIZED_TRAINING_RUNBOOK.md) · [Evaluation-methodology audit](docs/EVAL_METHODOLOGY.md).
 

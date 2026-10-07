@@ -861,3 +861,197 @@ Outcome:
   results (README holds owner-staged edits).
 - Addendum, 2026-10-07: TASK-007 added the Playwright dashboard spec, `e2e/phase3-dashboard.spec.js` (`366383e`),
   with zero console errors. It runs in CI, so the dashboard is now end-to-end verified.
+
+---
+
+## Phase 4 — Production hardening and supply-chain reliability (planned 2026-10-07)
+
+Phase 4 hardens the system that already ships. It adds no features. Scope and rationale come from the Phase 4
+reconnaissance, reviewed and approved on 2026-10-07. The facts below were re-checked against the repository the same
+day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
+
+**Deadline:** TASK-019 must land before **2026-10-19**, when GitHub moves `ubuntu-latest` to Ubuntu 26.
+
+- [ ] **4A** — CI platform currency → TASK-019
+- [ ] **4B** — Serving dependency security → TASK-020
+- [ ] **4C** — Dependency and secret scanning in CI → TASK-021
+- [ ] **4D** — Deploy only when the production image changes → TASK-022
+- [ ] **4E** — Real-model post-deploy smoke test → TASK-023
+
+Facts the tasks rely on (checked 2026-10-07):
+- Runners: all seven jobs run on `ubuntu-latest`: five in `ci.yml`, one in `deploy-backend.yml` and one in
+  `no-ai-attribution.yml`.
+- Actions in use: `actions/checkout@v4`, `actions/setup-python@v5`, `actions/cache@v4`, `actions/setup-node@v4`,
+  `actions/upload-artifact@v4`.
+- Node: the `frontend` job sets `node-version: "20"`. Nothing else in the repository pins Node (no `.nvmrc`, no
+  `engines`). Vite 8 needs `^20.19.0 || >=22.12.0`, and `@playwright/test` 1.63 needs Node >= 20.
+- Python:
+  - The pytest matrix is 3.10 and 3.11. `requires-python` is `>=3.10,<3.13`, ruff targets `py310`, mypy uses
+    `python_version = "3.10"`, and the local venv is 3.10.11.
+  - Python 3.10 reaches upstream end of life in October 2026.
+  - `tensorflow-cpu` 2.15.0 publishes wheels for Python 3.9–3.11 only, so the matrix can't move to 3.12 while the TF
+    pin holds.
+- Serving pins (`requirements.txt`): `fastapi==0.111.0`, `python-multipart==0.0.9`, `pillow==10.3.0`,
+  `uvicorn[standard]==0.30.1`. Starlette isn't pinned directly; FastAPI brings it in. `pyproject.toml` gives ranges
+  for the same packages: `fastapi>=0.111,<1.0`, `python-multipart>=0.0.9`, `pillow>=10.0,<11.0`.
+- Scanning: CI runs no dependency audit and no secret scan. The `gitleaks` pre-commit hook (v8.18.4) scans staged
+  changes only, so it does nothing in CI (ADR-016). Both are open rows in `SECURITY.md` § Known gaps.
+- Deploys:
+  - `deploy-backend.yml` runs after every green CI run on `main` (`workflow_run`), so every commit force-pushes and
+    rebuilds the Space, docs-only commits included (ADR-017). `workflow_run` doesn't support a path filter.
+  - The image copies `requirements.txt`, `pyproject.toml`, `README.md`, `src/`, `backend/`, `configs/` and `models/`.
+  - `README.md` is in the image on purpose. `pyproject.toml` declares `readme = "README.md"` for the in-image
+    `pip install -e .`, and the deploy commit prepends the Space's config header to it.
+  - The deploy gate checks HF `RUNNING` and `/healthz` `model_loaded: true`. It sends no caption request and checks no
+    CORS header.
+  - Spaces sleep when idle, and the first request after that is slow (runbook § 9).
+
+Dependency graph. The work order above is the approved sequence; the arrows are hard dependencies.
+
+```
+TASK-019 (CI platform) ─┬─► TASK-020 (serving deps) ─► TASK-021 (scanning in CI)
+                        └─► TASK-022 (deploy on image change) ─► TASK-023 (post-deploy smoke test)
+```
+
+### TASK-019 — CI platform currency            [status: todo] (deadline 2026-10-19)
+Area: deployment
+Goal: CI and the deploy workflow run on an explicitly chosen, supported platform before GitHub moves `ubuntu-latest`
+to Ubuntu 26 and retires the Node 20 Actions runtime.
+Scope:
+- Replace `ubuntu-latest` in all seven jobs with an explicit supported runner, currently proposed as `ubuntu-24.04`.
+- Update the GitHub Actions versions needed to clear the Node 20 deprecation. Confirm each exact version from the
+  action's own releases during the task. This plan doesn't fix them.
+- Move the `frontend` job from Node 20 to the supported LTS the repository standardises on, chosen and recorded in
+  this task.
+- Record the Python 3.10 end-of-life decision: whether 3.10 stays in the pytest matrix and `requires-python`, and why.
+- Update `docs/CI.md`, and the deployment runbook wherever it names the runner or Node version.
+Acceptance criteria:
+- GIVEN the three workflow files THEN no job uses `ubuntu-latest`, and every job names the chosen runner.
+- GIVEN a push to `main` THEN all six CI jobs pass on that runner, and the run shows no Node 20 deprecation annotation.
+- The `frontend` job passes lint, build and the Playwright E2E on the new Node version.
+- The next `deploy-backend.yml` run passes its existing gate (`RUNNING` + `model_loaded: true`) on the pinned runner.
+- An ADR records the runner pin and its reason, the Node version, and the Python 3.10 decision.
+- No gate is removed or weakened. The pytest matrix changes only if the recorded 3.10 decision says so.
+Verification: the deployment skill's YAML parse check on all three workflows; `grep -rn "ubuntu-latest"
+.github/workflows` finds nothing; pre-commit on the changed files; the CI run on `main` (every job green, annotations
+checked); the following `deploy-backend.yml` run.
+Depends on: none. First Phase 4 task.
+Owns: `.github/workflows/{ci,deploy-backend,no-ai-attribution}.yml`, `docs/CI.md`, the runbook's CI notes, the ADR.
+`pyproject.toml` only if the 3.10 decision changes `requires-python` or the tool targets.
+Out of scope: serving dependency upgrades (TASK-020); vulnerability or secret scanners (TASK-021); redesigning the
+deploy trigger (TASK-022); the TensorFlow / Keras migration; adopting Ubuntu 26; the Dockerfile base image; unrelated
+application changes.
+
+### TASK-020 — Fix vulnerable serving dependencies            [status: todo]
+Area: inference-api · deployment
+Goal: the serving image ships no FastAPI, Starlette, `python-multipart` or Pillow version with a known, fixable
+vulnerability, and the `tensorflow-cpu==2.15.0` pin stays.
+Scope:
+- Upgrade FastAPI, and with it Starlette, plus `python-multipart`, to releases that fix the known advisories. Pin
+  Starlette explicitly if FastAPI's range would still allow a vulnerable version.
+- Upgrade Pillow where appropriate: where a fixed release works with TF 2.15 and the current `<11.0` bound. If a fix
+  needs a bound change, decide it in this task and record why.
+- Keep the `requirements.txt` pins and the `pyproject.toml` ranges consistent.
+- Reassess the full-body upload buffering gap (`SECURITY.md` § Known gaps, first row) against the upgraded multipart
+  parser. Either close it or update the row with the current behaviour.
+Acceptance criteria:
+- An audit of `requirements.txt` (for example `pip-audit -r requirements.txt`) reports no known vulnerability in
+  FastAPI, Starlette, `python-multipart` or Pillow. Any finding that remains is listed in `SECURITY.md` with its reason.
+- `tensorflow-cpu==2.15.0` and `numpy<2` are unchanged, and the resolved set installs alongside them (`pip check` is
+  clean).
+- The existing backend contract tests pass unchanged. `/healthz` and `/v1/captions` keep the 200/400/413/415/422/503
+  codes and the `CaptionResponse` / `ErrorResponse` shapes. No test is weakened.
+- Any change to upload handling keeps that contract and adds a regression test.
+- The Space redeploys on the new pins and passes the deploy gate.
+Verification: `pytest backend/app/tests -q`; the full suite; ruff lint + format; mypy; `pip check`; the audit
+command; pre-commit on the changed files; CI green on `main`; the deploy run.
+Depends on: TASK-019.
+Needs: approval to upgrade packages in the local venv and to install the audit tool.
+Owns: `requirements.txt`, the `pyproject.toml` dependency ranges, `SECURITY.md`, any upload-handling fix in
+`backend/app/` and its test.
+Out of scope: TensorFlow, Keras or NumPy upgrades; CI scanners (TASK-021); dev, eval and `[hf]` dependencies;
+frontend dependencies; API contract changes.
+
+### TASK-021 — Dependency and secret scanning in CI            [status: todo]
+Area: deployment
+Goal: CI catches known-vulnerable dependencies and committed secrets, instead of relying on hooks that only scan
+staged changes on machines that have them installed.
+Scope:
+- `pip-audit` in CI over the serving requirements (`requirements.txt`). Whether other requirement files are audited is
+  decided and recorded in this task.
+- `npm audit` over the frontend's production dependencies (`--omit=dev`), which are what ships in the Vercel bundle.
+- A full-history `gitleaks` scan in CI, with a full-history checkout, so a commit made without hooks is still scanned.
+- `SECURITY.md` known-gap rows and `docs/CI.md` updated; an ADR records the scanners, what each covers and when each
+  blocks.
+Acceptance criteria:
+- GIVEN a push or pull request THEN all three scans run in CI and their findings show in the job log.
+- The scans become a blocking CI gate only once TASK-020's clean baseline is confirmed on `main`. If the baseline isn't
+  clean, they land report-only, with the remaining findings listed.
+- The full-history `gitleaks` scan passes over the whole history. A false positive gets a documented allowlist entry.
+  A real secret is rotated first, never only allowlisted.
+- Scanner versions are pinned. `gitleaks` matches the pre-commit hook's v8.18.4 unless the task records a reason to
+  differ.
+- Workflow permissions stay `contents: read`, and no new repository secret is needed.
+Verification: the YAML parse check; a CI run on `main` showing the three scans; pre-commit on the changed files; the
+same scan commands run locally where installation is approved.
+Depends on: TASK-020 (clean baseline).
+Needs: approval to add the scanner tooling to CI, and to install it locally to reproduce findings.
+Owns: `.github/workflows/ci.yml` (the scan steps), any scanner config such as a `gitleaks` allowlist, `docs/CI.md`,
+`SECURITY.md`, the ADR.
+Out of scope: fixing vulnerabilities (TASK-020); container image scanning; Dependabot or automated update pull
+requests; gating on dev-only npm dependencies.
+
+### TASK-022 — Deploy only when the production image changes            [status: todo]
+Area: deployment
+Goal: commits that can't change the production image (docs, tests, frontend, results and the like) no longer rebuild
+and restart the HF Space.
+Scope:
+- In `deploy-backend.yml`, decide from the commits being deployed whether any image input changed, and skip the
+  force-push and rebuild if none did. `workflow_run` has no path filter, so the check runs inside the job.
+- Derive the image inputs from the `Dockerfile` `COPY` lines and `.dockerignore`, plus the `Dockerfile` itself and the
+  deploy workflow, which writes the Space's README header.
+- `README.md` is copied into the image on purpose (`pyproject.toml` `readme`, and the Space config header). Decide
+  explicitly whether a README-only commit redeploys, and record why.
+- A new ADR revising ADR-017 (`DECISIONS.md` is append-only).
+Acceptance criteria:
+- GIVEN a commit that changes no image input THEN the deploy run skips with a notice giving the reason, and nothing is
+  pushed to the Space.
+- GIVEN a commit that changes any image input THEN it deploys as it does today, through the same gate.
+- The comparison base is the commit the Space last deployed, not the parent commit. An image change whose deploy was
+  skipped, superseded or failed is still deployed by a later commit.
+- `workflow_dispatch` can still force a deploy. The superseded-commit guard and the manual-run CI verification stay.
+- `README.md` is handled as the ADR says.
+- The ADR records the trigger rule and the README decision, and `docs/CI.md` and the runbook match it.
+Verification: the YAML parse check; the change-detection rule exercised against representative commit ranges
+(docs-only, image-changing, an image change followed by a docs-only commit); on `main`, one observed skip for a
+docs-only push and one observed deploy for an image change.
+Depends on: TASK-019 (same workflow file; the runner pin lands first).
+Owns: `.github/workflows/deploy-backend.yml`, the ADR, `docs/CI.md`, the deployment runbook.
+Out of scope: changing what the image contains; the CI workflow's own trigger; the post-deploy smoke test (TASK-023);
+Vercel deploys (handled by Vercel's GitHub integration).
+
+### TASK-023 — Real-model post-deploy smoke test            [status: todo]
+Area: deployment · inference-api
+Goal: a deploy passes only once the live Space has captioned a real image with the real model and allows the Vercel
+origin through CORS.
+Scope:
+- After the existing health gate, send one real `POST /v1/captions` request to the live Space and check the response.
+- Verify CORS from the Vercel origin: a request with `Origin: https://image-captioning-system.vercel.app` gets that
+  origin back in `Access-Control-Allow-Origin`.
+- Account for cold starts: the Space may be asleep or still warming up, so the check waits and retries within a
+  bounded timeout before it reports a failure.
+- Build on the deploy workflow as TASK-022 leaves it. Document the check in `docs/CI.md` and runbook § 8.
+Acceptance criteria:
+- GIVEN a deploy that passed the health gate THEN one real caption request returns HTTP 200 with a
+  `CaptionResponse`-shaped body, a non-empty caption, and the same `model_version` that `/healthz` reports.
+- GIVEN the Vercel origin THEN the response allows it. GIVEN an origin outside the allow-list THEN the response
+  doesn't allow it.
+- A sleeping or waking Space doesn't fail the deploy before the bounded timeout. An error response from a running
+  Space fails it, with the status and body logged and no image bytes or tokens.
+- The check needs no new secret, because the API is public.
+Verification: the YAML parse check; a deploy run on `main` with the smoke step passing; evidence that the step fails
+when it should (for example against a wrong expected origin), reverted before commit.
+Depends on: TASK-022.
+Owns: the smoke step in `.github/workflows/deploy-backend.yml`, any committed test image, `docs/CI.md`, the runbook.
+Out of scope: asserting caption text or quality; load or latency testing; scheduled uptime monitoring; frontend
+changes; API contract changes.
