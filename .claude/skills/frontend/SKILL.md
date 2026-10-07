@@ -6,7 +6,7 @@ description: Acceptance criteria and definition of done for the React 19 + Vite 
 # Frontend SPA — acceptance criteria
 
 ## Scope
-`frontend/src/**` (`App.jsx`, `components/*`, `services/api.js`), `frontend/vite.config.js`,
+`frontend/src/**` (`App.jsx`, `components/*` incl. `Phase3Dashboard.jsx`, `services/api.js`), `frontend/vite.config.js`,
 `frontend/eslint.config.js`, `frontend/package.json`, `frontend/.env.example`.
 Backend contract source of truth: `backend/app/schemas/caption.py`.
 
@@ -17,6 +17,13 @@ Backend contract source of truth: `backend/app/schemas/caption.py`.
 - Error classes: `timeout` (60 s caption / 3 s health), `network` (unreachable or CORS), `http` (shows backend `detail`), `unknown`.
 - `StatusBadge` polls `/healthz` every 10 s and on window focus: `checking` → `online` / `offline`, and recovers by itself.
 - Preview object URLs are revoked on change/unmount (no leaks).
+- GIVEN the view switch in `App.jsx` (`Caption an image` / `Phase 3 comparison`, `aria-pressed` buttons, no router) WHEN the dashboard is chosen THEN `components/Phase3Dashboard.jsx` renders from the build-time import of `src/generated/phase3-dashboard.json`. No request is made. The caption flow stays mounted behind `hidden`, so its file, result and in-flight request survive the switch.
+- The dashboard shows every model's quality rows and its latency per device and batch size, each tied to its run id, plus the caveats (not live, not held-out, not a ranking, CPU/GPU from different hosts, sequential CNN batches) and the data file's notes. Values come from the JSON only: nothing is recomputed, ranked or colour-coded.
+
+## Dashboard edge cases
+- A missing metric, device run, batch or load time renders as "n/a"; the row stays, with its batch size.
+- Display rounding follows the committed reports (metrics 2 decimals as in `comparison.md`; latency 0.0001 s and load 0.1 s as in `EVAL_METHODOLOGY.md` § 9.9). Every number keeps its exact value in `<data value>`, and "Show exact values" displays it.
+- Wide tables scroll inside focusable `role="region"` containers; the page never scrolls sideways at 390 px. At 1280 px every column is visible.
 
 ## Edge cases
 - Backend 503 during a cold start → readable message, badge offline or loading.
@@ -36,7 +43,7 @@ Backend contract source of truth: `backend/app/schemas/caption.py`.
 If the Playwright MCP is connected (`/mcp`), use it. Otherwise ask the user to run the flow manually and report back.
 1. Start backend (`uvicorn app.main:app --app-dir backend --port 8000`) and `npm run dev`.
 2. Navigate to http://localhost:5173 and take an accessibility snapshot (not screenshots).
-3. Drive the changed flow: upload → Generate → result, plus one error path (bad type / backend stopped).
+3. Drive the changed flow: upload → Generate → result, plus one error path (bad type / backend stopped). Dashboard changes: switch views, check the tables and caveats, and that the switch makes no request.
 4. Console: zero errors, no new warnings. Network: no 4xx/5xx on the happy path.
 5. Fail → fix source, reload, repeat. Keep a screenshot of the end state as evidence.
 A UI change with no browser run is reported as **"not browser-verified"**, never as done.
