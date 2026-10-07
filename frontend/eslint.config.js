@@ -18,4 +18,9 @@ export default defineConfig([
       parserOptions: { ecmaFeatures: { jsx: true } },
     },
   },
+  {
+    // Playwright runs these in Node (TASK-007).
+    files: ["playwright.config.js", "e2e/**/*.js"],
+    languageOptions: { globals: globals.node },
+  },
 ]);
