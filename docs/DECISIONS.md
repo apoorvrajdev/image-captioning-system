@@ -126,3 +126,17 @@ Format: **Decision · Why · Evidence**.
   - `tensorflow-cpu==2.15.0` and `numpy<2` stay pinned and unchanged. GPU runs of the CNN + Transformer install `tensorflow==2.15.0` in that run environment only.
 - **Why:** the comparison needs `transformers` and `torch` only where runs actually happen (owner-run, on Kaggle). Keeping them out of CI, the backend and the image keeps CI fast and offline, keeps the image slim, and leaves the TF 2.15 pin (Keras 2 `TextVectorization` save/load) untouched. Both are already installed with `[hf]` in the local dev venv, so nothing new needs installing.
 - **Evidence:** `docs/EVAL_METHODOLOGY.md` § 8, `docs/TASKS.md` (TASK-009 – TASK-018), `pyproject.toml` `[project.optional-dependencies].hf` and the mypy overrides, `.github/workflows/ci.yml` install steps, ADR-013.
+
+### ADR-020 — Phase 3 latency is a separate artefact, timed through the shared captioner interface
+- **Decision:**
+  - The artefact contract (ADR-011) gains a latency run: a new `results/<prefix><model_id>-<decoding>-<device>/` holding only `latency.json`. It never sits in or next to a quality run, and holds no metrics or predictions.
+  - Latency is timed around `Captioner.caption()` (TASK-011), the call that produced the quality runs' captions. One sample is one call on one batch, read from `time.perf_counter`. Load (construction plus `load()`) is timed once and kept separate.
+  - Each batch size gets at least one untimed warmup pass, then the measured passes. The statistics are count, mean, median, min and max per batch size, with the raw samples stored. Nothing is filtered, and any failed call ends the run with nothing written.
+  - One model runs per invocation. For the CNN + Transformer, which TensorFlow places itself, `--device` is checked against the GPUs TensorFlow can see rather than forced.
+  - The protocol and its defaults are `EVAL_METHODOLOGY.md` § 9. The defaults are the first 32 slice images, batch sizes 1 and 8, 1 warmup pass and 5 measured passes.
+- **Why:**
+  - Quality runs are append-only and their files are already defined, so latency can't be added to them without rewriting committed results.
+  - Timing the same call that captioned the quality slice measures those exact model setups, with no second inference path to drift.
+  - Raw samples let any other statistic be recomputed later without re-running. Fixing the statistics before any run means none can be picked to suit the results.
+  - Checking the CNN's device keeps the device label true without changing the adapter.
+- **Evidence:** `docs/EVAL_METHODOLOGY.md` § 9, `src/captioning/evaluation/latency.py`, `scripts/benchmark_latency.py`, `tests/unit/test_latency_benchmark.py`.
