@@ -175,3 +175,22 @@ Format: **Decision · Why · Evidence**.
   - The dashboard's numbers have to be traceable to one committed run. A recomputed or ranked value would be a new result without a run behind it.
   - Reusing the reports' rounding keeps the page consistent with what is already published, and the exact values stay one click away.
 - **Evidence:** `frontend/src/App.jsx`, `frontend/src/components/Phase3Dashboard.jsx`, `docs/TEST_PLAN.md` (Phase 3 dashboard), `results/phase3-comparison/comparison.md`, `docs/EVAL_METHODOLOGY.md` §§ 9.9–9.10, ADR-021.
+
+### ADR-023 — Browser E2E runs Playwright on Chromium against the production bundle, with the API mocked
+- **Decision:**
+  - `@playwright/test` is the SPA's only test framework, a devDependency of `frontend/`. Only Chromium is installed: the full build locally, and only the headless shell in CI.
+  - `playwright.config.js` builds the app and serves it with `npm run preview`, so the specs exercise the production bundle the deploy ships. There are no component or unit tests.
+  - The specs live in `frontend/e2e/`.
+    - `e2e/support.js` answers every request that leaves the app's origin.
+    - `/healthz` and `/v1/captions` get bodies shaped like `backend/app/schemas/caption.py`, or a refused connection when a test marks the API down. Any other off-origin request fails the test.
+    - No test needs a backend, TensorFlow or the network.
+  - Every test fails on a console error or an uncaught page error, with one exception. While a test has marked the API down, Chromium's `Failed to load resource: net::ERR_CONNECTION_REFUSED` line is allowed for the two API URLs. The browser's network stack logs that line even though the app handles the failure; any other console error still fails.
+  - Expected dashboard values come from the committed `phase3-dashboard.json`, the same file the bundle imports. The specs don't keep a second copy.
+  - Retries are off. `npm run test:e2e` runs in the CI `frontend` job after lint and build, and the traces are uploaded only when it fails.
+- **Why:**
+  - Mocking at the browser's network layer keeps the caption flow testable without the 0.5 GB model, and keeps the specs deterministic.
+  - Testing the preview build catches bundling problems that a dev server would hide.
+  - One browser keeps the CI download and runtime small. The SPA has no browser-specific code.
+  - Without retries, a flaky test fails visibly instead of passing on a second try.
+  - The narrow console allowance keeps "zero console errors" meaningful. Without it, the "API unreachable" case could never pass.
+- **Evidence:** `frontend/playwright.config.js`, `frontend/e2e/`, `frontend/package.json`, `.github/workflows/ci.yml` (`frontend` job), `docs/TEST_PLAN.md`, ADR-021, ADR-022.
