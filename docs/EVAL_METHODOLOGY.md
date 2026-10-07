@@ -587,4 +587,86 @@ the defaults.
   §§ 9.1–9.6 is a dated amendment that gives its reason, as in § 8.7. Runs made
   under changed settings go to new run directories and aren't compared with runs
   made under these settings.
-- **Status:** no latency result exists yet. TASK-016 makes the first runs.
+- **Status:** the CPU runs exist (§ 9.9). The Kaggle GPU runs (TASK-016) haven't
+  been made yet.
+
+### 9.9 Results: CPU (TASK-016, 2026-10-07)
+
+These are the first runs under §§ 9.1–9.6. Nothing in the protocol was changed.
+Only CPU runs exist so far. The Kaggle GPU runs that TASK-016 also requires
+haven't been made yet.
+
+**Runs.** Each was written by `scripts/benchmark_latency.py`, one invocation per
+model, with the protocol defaults and `--device cpu`:
+
+| `model_id` | Run directory | Revision | Load (s) |
+|---|---|---|---|
+| `blip-base` | [`results/phase3-latency-blip-base-greedy-cpu/`](../results/phase3-latency-blip-base-greedy-cpu/) | `82a37760796d32b1411fe092ab5d4e227313294b` | 5.8 |
+| `vit-gpt2` | [`results/phase3-latency-vit-gpt2-greedy-cpu/`](../results/phase3-latency-vit-gpt2-greedy-cpu/) | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | 8.4 |
+| `git-base-coco` | [`results/phase3-latency-git-base-coco-greedy-cpu/`](../results/phase3-latency-git-base-coco-greedy-cpu/) | `a13141da42abd4a8cbf283601a8104265f537cee` | 4.6 |
+| `inceptionv3-transformer-stabilized` | [`results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cpu/`](../results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cpu/) | `59d93b4babb16b0ac81eef598f3abc271a355cbf` (tag `v2.0.0`) | 5.5 |
+
+**Execution.**
+
+- **Host:** the owner's laptop, recorded in every run's `environment` field as:
+  "Local laptop ASUS TUF Gaming A15 FA506NFR, AMD Ryzen 7 7435HS (8 cores / 16
+  threads), 15.8 GiB RAM, Windows 11 Home Single Language 10.0.26200, AC power,
+  power plan Turbo; CPU only (torch 2.3.0+cpu, tensorflow-cpu 2.15.0); Hugging
+  Face weights from the local cache (HF_HUB_OFFLINE=1)".
+  - Python 3.10.11, `transformers` 4.41.2.
+  - Python 3.10 reports this host's platform as `Windows-10-10.0.26200-SP0`.
+    Build 26200 is Windows 11.
+  - The laptop has an NVIDIA GeForce RTX 2050, which these runs didn't use:
+    `torch` is the CPU build and `tensorflow-cpu` can see no GPU
+    (`runtime.tensorflow_gpus` is `[]` for the CNN).
+  - The machine wasn't isolated. Background CPU load was about 1–4% before the
+    runs. While they ran, no other benchmark or test was started; there were
+    only brief progress checks (a process listing and log tails). Other desktop
+    activity wasn't controlled.
+- **Weights:**
+  - The baselines loaded from the local Hugging Face cache, from the snapshots
+    named by their § 8.1 revisions. `HF_HUB_OFFLINE=1` was set, so nothing was
+    downloaded and the load times include no download.
+  - The CNN + Transformer used the § 8.8 checkpoint (`model.h5` SHA-256
+    `74963a3f…`, checked before the run).
+- **Inputs:** the first 32 slice images, `000000530117.jpg` … `000000096793.jpg`
+  (the full list is in each `latency.json`), from `data/coco2017/train2017/`.
+  The slice fingerprint is `6b5628bf…`.
+- **Run:** the four runs ran one after another. All completed; no call failed
+  and nothing was retried.
+
+**Checks on the committed files.** Each `latency.json` was checked to have:
+
+- the § 8.1 model id, Hub repository and revision, and the § 8.4 decode
+  settings;
+- `device` `cpu`, the same environment, platform and package versions;
+- the same 32 file names, slice fingerprint, settings and timing definition;
+- batch sizes 1 and 8, with 32 and 4 calls per pass;
+- 160 and 20 positive samples;
+- summary statistics equal to those recomputed from the raw samples;
+- no timestamp.
+
+**Statistics.** Values come from each file's `summary_seconds`, shown here in
+milliseconds per call (that is, per batch), rounded to 0.1 ms. Rows are sorted by
+model id. The order is not a ranking.
+
+| Model | Batch size | Samples | Mean | Median | Min | Max |
+|---|---|---|---|---|---|---|
+| blip-base | 1 | 160 | 1462.3 | 1450.0 | 862.3 | 2765.4 |
+| blip-base | 8 | 20 | 11348.3 | 11043.1 | 9660.4 | 15848.8 |
+| git-base-coco | 1 | 160 | 3473.5 | 3485.8 | 1736.6 | 5159.0 |
+| git-base-coco | 8 | 20 | 30873.7 | 29139.3 | 24653.1 | 40414.6 |
+| inceptionv3-transformer-stabilized | 1 | 160 | 1070.0 | 1052.5 | 682.8 | 1484.1 |
+| inceptionv3-transformer-stabilized | 8 | 20 | 7888.8 | 7872.5 | 7583.6 | 8564.6 |
+| vit-gpt2 | 1 | 160 | 851.9 | 842.3 | 704.1 | 1076.3 |
+| vit-gpt2 | 8 | 20 | 4376.8 | 4331.8 | 4130.0 | 4846.3 |
+
+- **The CNN + Transformer at batch size 8** is eight single-image predictions in
+  a row (§ 9.5). It is not batched inference, and it isn't like-for-like with the
+  Hugging Face models' batch-8 rows.
+- **Scope of these figures:** they hold for this host, on the CPU, with these
+  settings, only. They say nothing about GPU latency, other hosts or caption
+  quality.
+- **What a sample includes:** reading the image file and generating until each
+  caption ends (§ 9.1). The spread within a row therefore includes differences
+  in caption length between images.
