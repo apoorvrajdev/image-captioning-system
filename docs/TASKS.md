@@ -577,7 +577,7 @@ Outcome:
 - Not run, by design: any real model, checkpoint download or timing run. No `latency.json` exists yet; TASK-016 makes
   the first runs. No Make target was added.
 
-### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: in-progress] (owner-run; CPU runs done 2026-10-07, Kaggle GPU runs pending)
+### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: done] (2026-10-07)
 Area: evaluation · docs
 Goal: commit latency results for all four models on CPU and GPU.
 Acceptance criteria:
@@ -590,7 +590,7 @@ Verification: the Kaggle logs; only new results directories in the diff; pre-com
 Depends on: TASK-015; approvals for the Kaggle GPU session and the checkpoint downloads.
 Owns: the new latency results directories.
 Out of scope: latency on the HF Space.
-Outcome so far (CPU half):
+Outcome, CPU half:
 - Runs: one `scripts/benchmark_latency.py --config configs/base.yaml --images-dir data/coco2017/train2017 --model <id>
   --device cpu --environment "<label>"` invocation per model, with the § 9 defaults and no protocol change. The CNN
   also took `--cnn-weights` and `--cnn-tokenizer-dir`.
@@ -627,14 +627,50 @@ Outcome so far (CPU half):
   - pre-commit passed on every commit.
   - No code changed, so the test suite wasn't re-run.
 
-Remaining (GPU half, owner-run; needs the Kaggle GPU session):
-- In a Kaggle GPU environment, install the repository with `[hf]`. In that environment only, replace `tensorflow-cpu`
-  with `tensorflow==2.15.0` (ADR-019). This setup hasn't been tried here.
-- Run the four § 9.7 commands with `--device cuda` and an `--environment` label naming the Kaggle GPU.
-  - `--images-dir` points at the attached COCO 2017 `train2017` directory.
-  - The CNN takes the Hub `v2.0.0` checkpoint.
-  - The CNN run fails closed unless TensorFlow can see the GPU.
-- Commit the four new `results/phase3-latency-*-greedy-cuda/` directories, then close this task.
+Outcome, GPU half (same protocol, same 32 images):
+- Kaggle: a dedicated private kernel, `apoorvujjwal/task-016-phase-3-gpu-latency-benchmark` (version 1).
+  - It was pushed with the Kaggle CLI, with the `NvidiaTeslaT4` accelerator, internet on, and
+    `awsaf49/coco-2017-dataset` attached.
+  - No existing notebook was used or changed.
+  - It ran for about 15 minutes and finished `COMPLETE`.
+- Hardware: two Tesla T4s (15360 MiB, driver 580.178.04). Every run used GPU 0, through `CUDA_VISIBLE_DEVICES=0`. The
+  host had an Intel Xeon @ 2.00GHz with 4 vCPUs and 31.3 GiB RAM.
+- Runtime:
+  - The Kaggle image is Python 3.13.15, and `tensorflow` 2.15.0 has no wheels for it. The kernel therefore used uv to
+    build two Python 3.10.20 environments.
+  - Both environments hold the `requirements.txt` pins without `tensorflow-cpu`, and the repository at `03a8f9e`.
+  - Hugging Face models: `torch` 2.3.0+cu121 and `transformers` 4.41.2.
+  - CNN: `tensorflow==2.15.0` plus its own `and-cuda` CUDA library pins, without the three TensorRT packages, which
+    can't be installed from PyPI and aren't used by the CNN.
+  - Two environments were needed because `torch` 2.3.0 and `tensorflow` 2.15.0 pin conflicting cuDNN and cuBLAS builds.
+  - The repository pins are unchanged.
+- Checks before any run:
+  - `torch` ran a convolution on `cuda:0`. TensorFlow listed `GPU:0` (Tesla T4, compute capability 7.5) and ran a
+    convolution and a matrix multiply on it.
+  - The baselines loaded with `_commit_hash` equal to their pinned SHAs. The runs then used the cache with
+    `HF_HUB_OFFLINE=1`.
+  - The CNN's `model.h5` (`74963a3f…`) and `vocab.pkl` (`178029c9…`) matched the Hub commit `59d93b4` hashes.
+- Runs: the four `--device cuda` CLI invocations ran in one session. All completed, with no failed call and no retry.
+
+  | Run directory | Revision | Commit |
+  |---|---|---|
+  | `results/phase3-latency-blip-base-greedy-cuda/` | `82a37760796d32b1411fe092ab5d4e227313294b` | `4ba72c8` |
+  | `results/phase3-latency-vit-gpt2-greedy-cuda/` | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | `b249763` |
+  | `results/phase3-latency-git-base-coco-greedy-cuda/` | `a13141da42abd4a8cbf283601a8104265f537cee` | `2b70e88` |
+  | `results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cuda/` | `59d93b4` (tag `v2.0.0`) | `a072492` |
+
+- Retrieval: `kaggle kernels output`. The files were committed unchanged (SHA-256 checked); they were already LF.
+- Checks on the four files: the same checks as the CPU half, with `device` `cuda`. The CNN records
+  `tensorflow_gpus: ["/physical_device:GPU:0"]`. Inputs, settings, timing and revisions all equal the CPU runs'.
+- Setup note: the CNN's GPU `load_seconds` includes Keras downloading the 88 MB ImageNet InceptionV3 base weights,
+  because the fresh machine had no Keras cache. The local CPU run had them cached. Samples aren't affected.
+- Statistics: `EVAL_METHODOLOGY.md` § 9.10 (`04a190f`).
+  - The CNN's batch-8 figures are sequential single-image calls.
+  - No ranking is made, and no CPU-vs-GPU claim: the two halves differ in host, OS and framework builds.
+- Verification:
+  - `git diff --stat 03a8f9e` shows only the four new `results/phase3-latency-*-cuda/` directories and docs.
+  - No quality run, CPU latency run or `phase3-comparison/` file changed.
+  - pre-commit passed on every commit. No code changed.
 
 ### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (first task of Phase 3D; awaiting approval to install)
 Area: frontend · deployment

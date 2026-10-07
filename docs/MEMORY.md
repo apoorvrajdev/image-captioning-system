@@ -15,10 +15,12 @@ _Last updated: 2026-10-07_
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
   (TASK-013) exist. The first baseline results are committed (TASK-014): `results/phase3-comparison/`, recorded in
   `EVAL_METHODOLOGY.md` § 8.8. The latency benchmark tooling exists and is tested (TASK-015), with its protocol in
-  `EVAL_METHODOLOGY.md` § 9 and ADR-020. TASK-016 is in progress:
-  - The four CPU latency runs are committed: `results/phase3-latency-*-greedy-cpu/`, recorded in § 9.9.
-  - The Kaggle GPU runs are waiting for the owner's session.
-  - TASK-017 hasn't started.
+  `EVAL_METHODOLOGY.md` § 9 and ADR-020. TASK-016 is done:
+  - The four CPU latency runs (`results/phase3-latency-*-greedy-cpu/`, § 9.9) and the four Kaggle T4 GPU runs
+    (`results/phase3-latency-*-greedy-cuda/`, § 9.10) are committed.
+  - They come from different hosts and runtimes, so they aren't a controlled CPU-vs-GPU comparison.
+  - The CNN's batch-8 figures are sequential single-image calls.
+  - TASK-017 (dashboard data export) is next and hasn't started.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -49,7 +51,20 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
-- 2026-10-07 Phase 3 CPU latency runs (TASK-016, CPU half; the GPU half is pending):
+- 2026-10-07 Phase 3 GPU latency runs (TASK-016, GPU half; TASK-016 is done):
+  - The same four models, pinned revisions, 32 images and § 9 protocol as the CPU half, with `--device cuda`.
+  - Run in a dedicated private Kaggle kernel, `apoorvujjwal/task-016-phase-3-gpu-latency-benchmark`, on one Tesla T4
+    (GPU 0 of 2).
+  - Runtime: the Kaggle image is Python 3.13, so the kernel built two uv Python 3.10.20 environments.
+    - Hugging Face models: `torch` 2.3.0+cu121.
+    - CNN: `tensorflow` 2.15.0 with its `and-cuda` CUDA pins, without TensorRT.
+    - Two environments were needed because the two frameworks pin conflicting CUDA libraries.
+  - Checks before the runs: `torch` CUDA and the TensorFlow GPU both ran real operations; the revisions and the
+    checkpoint SHA-256 matched.
+  - Output: `results/phase3-latency-*-greedy-cuda/`, with statistics in `EVAL_METHODOLOGY.md` § 9.10.
+  - The CNN's GPU load time includes Keras downloading the ImageNet InceptionV3 weights on the fresh machine.
+  - Committed as `4ba72c8`..`04a190f`, plus the closing docs.
+- 2026-10-07 Phase 3 CPU latency runs (TASK-016, CPU half):
   - Real runs of BLIP-base, ViT-GPT2, GIT-base-coco and the CNN + Transformer at their pinned revisions, under the
     unchanged § 9 protocol: one `scripts/benchmark_latency.py --device cpu` invocation each.
   - Host: the owner's laptop, an AMD Ryzen 7 7435HS on Windows 11, CPU only. Weights came from the local cache with
