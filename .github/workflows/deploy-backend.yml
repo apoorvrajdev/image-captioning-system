@@ -87,7 +87,7 @@ jobs:
           PY
 
       - name: Checkout the tested commit (full history)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 0
