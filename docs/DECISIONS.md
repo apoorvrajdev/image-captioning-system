@@ -156,3 +156,22 @@ Format: **Decision · Why · Evidence**.
   - Results are append-only and change only by commit, so a file built with the SPA is as current as the repository. The dashboard needs no network request, and the drift test stops it from disagreeing with `results/`.
   - Copying verbatim and refusing inconsistent sources keeps every number traceable to one committed run, with the caveats that apply to it.
 - **Evidence:** `src/captioning/evaluation/dashboard.py`, `scripts/export_dashboard_data.py`, `tests/unit/test_dashboard_export.py`, `frontend/src/generated/phase3-dashboard.json`, `.pre-commit-config.yaml` (prettier `exclude`), `Dockerfile` `COPY` lines, ADR-013, ADR-019, ADR-020.
+
+### ADR-022 — The SPA switches views in `App` state, and the dashboard shows the exported values without reinterpreting them
+- **Decision:**
+  - The SPA has two views, the caption flow and the Phase 3 dashboard. A button pair in `App.jsx` switches them through React state. There is no router and no URL change (TASK-018 rules out a router without separate approval).
+  - The caption flow stays mounted behind the `hidden` attribute while the dashboard shows, so its file, result and any in-flight request survive a switch. The dashboard mounts only when chosen.
+  - `components/Phase3Dashboard.jsx` reads only `frontend/src/generated/phase3-dashboard.json` (ADR-021), imported at build time. It makes no request.
+  - Values are shown as exported. The dashboard computes no metric, ranking, winner or combined score, and colours nothing by value. Models keep the file's order (by model id), and each row names its run id.
+  - Display rounding follows the committed reports:
+    - metrics to two decimals, as in `comparison.md`;
+    - latency to 0.0001 s, the 0.1 ms of `EVAL_METHODOLOGY.md` § 9.9, kept in the file's unit, seconds;
+    - load time to 0.1 s.
+  - Every number keeps its exact value in a `<data value>` element, and a "Show exact values" toggle displays it. Missing values show "n/a".
+  - The caveats are shown above the tables, ahead of any number: not live, not held-out, not a ranking, CPU/GPU from different hosts, sequential CNN batches. The file's own notes are also shown in full.
+- **Why:**
+  - Two views don't justify a routing dependency.
+  - Keeping the caption flow mounted is the smallest way to leave it unchanged.
+  - The dashboard's numbers have to be traceable to one committed run. A recomputed or ranked value would be a new result without a run behind it.
+  - Reusing the reports' rounding keeps the page consistent with what is already published, and the exact values stay one click away.
+- **Evidence:** `frontend/src/App.jsx`, `frontend/src/components/Phase3Dashboard.jsx`, `docs/TEST_PLAN.md` (Phase 3 dashboard), `results/phase3-comparison/comparison.md`, `docs/EVAL_METHODOLOGY.md` §§ 9.9–9.10, ADR-021.
