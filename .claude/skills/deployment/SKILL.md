@@ -22,7 +22,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 - Local DoD commands ≡ CI jobs (see CLAUDE.md Commands). A new gate is added to both.
 
 ## Definition of done — ALL must pass
-- [ ] Workflow YAML parses (`python -c "import yaml,sys;yaml.safe_load(open(sys.argv[1]))" <file>`), and no gate was removed or weakened.
+- [ ] Workflow YAML parses (`python -c "import yaml,sys;yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" <file>`), and no gate was removed or weakened.
 - [ ] `permissions: contents: read` kept. Secrets only via `${{ secrets.* }}`, never echoed.
 - [ ] Dependency changes keep `tensorflow-cpu==2.15.0` + `numpy<2`. Runtime deps stay in `requirements.txt` (the Docker layer) *and* `pyproject.toml`.
 - [ ] New env var ⇒ `.env.example` + runbook updated. No real values committed.
@@ -31,7 +31,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 
 ## Verification commands
 ```bash
-.venv/Scripts/python.exe -c "import yaml;[yaml.safe_load(open(f)) for f in ['.github/workflows/ci.yml','.github/workflows/deploy-backend.yml']];print('ok')"
+.venv/Scripts/python.exe -c "import yaml;[yaml.safe_load(open(f, encoding='utf-8')) for f in ['.github/workflows/ci.yml','.github/workflows/deploy-backend.yml']];print('ok')"
 .venv/Scripts/pytest.exe tests backend/app/tests -q
 docker build -t captioning-backend:local .   # only if Docker is available; otherwise report "not run"
 ```
