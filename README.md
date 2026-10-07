@@ -30,9 +30,9 @@
 
 ## Status
 
-> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a slim non-root Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11 plus the notebook parity audit, notebook SHA-256 freeze, pre-commit hooks, frontend lint + build) plus a chained `deploy-backend.yml` that deploys only CI-verified commits to the Space and passes only once `/healthz` reports the model loaded, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Next up: Phase 3 (multimodal baselines) — see [Roadmap](#-roadmap).
+> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a slim non-root Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11 plus the notebook parity audit, notebook SHA-256 freeze, pre-commit hooks, frontend lint + build) plus a chained `deploy-backend.yml` that deploys only CI-verified commits to the Space and passes only once `/healthz` reports the model loaded, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Phase 3 (multimodal baselines) has since been completed — see the Phase 3 status below and the [Roadmap](#-roadmap).
 
-> 📊 **Trained checkpoint shipped.** The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) was trained on COCO 2017 (95,918 train captions, 24,082 val captions, 10 epochs, Kaggle T4 ×2, cosine LR with 500-step warmup, label smoothing 0.1). Results on a 500-sample val2017 slice:
+> 📊 **Trained checkpoint shipped.** The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) was trained on COCO 2017 (95,918 train captions, 24,082 val captions, 10 epochs, Kaggle T4 ×2, cosine LR with 500-step warmup, label smoothing 0.1). Results on a 500-image held-out slice (COCO `train2017` images from the model's own image-level validation split, 732 stored references):
 >
 > | Decode strategy | BLEU-1 | BLEU-4 | ROUGE-L | METEOR | CIDEr |
 > |---|---|---|---|---|---|
@@ -41,7 +41,9 @@
 >
 > Full artefacts: [`results/stabilized-greedy/`](results/stabilized-greedy/) and [`results/stabilized-beam-w4-lp07-rp12/`](results/stabilized-beam-w4-lp07-rp12/). The trained weights are hosted on the Hub at [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) and loaded by the backend at startup — the live demo now produces real captions.
 
-> 🔬 **Evaluation-methodology audit (Stage 0 gate).** Before retraining to chase the apparent gap to the IEEE BLEU-4 ≈ 24 baseline, I ran a **pre-registered, blinded** evaluation audit. **Part A** re-scored the *same* beam predictions against the full COCO 5-reference set (the committed slice averages ~1.46 references/image): corpus BLEU-4 rose from **10.39 (≈1.46 refs) to 25.91 (5 refs)** — most of the apparent gap was a *reference-count* methodology difference, not a model deficit. This is **methodology parity with the paper's evaluation setup, not a claim of superiority** — the headline number is dominated by how many references you score against. **Part B** (blinded categorisation of 30 predictions, judged before the BLEU result was unblinded) found captions are fluent and usually on-topic but mostly *generic* rather than image-specific: **3/30 specific-correct, 11/30 generic-correct, 15/30 partially-correct, 1/30 incorrect**. Combined verdict: **reframe, do not retrain** ([`verdict.md`](results/stabilized-beam-w4-lp07-rp12/verdict.md)). Specificity is the primary remaining weakness — an architecture limit addressed in Phase 3.
+> 🔬 **Evaluation-methodology audit (Stage 0 gate).** Before retraining to chase the apparent gap to the IEEE BLEU-4 ≈ 24 baseline, I ran a **pre-registered, blinded** evaluation audit. **Part A** re-scored the *same* beam predictions against the full COCO 5-reference set (the committed slice averages ~1.46 references/image): corpus BLEU-4 rose from **10.39 (≈1.46 refs) to 25.91 (5 refs)** — most of the apparent gap was a *reference-count* methodology difference, not a model deficit. This is **methodology parity with the paper's evaluation setup, not a claim of superiority** — the headline number is dominated by how many references you score against. **Part B** (blinded categorisation of 30 predictions, judged before the BLEU result was unblinded) found captions are fluent and usually on-topic but mostly *generic* rather than image-specific: **3/30 specific-correct, 11/30 generic-correct, 15/30 partially-correct, 1/30 incorrect**. Combined verdict: **reframe, do not retrain** ([`verdict.md`](results/stabilized-beam-w4-lp07-rp12/verdict.md)). Specificity is the primary remaining weakness — an architecture limit of the frozen encoder, which Phase 3 measures against modern vision-language baselines rather than retraining.
+
+> 🔭 **Phase 3 complete — multimodal baselines (3A–3D).** An evaluation protocol was committed in [`docs/EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 8 before any baseline ran. Under it, BLIP-base, ViT-GPT2 and GIT-base-coco (pinned Hub revisions, greedy decoding) were scored alongside the CNN + Transformer on one fixed slice: 500 images, 732 stored references, SHA-256 fingerprint `6b5628bf…`. The slice is held out for the CNN + Transformer only. The Hugging Face baselines were trained on COCO (ViT-GPT2 possibly), so the quality table is **not a held-out, like-for-like comparison**, and no ranking is claimed. CPU latency (local laptop) and GPU latency (Kaggle Tesla T4) were measured under a separate pre-registered protocol (§ 9). They come from different hosts, so they are not a controlled CPU-vs-GPU comparison. The results ship in the SPA as a static, build-time **Phase 3 comparison** view with no backend endpoint. A Playwright E2E suite (14 Chromium tests covering the caption flow and the dashboard) runs in CI. Details: [Phase 3 — multimodal baseline comparison](#-phase-3--multimodal-baseline-comparison).
 
 ---
 
@@ -49,7 +51,7 @@
 
 | Component | URL | What you can do |
 |---|---|---|
-| **Frontend SPA** | https://image-captioning-system.vercel.app | Drag-and-drop an image, hit **Generate caption**, see the typed `CaptionResponse` rendered with model version, decode strategy, and latency |
+| **Frontend SPA** | https://image-captioning-system.vercel.app | Drag-and-drop an image, hit **Generate caption**, see the typed `CaptionResponse` rendered with model version, decode strategy, and latency. Switch to **Phase 3 comparison** for the static quality / latency dashboard, which is built into the bundle and makes no API call |
 | **Backend API** | https://apoorvrajdev-image-captioning-api.hf.space | Interactive Swagger at [`/docs`](https://apoorvrajdev-image-captioning-api.hf.space/docs); liveness + readiness at [`/healthz`](https://apoorvrajdev-image-captioning-api.hf.space/healthz); inference at `POST /v1/captions` |
 | **Weights (HF Hub)** | https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer | Pinned to tag `v2.0.0` (Space variables `BACKEND_WEIGHTS_HUB_REVISION` and `BACKEND_MODEL_VERSION`; `/healthz` reports `model_version: v2.0.0`); the backend pulls these at lifespan startup via `snapshot_download` so the Space's git tree never contains the `.h5` |
 
@@ -93,6 +95,9 @@ This project demonstrates that conversion end-to-end at a scale one engineer can
 - **Corpus-level metric suite** — BLEU-1..4 (sacrebleu), CIDEr, METEOR, ROUGE-L — emitted as one typed artefact per run.
 - **Notebook freeze + parity audit** — SHA-256 lock on the IEEE notebook plus a four-stage inline re-implementation that fails CI if the modular path drifts.
 - **Pre-commit governance** — Ruff, mypy, `nbstripout`, `gitleaks`, line-ending and TOML/YAML hygiene, all enforced before commits land.
+- **Pre-registered multimodal baseline comparison** — BLIP-base, ViT-GPT2 and GIT-base-coco behind one `Captioner` interface, with `torch` / `transformers` lazily imported from an optional extra. They are scored on a fingerprinted slice with a slice-identity check, plus CPU / GPU latency under a fixed protocol. The training-data overlap caveat is stated, not hidden.
+- **Static, drift-tested results dashboard** — committed results are exported to JSON that the SPA imports at build time. A test fails if the file drifts from `results/`.
+- **Browser E2E** — Playwright on Chromium against the production bundle, with the API mocked at the network layer and a zero-console-error gate, run in CI.
 - **Clean Git workflow** with Conventional Commits and small, reviewable changesets ([`CLAUDE.md`](CLAUDE.md) codifies the contribution rules).
 
 ---
@@ -204,7 +209,7 @@ The notebook is preserved verbatim as the canonical research artefact. Improveme
 
 The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) converged on COCO 2017 in 10 epochs on Kaggle T4 ×2. Training loss dropped monotonically from 4.69 (epoch 1) to 3.33 (epoch 10); validation accuracy climbed from 0.43 to 0.48. No overfitting was observed — val_acc was still rising at epoch 10.
 
-### Corpus-level metrics (500-sample val2017 slice)
+### Corpus-level metrics (500-image held-out slice)
 
 | Metric | Greedy | Beam (w=4, lp=0.7, rp=1.2) |
 |---|---|---|
@@ -218,7 +223,7 @@ The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/
 
 Beam search trades a marginal n-gram overlap regression for a +5% CIDEr lift — CIDEr down-weights generic phrases and rewards image-specific vocabulary, making it the better quality signal for captioning. Full artefact sets (metrics, predictions, diagnostics, qualitative samples) are committed under [`results/`](results/).
 
-**Phase 3 baselines.** BLIP-base, ViT-GPT2 and GIT-base-coco were scored on this same 500-image slice and reference set with greedy decoding at pinned Hub revisions: [`results/phase3-blip-base-greedy/`](results/phase3-blip-base-greedy/), [`results/phase3-vit-gpt2-greedy/`](results/phase3-vit-gpt2-greedy/), [`results/phase3-git-base-coco-greedy/`](results/phase3-git-base-coco-greedy/). [`results/phase3-inceptionv3-transformer-stabilized-greedy/`](results/phase3-inceptionv3-transformer-stabilized-greedy/) re-runs the greedy column above through the same harness and reproduces it exactly. The cross-model table, with both columns above as reference rows, is [`results/phase3-comparison/comparison.md`](results/phase3-comparison/comparison.md) (details in [`docs/EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 8.8). The Hugging Face baselines were fine-tuned on COCO training data (ViT-GPT2 possibly), so they may have seen these images, which the CNN + Transformer held out: these scores are not a held-out, like-for-like comparison (§ 8.5).
+**Phase 3 baselines.** BLIP-base, ViT-GPT2 and GIT-base-coco were scored on this same 500-image slice and reference set with greedy decoding at pinned Hub revisions: [`results/phase3-blip-base-greedy/`](results/phase3-blip-base-greedy/), [`results/phase3-vit-gpt2-greedy/`](results/phase3-vit-gpt2-greedy/), [`results/phase3-git-base-coco-greedy/`](results/phase3-git-base-coco-greedy/). [`results/phase3-inceptionv3-transformer-stabilized-greedy/`](results/phase3-inceptionv3-transformer-stabilized-greedy/) re-runs the greedy column above through the same harness and reproduces it exactly. The cross-model table, with both columns above as reference rows, is [`results/phase3-comparison/comparison.md`](results/phase3-comparison/comparison.md) (details in [`docs/EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 8.8). The Hugging Face baselines were fine-tuned on COCO training data (ViT-GPT2 possibly), so they may have seen these images, which the CNN + Transformer held out: these scores are not a held-out, like-for-like comparison (§ 8.5). [Phase 3 — multimodal baseline comparison](#-phase-3--multimodal-baseline-comparison) has the protocol, the full quality table, CPU / GPU latency and the dashboard.
 
 ### Evaluation methodology audit (5-reference rescore)
 
@@ -262,7 +267,7 @@ The model produces fluent, semantically grounded captions with correct object id
 | 000000082881 | a man riding skis down a snow covered slope | two people ski over a snow covered slope | 29.8 |
 | 000000252596 | a person riding a skateboard down a street | a person skateboards down a street that has greenery on either side | 15.7 |
 
-Known failure modes: colour attribute errors (red vs. yellow), count mismatches (one vs. two), generic fallback on unusual compositions. These are expected limitations of a frozen-InceptionV3 encoder and addressable in Phase 3 with modern vision backbones.
+Known failure modes: colour attribute errors (red vs. yellow), count mismatches (one vs. two), generic fallback on unusual compositions. These are expected limitations of a frozen-InceptionV3 encoder. Phase 3 compares the model with baselines built on modern vision backbones; it does not change the model.
 
 ### Training configuration
 
@@ -280,6 +285,124 @@ Known failure modes: colour attribute errors (red vs. yellow), count mismatches 
 
 ---
 
+## 🔭 Phase 3 — multimodal baseline comparison
+
+Phase 3 (TASK-009 – TASK-018, plus the TASK-007 browser E2E) compares the CNN + Transformer with three Hugging Face captioning models. Every protocol choice was committed before the first result existed, and every published number traces to one committed run directory.
+
+### Protocol (pre-registered)
+
+- **Protocol first.** [`docs/EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 8 fixed these choices before any baseline ran: the model list, pinned revisions, slice, references, normalisation and decode settings. The protocol commit precedes every Phase 3 result in `git log` ([ADR-019](docs/DECISIONS.md)).
+- **Models**, each a Hub id at a pinned revision:
+  - BLIP-base `Salesforce/blip-image-captioning-base` @ `82a3776`;
+  - ViT-GPT2 `nlpconnect/vit-gpt2-image-captioning` @ `dc68f91`;
+  - GIT-base-coco `microsoft/git-base-coco` @ `a13141d`;
+  - the CNN + Transformer `apoorvrajdev/captioning-inceptionv3-transformer` @ tag `v2.0.0` (`59d93b4`).
+- **Slice.** The 500 images of [`results/stabilized-greedy/predictions.jsonl`](results/stabilized-greedy/predictions.jsonl), in file order, with no re-sampling.
+  - Each image is scored against its stored references: 732 in total, about 1.46 per image.
+  - SHA-256 fingerprint: `6b5628bfa410ed233ef9603beed3c05c9e63acebc8bfa31d7e63e634f9e25116`.
+  - The images are COCO `train2017` images from the CNN + Transformer's own image-level validation split, so that model never trained on them.
+- **Normalisation and metrics.** Every model's output goes through the same `preprocess_caption` → `strip_sentinels` path as the references. The metric code is unchanged.
+- **Decoding.**
+  - Baselines: greedy, `num_beams` 1, no sampling, `max_new_tokens` 40, `repetition_penalty` 1.0, float32, each model's own processor.
+  - CNN + Transformer: greedy as the primary row, and beam (w4, lp 0.7, rp 1.2) as a labelled reference row.
+- **Isolation.** The baselines sit behind one `Captioner` interface in [`src/captioning/baselines/`](src/captioning/baselines/).
+  - `torch` and `transformers` come from the optional `[hf]` extra (`torch==2.3.0`, `transformers==4.41.2`) and are imported lazily.
+  - The backend, the Space image and CI never import them, and the `tensorflow-cpu==2.15.0` pin is untouched.
+- **Harness.**
+  - [`scripts/compare_models.py`](scripts/compare_models.py) writes one `results/phase3-<model_id>-<decoding>/` per model, with a `comparison_meta.json` recording the slice fingerprint, revision and decode settings.
+  - [`scripts/compare_runs.py`](scripts/compare_runs.py) joins the runs into [`results/phase3-comparison/`](results/phase3-comparison/). It refuses any run whose slice fingerprint, counts, protocol or normalisation differ.
+
+### Quality results
+
+The values come from [`results/phase3-comparison/comparison.md`](results/phase3-comparison/comparison.md), at two decimals; `comparison.json` holds the exact values. Rows are ordered by model id. The order is not a ranking.
+
+| Model | Run | Decoding | BLEU-1 | BLEU-2 | BLEU-3 | BLEU-4 | ROUGE-L | METEOR | CIDEr |
+|---|---|---|---|---|---|---|---|---|---|
+| BLIP-base | [`phase3-blip-base-greedy`](results/phase3-blip-base-greedy/) | greedy | 56.61 | 39.70 | 27.86 | 19.88 | 42.13 | 17.23 | 1.06 |
+| GIT-base-coco | [`phase3-git-base-coco-greedy`](results/phase3-git-base-coco-greedy/) | greedy | 51.59 | 36.55 | 26.05 | 18.83 | 47.08 | 21.92 | 1.46 |
+| CNN + Transformer | [`stabilized-beam-w4-lp07-rp12`](results/stabilized-beam-w4-lp07-rp12/) (reference) | beam | 41.93 | 25.41 | 16.01 | 10.39 | 36.84 | 15.56 | 0.83 |
+| CNN + Transformer | [`stabilized-greedy`](results/stabilized-greedy/) (reference) | greedy | 42.20 | 26.09 | 16.52 | 10.57 | 37.57 | 15.45 | 0.79 |
+| ViT-GPT2 | [`phase3-vit-gpt2-greedy`](results/phase3-vit-gpt2-greedy/) | greedy | 49.12 | 33.41 | 22.91 | 15.84 | 44.51 | 19.78 | 1.26 |
+
+- **The CNN + Transformer rows** are the committed runs made before the harness existed.
+  [`results/phase3-inceptionv3-transformer-stabilized-greedy/`](results/phase3-inceptionv3-transformer-stabilized-greedy/)
+  re-runs the greedy row through the harness at the pinned `v2.0.0` revision. It reproduces the row exactly: 500/500
+  identical predictions and bit-identical metrics (§ 8.8).
+- **Not a held-out, like-for-like comparison** (§ 8.5).
+  - The slice is held out for the CNN + Transformer only.
+  - BLIP-base's and GIT-base-coco's model cards state COCO training. ViT-GPT2's cards name no dataset, so it is
+    treated as possibly COCO-trained.
+  - Per-image overlap with the baselines' training data isn't measured, so they may have seen these images.
+  - The table therefore supports no "model X beats model Y" claim.
+  - The slice is kept on purpose: it is the setup behind every committed CNN + Transformer result.
+- **Stored references only.** Scores use the slice's ~1.46 stored references per image, not the five-reference COCO
+  setup, so they aren't comparable with published COCO results. See the
+  [5-reference audit](#evaluation-methodology-audit-5-reference-rescore).
+
+### Latency (CPU and GPU)
+
+The protocol is [`docs/EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 9 and [ADR-020](docs/DECISIONS.md), fixed before
+any measurement. [`scripts/benchmark_latency.py`](scripts/benchmark_latency.py) times one model per invocation, through
+the same `Captioner.caption()` call that produced the quality runs. It writes only
+`results/phase3-latency-<model_id>-<decoding>-<device>/latency.json`.
+
+- **Inputs:** the first 32 slice images, at batch sizes 1 and 8.
+- **Timing:**
+  - one untimed warmup pass, then 5 measured passes;
+  - `time.perf_counter` around each call;
+  - load time (construction + `load()`) is timed once and is never part of a sample.
+- **Statistics:** count, mean, median, min and max per batch size, with every raw sample stored. Nothing is filtered
+  or retried: a failed call ends the run with nothing written.
+- **Hosts:**
+  - CPU: a local laptop (AMD Ryzen 7 7435HS, Windows 11), with CPU-only `torch` / `tensorflow-cpu` builds and weights
+    from the local cache.
+  - GPU: one Kaggle Tesla T4, running `torch` 2.3.0+cu121 and `tensorflow` 2.15.0 in two separate Python 3.10
+    environments, because their CUDA pins conflict.
+
+The table shows mean milliseconds **per call**. One call captions one whole batch, so a batch-8 value is the time for
+eight images. Median, min and max are in §§ 9.9–9.10. Rows are ordered by model id. The order is not a ranking.
+
+| Model | CPU batch 1 | CPU batch 8 | GPU batch 1 | GPU batch 8 |
+|---|---|---|---|---|
+| BLIP-base | 1462.3 | 11348.3 | 178.2 | 1102.2 |
+| GIT-base-coco | 3473.5 | 30873.7 | 392.8 | 3089.2 |
+| CNN + Transformer | 1070.0 | 7888.8 † | 739.4 | 5776.5 † |
+| ViT-GPT2 | 851.9 | 4376.8 | 198.8 | 430.8 |
+
+- † **Sequential, not batched.** `CNNCaptioner` captions one image at a time, so the CNN + Transformer's batch-8
+  figure is eight single-image calls in a row. It isn't like-for-like with the batched Hugging Face rows (§ 9.5).
+- **Not a controlled CPU-vs-GPU comparison.** The two devices ran on different hosts, operating systems and framework
+  builds, so figures compare only within one device (§§ 9.5, 9.10).
+- **Load time is reported separately** (`load_seconds`). On the GPU host, the CNN + Transformer's load time included
+  Keras downloading the 88 MB ImageNet InceptionV3 weights onto the fresh Kaggle machine. That affects the load time
+  only, never a sample.
+- **Latency says nothing about caption quality.**
+
+### Static comparison dashboard
+
+- **Export.** [`scripts/export_dashboard_data.py`](scripts/export_dashboard_data.py), with its logic in
+  [`evaluation/dashboard.py`](src/captioning/evaluation/dashboard.py), turns `results/phase3-comparison/` and the eight
+  latency runs into [`frontend/src/generated/phase3-dashboard.json`](frontend/src/generated/phase3-dashboard.json).
+  - Values are copied verbatim: nothing is rounded, recomputed or ranked. Inconsistent sources are refused.
+  - `tests/unit/test_dashboard_export.py` regenerates the file from `results/` and fails on any drift; `--check` does
+    the same from the command line.
+- **No backend.** The SPA imports that file at build time and renders it in a **Phase 3 comparison** view
+  ([`Phase3Dashboard.jsx`](frontend/src/components/Phase3Dashboard.jsx)). There is no backend endpoint and no runtime
+  request for the data, so the Space image needs neither `torch` nor `results/` ([ADR-021](docs/DECISIONS.md)).
+- **What it shows:**
+  - the quality table;
+  - CPU and GPU latency per batch size;
+  - per-model provenance: the Hub repository at its revision, source run ids, and decode settings;
+  - the slice details;
+  - the caveats, placed above any number.
+- **Display** ([ADR-022](docs/DECISIONS.md)):
+  - rounding matches the committed reports: metrics to two decimals, latency to 0.0001 s, load time to 0.1 s;
+  - every cell carries its exact value, and a **Show exact values** toggle displays it;
+  - missing values show `n/a`;
+  - nothing is ranked or colour-coded by value.
+
+---
+
 ## 🛠️ Tech Stack
 
 | Layer | Technologies |
@@ -287,8 +410,8 @@ Known failure modes: colour attribute errors (red vs. yellow), count mismatches 
 | **Core ML** | Python 3.10–3.12, TensorFlow-CPU 2.15.0 (pinned), NumPy, Pillow |
 | **Model** | InceptionV3 encoder (frozen) + custom multi-head Transformer decoder |
 | **Backend** | FastAPI 0.111, Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
-| **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config |
-| **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations |
+| **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config, Playwright E2E (Chromium) |
+| **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations; Phase 3 baselines via `transformers` 4.41.2 + `torch` 2.3.0 (optional `[hf]` extra) |
 | **Tooling** | Ruff (lint + format), mypy, pytest 8, pre-commit, nbstripout, gitleaks |
 | **Infra** | HuggingFace Hub (weights), HuggingFace Spaces (backend), Vercel (frontend), GitHub Actions (CI/CD) |
 
@@ -312,6 +435,8 @@ image-captioning-system/
 │   ├── inference/      image_loader.py · greedy.py · beam.py · predictor.py
 │   ├── evaluation/     bleu.py · cider.py · meteor.py · rouge.py
 │   │                   runner.py · benchmark.py · inspection.py · tokenization.py
+│   │                   slice.py · comparison.py · latency.py · dashboard.py   # Phase 3
+│   ├── baselines/      base.py · cnn.py · hf.py      # Phase 3 Captioner interface + adapters
 │   └── utils/          logging.py · seed.py · hashing.py
 │
 ├── backend/                                     # Phase 2A — FastAPI inference service
@@ -326,13 +451,17 @@ image-captioning-system/
 │
 ├── frontend/                                    # Phase 2B — React 19 + Vite 8 + Tailwind v4 SPA
 │   ├── vite.config.js · eslint.config.js · package.json · .env.example
+│   ├── playwright.config.js                     # Browser E2E: Chromium against `vite preview` of the production build
+│   ├── e2e/                                     # support.js (API mock + console-error fixtures) · caption-flow.spec.js · phase3-dashboard.spec.js
 │   └── src/
-│       ├── main.jsx · App.jsx · index.css
+│       ├── main.jsx · App.jsx · index.css       # App.jsx also switches caption flow ↔ Phase 3 comparison view
 │       ├── services/api.js                      # checkHealth / captionImage — AbortController + typed ApiError
+│       ├── generated/phase3-dashboard.json      # Phase 3 dashboard data — exported from results/, never hand-edited
 │       └── components/
 │           ├── Header.jsx · StatusBadge.jsx     # Sticky brand bar + 10s health poller
 │           ├── UploadZone.jsx · ImagePreview.jsx
 │           ├── CaptionResult.jsx · ErrorBanner.jsx · Spinner.jsx
+│           └── Phase3Dashboard.jsx              # Static Phase 3 quality / latency / provenance view
 │
 ├── configs/
 │   ├── base.yaml                                # IEEE hyperparameters (notebook cell 6 mirror)
@@ -344,8 +473,12 @@ image-captioning-system/
 │   ├── train.py · evaluate.py · predict.py
 │   ├── inspect_predictions.py                   # Per-sample diagnostics + diagnostics.jsonl
 │   ├── bootstrap_dev_artifacts.py               # Smoke-test artefacts so the API can boot pre-training
+│   ├── compare_models.py · compare_runs.py      # Phase 3 quality runs + cross-run summary (slice-identity check)
+│   ├── benchmark_latency.py                     # Phase 3 latency runs (§ 9 protocol)
+│   ├── export_dashboard_data.py                 # Phase 3 dashboard JSON for the SPA (drift-tested)
 │   └── notebook_module_audit.py                 # 4-stage parity gate vs. notebook
 │
+├── results/                                     # Committed evaluation artefact sets (append-only): stabilized-*, phase3-*, phase3-latency-*, phase3-comparison
 ├── tests/unit/                                  # 78 unit tests (parity, tokenizer, eval, splits, …)
 ├── docs/                                        # phase notes · runbooks · EVAL_METHODOLOGY · CI
 │                                                # + living docs: MEMORY · TASKS · DECISIONS · TEST_PLAN · SECURITY
@@ -471,12 +604,13 @@ Phase 2A delivers a production-style inference service rather than a thin demo w
 
 Phase 2B ships a single-page inference UI under [`frontend/`](frontend/) — not a styled demo. The split mirrors the backend's separation between transport, service, and presentation:
 
-- **Application shell** — [`frontend/src/App.jsx`](frontend/src/App.jsx). Owns the request lifecycle (selected file → preview → generate → result). The preview `URL.createObjectURL` is `useMemo`-derived and revoked through an effect cleanup so previews never leak across uploads. Four `useState` slots (`file`, `result`, `error`, `loading`) cover every UI state — no Redux, no React Query, no context.
+- **Application shell** — [`frontend/src/App.jsx`](frontend/src/App.jsx). Owns the request lifecycle (selected file → preview → generate → result). The preview `URL.createObjectURL` is `useMemo`-derived and revoked through an effect cleanup so previews never leak across uploads. Four `useState` slots (`file`, `result`, `error`, `loading`) cover the request lifecycle, plus one `view` slot for the view switch. There is no Redux, no React Query and no context.
 - **API service layer** — [`frontend/src/services/api.js`](frontend/src/services/api.js). Single boundary for every backend call. Reads `import.meta.env.VITE_API_BASE` once at module load (falls back to `http://127.0.0.1:8000`), wraps `fetch` with `AbortController`-driven timeouts (3 s for `/healthz`, 60 s for `/v1/captions`), and classifies failures into `timeout` / `network` / `http` / `unknown` kinds on a typed `ApiError`.
 - **Upload zone** — [`frontend/src/components/UploadZone.jsx`](frontend/src/components/UploadZone.jsx). Drag/drop + click-to-browse + keyboard activation. Validates content-type (JPEG / PNG / WebP) and size (10 MB) before the file ever touches the network — invalid uploads are rejected client-side with the same wording the backend would have returned.
 - **Status badge** — [`frontend/src/components/StatusBadge.jsx`](frontend/src/components/StatusBadge.jsx). Polls `/healthz` every 10 seconds and on window focus, runs a three-state machine (`checking` / `online` / `offline`), recovers automatically when the backend comes back.
 - **Error banner** — [`frontend/src/components/ErrorBanner.jsx`](frontend/src/components/ErrorBanner.jsx). Single surface for every failure class. Reads `ApiError.message` so the user sees "Cannot reach backend" or "Request timed out" instead of a raw browser error.
 - **Caption result** — [`frontend/src/components/CaptionResult.jsx`](frontend/src/components/CaptionResult.jsx). Consumes the backend's typed `CaptionResponse` directly: caption text plus model version, decode strategy, latency, and the request ID echoed from the `x-request-id` header.
+- **View switch + Phase 3 dashboard (Phase 3D)** — [`App.jsx`](frontend/src/App.jsx) switches between **Caption an image** and **Phase 3 comparison** with two `aria-pressed` buttons held in React state. There is no router and the URL doesn't change. The caption flow stays mounted behind the `hidden` attribute, so an upload, a result or an in-flight request survives a switch. [`Phase3Dashboard.jsx`](frontend/src/components/Phase3Dashboard.jsx) renders the build-time [`phase3-dashboard.json`](frontend/src/generated/phase3-dashboard.json) and never calls the API; see [Static comparison dashboard](#static-comparison-dashboard).
 
 ```
 ┌──────────────┐  drag/drop   ┌─────────────┐  validate   ┌──────────────┐
@@ -553,10 +687,30 @@ make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 | Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) (pre-commit) | ✅ enabled |
 | Notebook integrity | SHA-256 freeze via [`make freeze-paper-notebook`](Makefile) | ✅ locked |
 | Parity audit | [`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py) — 4 stages | ✅ all passing |
+| Browser E2E | [Playwright](https://playwright.dev/) 1.63 on Chromium — [`frontend/e2e/`](frontend/e2e/) | ✅ 14 passing, run in CI |
 
 The parity audit re-implements four notebook stages inline (caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, decoder forward pass) and asserts the modular path produces byte-identical (or `tf.allclose`-identical) output. It is the contract that gates any behavioural improvement.
 
 The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced in Phase 2C WS-D uses a duck-typed `FakePredictorService` to exercise every status code in the `/v1/captions` contract — 200 / 400 / 413 / 415 / 422 / 503 — plus the `/healthz` readiness flip and `x-request-id` propagation, all without loading TensorFlow. The full backend slice runs in **0.3 seconds**.
+
+The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-023](docs/DECISIONS.md)) runs Playwright on Chromium. `@playwright/test` 1.63.0 is a devDependency. To run it: `cd frontend && npx playwright install chromium` once, then `npm run test:e2e`.
+
+- **Real bundle.** The config builds the production bundle and serves it with `vite preview`, so the tests exercise what Vercel ships rather than a dev server.
+- **Mocked API.** `/healthz` and `/v1/captions` are mocked at the browser's network layer with schema-shaped responses (`page.route`). Any other off-origin request fails the test, so no backend, TensorFlow or network is needed.
+- **No binary fixture.** The upload is a 1×1 PNG built in memory, so nothing binary is committed.
+- **[`caption-flow.spec.js`](frontend/e2e/caption-flow.spec.js)** (3 tests):
+  - upload → caption card;
+  - a `.txt` file and a >10 MB file are each rejected inline, with no request;
+  - "Cannot reach backend" shows with the API down.
+- **[`phase3-dashboard.spec.js`](frontend/e2e/phase3-dashboard.spec.js)** (11 tests):
+  - every quality and latency cell matches the committed JSON, both the exact value and its display rounding;
+  - the caveats, provenance and `n/a` rendering;
+  - the exact-values toggle;
+  - switching views makes no request;
+  - the dashboard renders with the API down;
+  - layout at 390 and 1280 px.
+- **Error gate.** Every test fails on any console error or uncaught page error. The one allowance is Chromium's own `net::ERR_CONNECTION_REFUSED` line for the two API URLs, while a test deliberately takes the API down.
+- **CI.** The CI `frontend` job runs the suite after lint and build, using Chromium's headless shell.
 
 ---
 
@@ -629,12 +783,12 @@ The backend test suite ([`backend/app/tests/`](backend/app/tests/)) introduced i
   - [x] `deploy-frontend.yml` *(skipped — Vercel-native GitHub integration deploys on every push, no separate workflow needed)*
 - [x] **WS-H** — "[Live Demo](#-live-demo)" section above + [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md) (full topology, prerequisites, weights upload, Space setup, Vercel setup, CORS, CI/CD, smoke tests, known quirks, rollback) + [`docs/CI.md`](docs/CI.md) (workflow reference)
 
-### Phase 3 — Multimodal baselines ⏳ (planned)
+### Phase 3 — Multimodal baselines ✅ (complete)
 
-- [ ] **3A** — Side-by-side comparison harness: original CNN + Transformer vs. BLIP-base vs. ViT-GPT2 vs. GIT-base-coco
-- [ ] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation
-- [ ] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs. GPU)
-- [ ] **3D** — Comparison-result dashboard exposed through the existing SPA
+- [x] **3A** — Side-by-side comparison harness: original CNN + Transformer vs. BLIP-base vs. ViT-GPT2 vs. GIT-base-coco. It covers the protocol pre-registered in [`EVAL_METHODOLOGY.md`](docs/EVAL_METHODOLOGY.md) § 8, a fingerprinted slice loader, one `Captioner` interface with lazily imported Hugging Face adapters, and a runner that writes one `results/phase3-*` directory per model (TASK-009 – TASK-012).
+- [x] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation. It covers the cross-run summary with a slice-identity check, real baseline runs at pinned revisions, and [`results/phase3-comparison/`](results/phase3-comparison/) (TASK-013, TASK-014). This is not a held-out, like-for-like comparison (§ 8.5).
+- [x] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs. GPU). It covers the § 9 protocol and tool, CPU runs on a local laptop and GPU runs on a Kaggle Tesla T4 (TASK-015, TASK-016). Each device ran on its own host, so this is not a controlled CPU-vs-GPU comparison.
+- [x] **3D** — Comparison-result dashboard exposed through the existing SPA. It covers the static build-time JSON export with a drift test, the **Phase 3 comparison** view, and Playwright E2E for the caption flow and the dashboard, run in CI (TASK-017, TASK-018, TASK-007).
 
 ### Phase 4 — Observability ⏳ (planned)
 
@@ -653,7 +807,7 @@ Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restru
 > The notebook is the published research artefact and the only thing that can credibly produce the BLEU-4 ~24 baseline the IEEE paper claims. Editing it would silently destroy that reproducibility. The freeze + parity-audit pattern keeps the published result anchored while the modular package evolves; if the audit ever fails, the modular path has drifted from the paper and the diff is exactly where to start debugging.
 
 > **Why pin `tensorflow-cpu==2.15.0`?**
-> TF 2.16 ships Keras 3 as the default backend, and Keras 3 silently breaks `TextVectorization` save/load — the tokenizer round-trip the entire serving stack depends on. The pin is documented in [`requirements.txt`](requirements.txt) and protected by the env setup commands above. Phase 3's foundation-model baselines will live in optional dependency groups so they can install on a newer TF without unpinning the research pipeline.
+> TF 2.16 ships Keras 3 as the default backend, and Keras 3 silently breaks `TextVectorization` save/load — the tokenizer round-trip the entire serving stack depends on. The pin is documented in [`requirements.txt`](requirements.txt) and protected by the env setup commands above. Phase 3's foundation-model baselines live in the optional `[hf]` extra (`torch` + `transformers`, imported lazily), so they install without unpinning the research pipeline ([ADR-019](docs/DECISIONS.md)).
 
 > **Why two separate settings objects (`AppConfig` + `BackendSettings`)?**
 > Research hyperparameters (`model.*`, `train.*`, `data.*`) and serving knobs (weights path, model version, warmup toggle, request-id header) change on different cadences and have different audiences. Folding them into one object would mean every backend env var lived in a research YAML, and every research-side schema change risked breaking a deploy. Two objects with two prefixes (`CAPTIONING__*` vs `BACKEND_*`) gives each surface its own change schedule.
@@ -670,6 +824,9 @@ Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restru
 > **Why ship the metric suite and beam search *before* publishing new numbers?**
 > Without deterministic tokenisation + a corpus-level runner + a non-greedy decoder, any "improved" number is unfalsifiable — it could be a real gain, a decoding artefact, or a tokenisation difference. The harness is the prerequisite to making the next training run mean something. Publishing the bar before the harness exists is how research projects accumulate numbers nobody can reproduce.
 
+> **Why is the Phase 3 dashboard static data instead of a comparison endpoint?**
+> The comparison results change only when a new run is committed. A JSON file exported from `results/` and built into the SPA is therefore exactly as current as the repository, and a drift test stops it from disagreeing with `results/`. A live endpoint would have needed `torch` or the `results/` tree in the Space image, which the serving image deliberately excludes. It would also have made an offline, caveated evaluation look like live telemetry ([ADR-021](docs/DECISIONS.md)).
+
 ---
 
 ## 🔬 Experimental evaluation pipeline
@@ -680,14 +837,25 @@ The repository is evolving from a "research notebook reproduction" into a reprod
 - **[`scripts/inspect_predictions.py`](scripts/inspect_predictions.py)** — per-sample diagnostic view. Prints N random predictions vs. references with sentence-level BLEU-4 / ROUGE-L, prediction length, longest repeated-token run, and failure flags (`empty` / `very_short` / `repetitive` / `under_length`). Used when the aggregate metric moves but the qualitative behaviour does not.
 - **[`evaluation/benchmark.py`](src/captioning/evaluation/benchmark.py)** — `RunMeta` and `write_run_artifacts(...)`, the contract every evaluation run honours. Phase 3 cross-model comparison code joins multiple `results/<run_id>/` directories without bespoke parsers per model.
 - **Greedy vs. beam evaluation support** — the same evaluator accepts `--decode-strategy greedy|beam` plus beam-search controls (`--beam-width`, `--length-penalty`, `--no-repeat-ngram-size`), so a single command-line difference produces directly comparable artefact sets for the same checkpoint.
+- **Phase 3 harness.** See [Phase 3 — multimodal baseline comparison](#-phase-3--multimodal-baseline-comparison).
+  - [`scripts/compare_models.py`](scripts/compare_models.py) writes one artefact set per model on the fingerprinted slice.
+  - [`scripts/compare_runs.py`](scripts/compare_runs.py) builds the cross-run summary and refuses mismatched slices or protocols.
+  - [`scripts/benchmark_latency.py`](scripts/benchmark_latency.py) writes latency-only artefacts under the § 9 protocol.
+  - [`scripts/export_dashboard_data.py`](scripts/export_dashboard_data.py) exports the SPA's static, drift-tested dashboard data.
 
 ---
 
 ## ⚖️ Limitations
 
-- The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture, addressed in Phase 3 by adding modern foundation-model baselines for side-by-side comparison.
+- The model produces generic captions on cluttered or rare-object scenes — a known limitation of the IEEE-era architecture. Phase 3 now measures it side by side against modern foundation-model baselines.
 - The headline corpus BLEU-4 (10.57 greedy / 10.39 beam) is scored against ~1.46 references/image; a pre-registered **5-reference rescore of the identical predictions reaches 25.9 BLEU-4**, in the IEEE baseline's range. Most of the apparent gap was therefore an **evaluation-methodology (reference-count) artefact, not a model deficit** — see [Evaluation methodology audit](#evaluation-methodology-audit-5-reference-rescore). This is methodology parity, not superiority over the paper.
-- **Caption specificity** is the primary remaining quality weakness: a blinded 30-sample review found only **3/30** captions image-specific (11/30 generic, 15/30 with a count/colour/attribute error, 1/30 incorrect). This reflects the frozen-InceptionV3 encoder and is addressed in Phase 3 with modern vision backbones — not by re-running the original training recipe.
+- **Caption specificity** is the primary remaining quality weakness: a blinded 30-sample review found only **3/30** captions image-specific (11/30 generic, 15/30 with a count/colour/attribute error, 1/30 incorrect). This reflects the frozen-InceptionV3 encoder. Phase 3 benchmarks it against models with modern vision backbones rather than re-running the original training recipe; the model itself is unchanged.
+- **Phase 3 comparisons are caveated by design.**
+  - The baseline quality scores are not a held-out, like-for-like comparison: the Hugging Face models were trained on COCO (ViT-GPT2 possibly).
+  - CPU and GPU latency come from different hosts.
+  - The CNN + Transformer's batch-8 latency is sequential single-image calls.
+
+  See [Phase 3](#-phase-3--multimodal-baseline-comparison).
 - Colour attribute errors (red vs. yellow), count mismatches (one vs. two), and generic fallback on unusual compositions are the dominant failure modes — visible in [`results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl`](results/stabilized-beam-w4-lp07-rp12/qualitative.jsonl).
 - Validation pipeline includes a leftover `shuffle()` from the notebook (functionally harmless; kept deliberately for notebook parity, see [`data/pipeline.py`](src/captioning/data/pipeline.py)).
 
