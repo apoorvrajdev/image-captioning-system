@@ -5,9 +5,16 @@ import ImagePreview from "./components/ImagePreview";
 import CaptionResult from "./components/CaptionResult";
 import ErrorBanner from "./components/ErrorBanner";
 import Spinner from "./components/Spinner";
+import Phase3Dashboard from "./components/Phase3Dashboard";
 import { captionImage } from "./services/api";
 
+const VIEWS = [
+  { id: "caption", label: "Caption an image" },
+  { id: "phase3", label: "Phase 3 comparison" },
+];
+
 export default function App() {
+  const [view, setView] = useState("caption");
   const [file, setFile] = useState(null);
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
@@ -67,7 +74,31 @@ export default function App() {
         <Header />
 
         <main className="max-w-6xl mx-auto px-6 py-10 md:py-16">
-          <section className="mb-10 md:mb-14">
+          <nav
+            aria-label="Views"
+            className="mb-8 md:mb-10 flex w-fit max-w-full gap-1 rounded-xl border border-white/10 bg-white/[0.02] p-1"
+          >
+            {VIEWS.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                aria-pressed={view === id}
+                onClick={() => setView(id)}
+                className={[
+                  "px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                  view === id
+                    ? "bg-white/10 text-white"
+                    : "text-white/50 hover:text-white/80",
+                ].join(" ")}
+              >
+                {label}
+              </button>
+            ))}
+          </nav>
+
+          {view === "phase3" && <Phase3Dashboard />}
+
+          <section className="mb-10 md:mb-14" hidden={view !== "caption"}>
             <h1 className="text-3xl md:text-5xl font-semibold tracking-tight leading-tight">
               Describe any image{" "}
               <span className="bg-gradient-to-r from-violet-300 via-fuchsia-300 to-indigo-300 bg-clip-text text-transparent">
@@ -81,7 +112,10 @@ export default function App() {
             </p>
           </section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <div
+            className="grid grid-cols-1 lg:grid-cols-5 gap-6"
+            hidden={view !== "caption"}
+          >
             <div className="lg:col-span-3 space-y-5">
               {file ? (
                 <ImagePreview
