@@ -15,8 +15,10 @@ _Last updated: 2026-10-07_
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
   (TASK-013) exist. The first baseline results are committed (TASK-014): `results/phase3-comparison/`, recorded in
   `EVAL_METHODOLOGY.md` § 8.8. The latency benchmark tooling exists and is tested (TASK-015), with its protocol in
-  `EVAL_METHODOLOGY.md` § 9 and ADR-020. No latency has been measured yet: TASK-016 (owner-run CPU and GPU runs) is
-  next for 3C.
+  `EVAL_METHODOLOGY.md` § 9 and ADR-020. TASK-016 is in progress:
+  - The four CPU latency runs are committed: `results/phase3-latency-*-greedy-cpu/`, recorded in § 9.9.
+  - The Kaggle GPU runs are waiting for the owner's session.
+  - TASK-017 hasn't started.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -47,6 +49,15 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-07 Phase 3 CPU latency runs (TASK-016, CPU half; the GPU half is pending):
+  - Real runs of BLIP-base, ViT-GPT2, GIT-base-coco and the CNN + Transformer at their pinned revisions, under the
+    unchanged § 9 protocol: one `scripts/benchmark_latency.py --device cpu` invocation each.
+  - Host: the owner's laptop, an AMD Ryzen 7 7435HS on Windows 11, CPU only. Weights came from the local cache with
+    `HF_HUB_OFFLINE=1`.
+  - Output: `results/phase3-latency-{blip-base,vit-gpt2,git-base-coco,inceptionv3-transformer-stabilized}-greedy-cpu/`,
+    160 batch-1 and 20 batch-8 samples each, with the statistics in `EVAL_METHODOLOGY.md` § 9.9.
+  - The CNN's batch-8 figures are sequential single-image calls (§ 9.5). No ranking or cross-device claim is made.
+  - Committed as `672b224`..`11e749c`.
 - 2026-10-07 latency benchmark tooling (TASK-015, done; no measurements):
   - `scripts/benchmark_latency.py` times one model per invocation through the shared `Captioner.caption()` call, using
     `captioning.evaluation.latency`.

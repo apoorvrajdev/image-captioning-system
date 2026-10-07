@@ -577,7 +577,7 @@ Outcome:
 - Not run, by design: any real model, checkpoint download or timing run. No `latency.json` exists yet; TASK-016 makes
   the first runs. No Make target was added.
 
-### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: todo] (owner-run)
+### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: in-progress] (owner-run; CPU runs done 2026-10-07, Kaggle GPU runs pending)
 Area: evaluation · docs
 Goal: commit latency results for all four models on CPU and GPU.
 Acceptance criteria:
@@ -590,6 +590,51 @@ Verification: the Kaggle logs; only new results directories in the diff; pre-com
 Depends on: TASK-015; approvals for the Kaggle GPU session and the checkpoint downloads.
 Owns: the new latency results directories.
 Out of scope: latency on the HF Space.
+Outcome so far (CPU half):
+- Runs: one `scripts/benchmark_latency.py --config configs/base.yaml --images-dir data/coco2017/train2017 --model <id>
+  --device cpu --environment "<label>"` invocation per model, with the § 9 defaults and no protocol change. The CNN
+  also took `--cnn-weights` and `--cnn-tokenizer-dir`.
+
+  | Run directory | Revision | Commit |
+  |---|---|---|
+  | `results/phase3-latency-blip-base-greedy-cpu/` | `82a37760796d32b1411fe092ab5d4e227313294b` | `672b224` |
+  | `results/phase3-latency-vit-gpt2-greedy-cpu/` | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | `0857e22` |
+  | `results/phase3-latency-git-base-coco-greedy-cpu/` | `a13141da42abd4a8cbf283601a8104265f537cee` | `c5d700c` |
+  | `results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cpu/` | `59d93b4` (tag `v2.0.0`) | `df64b28` |
+
+- Named CPU environment: the owner's laptop, an ASUS TUF Gaming A15 with an AMD Ryzen 7 7435HS (8 cores, 16 threads),
+  15.8 GiB RAM, Windows 11 (build 26200), on AC power with the Turbo plan.
+  - Software: `torch` 2.3.0+cpu, `tensorflow-cpu` 2.15.0, `transformers` 4.41.2, Python 3.10.11.
+  - The baselines loaded from the local Hugging Face cache at their pinned snapshots, with `HF_HUB_OFFLINE=1`.
+  - The CNN used the § 8.8 checkpoint (`model.h5` SHA-256 `74963a3f…`).
+  - The laptop's RTX 2050 wasn't used: TF 2.15 has no native-Windows GPU support, and `torch` is the CPU build.
+- Inputs: the first 32 slice images (fingerprint `6b5628bf…`), with batch sizes 1 and 8, 1 warmup pass and 5 measured
+  passes. All four runs completed, with no failed call and no retry.
+- Checks on every committed `latency.json`:
+  - the pinned identity and decode settings;
+  - the same 32 file names, fingerprint, settings, timing definition, environment and versions;
+  - 160 and 20 samples;
+  - summaries that recompute exactly from the raw samples;
+  - no timestamps.
+- Statistics: `EVAL_METHODOLOGY.md` § 9.9 (`11e749c`), copied from the files.
+  - The CNN + Transformer's batch-8 figures are eight sequential single-image calls (§ 9.5), not batched inference.
+  - No ranking or cross-device claim is made.
+- Artefact normalisation: pre-commit's `mixed-line-ending --fix=lf` converted the script-written CRLF files to LF. Each
+  committed blob equals the Git blob hash recorded before the conversion.
+- Verification:
+  - `git diff --stat cca6a0d` shows only the four new `results/phase3-latency-*-cpu/` directories and docs. No
+    quality run and no `phase3-comparison/` file changed.
+  - pre-commit passed on every commit.
+  - No code changed, so the test suite wasn't re-run.
+
+Remaining (GPU half, owner-run; needs the Kaggle GPU session):
+- In a Kaggle GPU environment, install the repository with `[hf]`. In that environment only, replace `tensorflow-cpu`
+  with `tensorflow==2.15.0` (ADR-019). This setup hasn't been tried here.
+- Run the four § 9.7 commands with `--device cuda` and an `--environment` label naming the Kaggle GPU.
+  - `--images-dir` points at the attached COCO 2017 `train2017` directory.
+  - The CNN takes the Hub `v2.0.0` checkpoint.
+  - The CNN run fails closed unless TensorFlow can see the GPU.
+- Commit the four new `results/phase3-latency-*-greedy-cuda/` directories, then close this task.
 
 ### TASK-007 — Committed browser E2E for the caption flow            [status: blocked] (first task of Phase 3D; awaiting approval to install)
 Area: frontend · deployment
