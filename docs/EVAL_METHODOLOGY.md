@@ -418,3 +418,173 @@ The table below is copied from `comparison.md`:
   these numbers can't be compared with published COCO results.
 - **The beam row:** it is a labelled reference (§ 8.4). It isn't compared with
   the greedy baselines.
+
+## 9. Phase 3 latency protocol (pre-registered)
+
+This section fixes how Phase 3 times the four § 8.1 models (TASK-015, TASK-016
+in [`TASKS.md`](TASKS.md)). It was committed on 2026-10-07, **before any
+latency run existed**. Latency runs score nothing: §§ 8.1–8.6 and every
+quality result are unchanged. The code is `captioning.evaluation.latency` and
+`scripts/benchmark_latency.py`; where the artefact lives and why:
+[ADR-020](DECISIONS.md).
+
+### 9.1 What is timed
+
+- **One sample:** the wall-clock time of one `Captioner.caption()` call on one
+  batch of image paths. The call covers:
+  - reading and decoding the image files;
+  - each model's own preprocessing;
+  - generation with the § 8.4 decode settings;
+  - token decoding and the § 8.3 normalisation.
+
+  This is the call path that produced the § 8.8 captions. There is no second
+  inference path.
+- **Clock:** `time.perf_counter`, Python's monotonic, highest-resolution clock.
+  Only the `caption()` call sits between the two clock reads. A clock that goes
+  backwards fails the run.
+- **Load time:** captioner construction plus `load()`, timed once with the same
+  clock and recorded as `load_seconds`. It is never part of a sample.
+  - Both steps are timed together because the CNN + Transformer loads its
+    checkpoint while it is constructed, and the Hugging Face adapters load in
+    `load()`.
+  - It includes importing TensorFlow, or `torch` and `transformers`, and any Hub
+    download. It is the cold-start cost on that host, not a pure weight-read
+    time. A run with an empty Hugging Face cache includes the download.
+- **Not split into stages:** preprocessing, generation and normalisation are not
+  timed separately. The TASK-011 interface doesn't expose them, and splitting
+  them would mean changing the adapters.
+- **GPU:** both adapters return decoded strings, and decoding them needs the
+  generated tokens on the host. So a call can't return before its device work
+  has finished, and no extra synchronisation is added.
+
+### 9.2 Inputs
+
+- The first N images of the § 8.2 slice, in slice order. The default N is 32.
+- Every model gets the same N images.
+- The slice is checked as in TASK-012 (500 images, 732 references) before any
+  model loads. The run records the slice fingerprint and the N file names.
+- Only those N images have to exist locally. References aren't used.
+
+### 9.3 Warmup and measurement
+
+- **Batch sizes:** 1 and 8 by default, run in ascending order. Each must divide
+  N, so every call captions a full batch. With 32 images, a pass is 32 calls at
+  batch size 1 and 4 calls at batch size 8.
+- **Warmup:** for each batch size, W untimed passes (default 1) caption every
+  batch.
+  - Warmup runs again for each batch size, because input shapes change.
+  - At least one warmup pass is required. The first call, which pays for lazy
+    initialisation, graph tracing and a cold file cache, is never timed.
+- **Measurement:** R timed passes (default 5) then time every call. With the
+  defaults, that is 160 samples at batch size 1 and 20 at batch size 8.
+- **Order:** deterministic. Batch sizes run in ascending order, passes in turn,
+  and batches in slice order. Decoding draws no random numbers (§ 8.4). Seeds
+  are set with `set_global_seed(config.train.seed)` anyway, as in § 8.4.
+- **Failures:** the run ends and writes nothing if any call raises, or returns
+  the wrong number of captions. Samples are never dropped, filtered or retried.
+- **One model per invocation:** each run is its own process, so no other model
+  is loaded while one is timed.
+
+### 9.4 Statistics
+
+For each batch size, over all of its measured samples, pooled across passes:
+
+- count;
+- mean;
+- median;
+- minimum;
+- maximum.
+
+All values are seconds per call, that is per batch, not per image. The raw
+samples are stored in measurement order, so any other statistic can be
+recomputed from the file. There are no other percentiles, no outlier removal,
+no confidence intervals and no derived scores. Latency figures say nothing about
+caption quality.
+
+### 9.5 Devices and environment
+
+- **`--device`** is `cpu` or `cuda`.
+- **Hugging Face models** are moved to that `torch` device; `cuda` is the
+  default GPU.
+- **CNN + Transformer:** TensorFlow places it, so `--device` is checked against
+  the GPUs TensorFlow can see.
+  - `cpu` fails if TensorFlow can see a GPU. Hide it with
+    `CUDA_VISIBLE_DEVICES=""`.
+  - `cuda` fails if it can see none.
+  - The list is recorded as `runtime.tensorflow_gpus`.
+  - GPU runs install `tensorflow==2.15.0` in that environment only (ADR-019).
+- **CNN batches:** `CNNCaptioner` captions one image at a time, through
+  `predict_path` (TASK-011). A batch-8 sample is therefore eight single-image
+  predictions in a row, and shows no batching gain by construction. Batch
+  figures for the CNN + Transformer and for the Hugging Face models are not
+  like-for-like.
+- **Environment:**
+  - `--environment` is free text: the owner's name for the host and hardware,
+    recorded verbatim.
+  - Recorded automatically: the Python version, the platform string, and the
+    installed versions of `tensorflow`, `tensorflow-cpu`, `torch` and
+    `transformers` (`null` when not installed).
+  - Thread counts and other framework settings stay at their defaults and
+    aren't recorded separately.
+- **Comparability:** figures compare only within one environment and device.
+  No claim is made across devices or hosts beyond the measured setups.
+
+### 9.6 What each latency run records
+
+- **Run directory:** one new
+  `results/<prefix><model_id>-<decoding>-<device>/` per run. The default prefix
+  is `phase3-latency-`, for example `results/phase3-latency-blip-base-greedy-cpu/`.
+- **Contents:** only `latency.json`. No metrics, predictions or other quality
+  files are written. Existing `results/*` directories are never modified.
+- **Collisions:** an existing run directory is never overwritten. This is
+  checked before the model loads and again before writing. A failed run writes
+  nothing.
+- **Fields of `latency.json`**, in this order:
+
+  | Field | Content |
+  |---|---|
+  | `protocol` | `docs/EVAL_METHODOLOGY.md § 9` |
+  | `model_id`, `backend`, `captioner` | the § 8.1 id; `cnn` or `huggingface`; the adapter class |
+  | `hub_repo`, `revision` | the pinned § 8.1 repository and revision, checked against the config as in TASK-012 |
+  | `decode_strategy`, `decode_settings` | the § 8.4 settings, as the adapter reports them |
+  | `device`, `environment` | § 9.5 |
+  | `inputs` | the slice source, fingerprint, and image and reference counts; the N file names in order |
+  | `settings` | `num_images`, `batch_sizes`, `warmup_passes`, `measured_passes` |
+  | `timing` | the clock, and the definitions of a sample and of the load time |
+  | `load_seconds` | § 9.1 |
+  | `batches` | per batch size: `batch_size`, `calls_per_pass`, `samples_seconds`, and `summary_seconds` (§ 9.4) |
+  | `seed` | `config.train.seed` |
+  | `runtime` | the Python version, platform, package versions, and `tensorflow_gpus` (CNN only, otherwise `null`) |
+
+- **No timestamps:** given the same timings, the file is byte-identical. The
+  timings themselves vary from run to run.
+
+### 9.7 Running it (TASK-016)
+
+One invocation per model and device, with the protocol defaults:
+
+```bash
+python -m scripts.benchmark_latency --config configs/base.yaml \
+    --images-dir /path/to/coco2017/train2017 \
+    --model blip-base --device cpu --environment "<host and hardware>"
+
+python -m scripts.benchmark_latency --config configs/base.yaml \
+    --images-dir /path/to/coco2017/train2017 \
+    --model inceptionv3-transformer-stabilized \
+    --cnn-weights <checkpoint>/model.h5 --cnn-tokenizer-dir <checkpoint> \
+    --device cpu --environment "<host and hardware>"
+```
+
+`--num-images`, `--batch-size`, `--warmup-passes` and `--measured-passes` exist
+for development. Runs that change them are not comparable with runs that use
+the defaults.
+
+### 9.8 Scope and changes
+
+- **Out of scope:** serving latency on the Space (`PredictorService` reports its
+  own); load testing; Prometheus; per-stage timing.
+- **Changing this protocol:** after the first latency run exists, any change to
+  §§ 9.1–9.6 is a dated amendment that gives its reason, as in § 8.7. Runs made
+  under changed settings go to new run directories and aren't compared with runs
+  made under these settings.
+- **Status:** no latency result exists yet. TASK-016 makes the first runs.
