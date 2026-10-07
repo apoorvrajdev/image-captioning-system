@@ -140,3 +140,19 @@ Format: **Decision · Why · Evidence**.
   - Raw samples let any other statistic be recomputed later without re-running. Fixing the statistics before any run means none can be picked to suit the results.
   - Checking the CNN's device keeps the device label true without changing the adapter.
 - **Evidence:** `docs/EVAL_METHODOLOGY.md` § 9, `src/captioning/evaluation/latency.py`, `scripts/benchmark_latency.py`, `tests/unit/test_latency_benchmark.py`.
+
+### ADR-021 — The Phase 3 dashboard reads static data exported from committed results
+- **Decision:**
+  - The SPA's comparison dashboard (TASK-018) reads one static JSON file, `frontend/src/generated/phase3-dashboard.json`, imported at build time. There is no backend endpoint and no live comparison. The Space never computes or serves Phase 3 results.
+  - `python -m scripts.export_dashboard_data` (logic in `captioning.evaluation.dashboard`) is the file's only writer. It reads `results/phase3-comparison/comparison.json` and every `results/phase3-latency-*/latency.json`.
+    - Values are copied verbatim: nothing is rounded, recomputed, ranked or converted.
+    - It refuses sources that disagree on the slice, protocol, inputs, settings, timing or a model's Hub id and revision, a run directory whose name doesn't match its file, and a summary that doesn't recompute from its raw samples.
+    - The only hand-written content is each model's display name and the caveat notes, which restate `EVAL_METHODOLOGY.md` §§ 8 and 9 with their section numbers.
+  - Contents, per model: display name, Hub id and revision, quality rows (metrics, decoding, run id), latency per device and batch size (the § 9.4 summary, load time, environment, batch mode, run id), and its source run ids. Shared: the slice description, the § 8.5 overlap caveat copied from `comparison.json`, and the quality and latency notes. Raw latency samples stay in the run directories.
+  - The file is generated, never edited by hand. `tests/unit/test_dashboard_export.py` regenerates it from `results/` and fails on any difference, so a new comparison summary or latency run is followed by a re-export in the same change. `--check` runs the same comparison from the command line.
+  - Prettier's pre-commit hook excludes `frontend/src/generated/`, because the drift test owns that file's exact bytes.
+- **Why:**
+  - It keeps ADR-013 and ADR-019 intact. The Space image has neither `torch` nor `results/`: the `Dockerfile` copies only `src/`, `backend/`, `configs/` and `models/`, and `requirements.txt` has no `torch`. A live endpoint would need one of them in the image.
+  - Results are append-only and change only by commit, so a file built with the SPA is as current as the repository. The dashboard needs no network request, and the drift test stops it from disagreeing with `results/`.
+  - Copying verbatim and refusing inconsistent sources keeps every number traceable to one committed run, with the caveats that apply to it.
+- **Evidence:** `src/captioning/evaluation/dashboard.py`, `scripts/export_dashboard_data.py`, `tests/unit/test_dashboard_export.py`, `frontend/src/generated/phase3-dashboard.json`, `.pre-commit-config.yaml` (prettier `exclude`), `Dockerfile` `COPY` lines, ADR-013, ADR-019, ADR-020.
