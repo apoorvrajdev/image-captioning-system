@@ -42,7 +42,9 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 (`test_weights_loader.py`).
 
 **Evaluation.** Metric implementations match hand-checkable tiny corpora, and run artefacts follow the
-`write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`).
+`write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`). The SPA's Phase 3 dashboard data
+(`frontend/src/generated/phase3-dashboard.json`) equals a fresh export from the committed results
+(`test_dashboard_export.py`; `python -m scripts.export_dashboard_data --check`).
 
 **Frontend (manual until TASK-007 lands a mocked-API Playwright spec).** With backend + `npm run dev` running: upload a valid image,
 then Generate shows the caption card with version/strategy/latency/request ID. A disallowed type or a >10 MB file

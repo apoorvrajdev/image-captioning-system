@@ -55,6 +55,7 @@ cd frontend && npm run lint && npm run build
 ```
 
 ## Non-negotiables
+- `src/generated/phase3-dashboard.json` is generated from `results/` by `python -m scripts.export_dashboard_data` (ADR-021). Read it, never edit it: a hand edit fails `tests/unit/test_dashboard_export.py`.
 - Functional components + hooks only. No global state library unless a task decides it (ADR).
 - Client validation mirrors, never replaces, backend validation.
 - No secrets in `VITE_*` vars (they ship to the browser).
