@@ -138,19 +138,20 @@ Outcome:
 
 ---
 
-## Phase 3 — Multimodal baselines (decomposed below, NOT started)
+## Phase 3 — Multimodal baselines (done 2026-10-07; TASK-007 still blocked, see 3D)
 
 Constraints already fixed: baselines live in the optional `[hf]` extra (`transformers==4.41.2`,
 `torch==2.3.0`) and must not unpin the research pipeline (`tensorflow-cpu==2.15.0`). Every baseline
 writes the standard `results/<run_id>/` artefact contract on the **same slice, reference count and
 tokenisation** as the existing runs.
 
-- [ ] **3A** — Side-by-side comparison harness: CNN+Transformer vs BLIP-base vs ViT-GPT2 vs GIT-base-coco
+- [x] **3A** — Side-by-side comparison harness: CNN+Transformer vs BLIP-base vs ViT-GPT2 vs GIT-base-coco
   → TASK-009, TASK-010, TASK-011, TASK-012
-- [ ] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation
+- [x] **3B** — Per-model BLEU / CIDEr / METEOR / ROUGE-L on a shared COCO slice with deterministic tokenisation
   → TASK-013, TASK-014
-- [ ] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs GPU) → TASK-015, TASK-016
-- [ ] **3D** — Comparison-result dashboard exposed through the existing SPA → TASK-007, TASK-017, TASK-018
+- [x] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs GPU) → TASK-015, TASK-016
+- [x] **3D** — Comparison-result dashboard exposed through the existing SPA → TASK-007, TASK-017, TASK-018
+  (the dashboard ships; TASK-007, the Playwright E2E, is still blocked on install approval, so it was checked manually)
 
 Facts the tasks rely on (checked 2026-10-05):
 - Slice: both committed runs (`stabilized-greedy`, `stabilized-beam-w4-lp07-rp12`) score the same 500 images in the
@@ -742,7 +743,7 @@ Outcome:
     none to existing frontend code, and none to `README.md`.
 - Not done, by scope: any UI (TASK-018), a Make target, or a CI step beyond the pytest drift test.
 
-### TASK-018 — Add the comparison dashboard to the SPA            [status: todo]
+### TASK-018 — Add the comparison dashboard to the SPA            [status: done] (2026-10-07; manually browser-checked, not end-to-end verified)
 Area: frontend
 Goal: a view in the existing SPA that renders the exported metrics and latency tables, every value traceable to its
 run id, with the caveats visible.
@@ -758,3 +759,46 @@ Verification: `npm run lint`; `npm run build`; `npx playwright test`.
 Depends on: TASK-017, TASK-007.
 Owns: the dashboard components, the view switch in `App.jsx`, the dashboard spec, the `TEST_PLAN.md` frontend row.
 Out of scope: live per-image comparison; a gallery of slice images; backend changes.
+Outcome:
+- `frontend/src/components/Phase3Dashboard.jsx` (`28af9f0`) renders `src/generated/phase3-dashboard.json`, imported at
+  build time. The view switch in `App.jsx` (`4b6e636`) is two `aria-pressed` buttons, "Caption an image" and
+  "Phase 3 comparison", with no router.
+  - The caption flow stays mounted behind `hidden`, so its file, result and in-flight request survive a switch.
+  - No dependency was added; `package.json` and `package-lock.json` are unchanged.
+- What the dashboard shows, in order:
+  - Caveats first: not live, not held-out (the § 8.5 caveat verbatim), not a ranking, CPU/GPU from different hosts,
+    and sequential CNN batches.
+  - The quality table: 5 runs, each with run id and kind, decoding, samples and the 7 metrics.
+  - A CPU table and a GPU table: each model's run id, batch mode, load time, then per batch size the calls, the
+    sample count and mean, median, min and max.
+  - Per-model provenance cards: Hub repository linked at its revision, revision, source runs, and each quality run's
+    revision and decode settings.
+  - The slice facts, the latency settings and timing definitions, and every note in the file.
+- Values are shown as exported (ADR-022). The dashboard ranks nothing, computes no winner and colours nothing by value.
+  - Rounding follows the committed reports: metrics to 2 decimals (`comparison.md`), latency to 0.0001 s (§ 9.9's
+    0.1 ms, in the file's unit, seconds), load time to 0.1 s.
+  - Each number keeps its exact value in `<data value>`, and "Show exact values" displays it.
+  - Missing values show "n/a".
+- The generated JSON and its schema are unchanged (SHA-256 `cbb3b295…`). `python -m scripts.export_dashboard_data
+  --check` reports it up to date, and `tests/unit/test_dashboard_export.py` passes (32).
+- Docs: ADR-022 (`015218a`), `TEST_PLAN.md` dashboard checks (`4e7049c`), the repo map and frontend skill (`5f5138f`).
+- Verification:
+  - `npm run lint` clean; `npm run build` OK (26 modules; JS bundle 205 → 233 kB, 72 kB gzip). Pre-commit hooks passed
+    on every changed file.
+  - The Playwright spec isn't written: TASK-007 (the `@playwright/test` install) is still blocked on approval. Per
+    the criteria, the dashboard was checked manually and is **not end-to-end verified**.
+  - The manual check was a throwaway script, not committed. It drove the installed Chrome (headless, DevTools
+    protocol) against `vite preview` of the production build, with `/healthz` and `/v1/captions` mocked the way
+    TASK-007 plans. 40 of 40 checks passed:
+    - every displayed metric equals `comparison.md`, and every latency row equals §§ 9.9–9.10;
+    - every exact value is present in `<data value>`;
+    - switching views makes no request, and the JSON is never fetched;
+    - zero console errors or warnings;
+    - the page doesn't scroll sideways at 390 px, and no table column is clipped at 1280 px;
+    - the caption flow is unchanged: upload → Generate → card, a `.txt` rejected with no request, "Cannot reach
+      backend" when the API is down, and the file and result survive a round trip to the dashboard.
+  - A second throwaway build aliased the import to a mutated copy of the JSON, outside the repo. A deleted metric, a
+    missing GPU run, a missing batch and a null load time each rendered "n/a", with no errors.
+  - No change under `results/`, `configs/`, `notebooks/`, `models/`, `backend/` or `src/`, and none to `README.md`.
+- Not done, by scope: the Playwright dashboard spec (needs TASK-007), a URL for each view, and the README Phase 3
+  results (README holds owner-staged edits).

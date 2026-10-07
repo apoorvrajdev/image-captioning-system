@@ -9,8 +9,12 @@ _Last updated: 2026-10-07_
 
 - **Completed:** Phase 0 (bootstrap), Phase 1 (modularisation), Phase 1b (training stabilisation +
   metric suite + stabilized checkpoint), Phase 2A (FastAPI), Phase 2B (SPA), Phase 2C (public deployment),
-  Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup.
-- **Next:** Phase 3 — multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
+  Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup,
+  Phase 3 (multimodal baselines, 3A–3D: TASK-009 – TASK-018, done 2026-10-07).
+- **Phase 3 is complete except TASK-007.** TASK-007 (the Playwright E2E) is still blocked on install approval, so
+  the SPA's caption flow and dashboard were checked manually, not end to end. No task after Phase 3 is defined in
+  [`TASKS.md`](TASKS.md).
+- **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
   (TASK-013) exist. The first baseline results are committed (TASK-014): `results/phase3-comparison/`, recorded in
@@ -22,7 +26,8 @@ _Last updated: 2026-10-07_
   - The CNN's batch-8 figures are sequential single-image calls.
   - TASK-017 is done: `python -m scripts.export_dashboard_data` writes the SPA's static
     `frontend/src/generated/phase3-dashboard.json` from those results (ADR-021), and a test fails if it drifts.
-  - TASK-018 (dashboard UI) is next and hasn't started. TASK-007 (Playwright) still awaits install approval.
+  - TASK-018 is done: the SPA's "Phase 3 comparison" view renders that file (ADR-022). TASK-007 (Playwright) still
+    awaits install approval.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -37,7 +42,8 @@ _Last updated: 2026-10-07_
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
-| Frontend `npm run lint` / `npm run build` | clean / builds |
+| Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
+| Frontend browser check (manual, headless Chrome, mocked API) | caption flow + Phase 3 dashboard, 40/40, zero console errors (2026-10-07); not end-to-end (TASK-007) |
 | CI on `main` for `915112b` (run `37140358717`) | green, all 6 jobs incl. `pre-commit` |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
@@ -53,6 +59,20 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-07 Phase 3 dashboard in the SPA (TASK-018, done; Phase 3 complete except TASK-007):
+  - A "Caption an image" / "Phase 3 comparison" switch in `App.jsx` (state only, no router). The caption flow stays
+    mounted behind `hidden` and is unchanged.
+  - `components/Phase3Dashboard.jsx` renders `phase3-dashboard.json` from a build-time import, with no request:
+    - the caveats first;
+    - the quality table, per-device latency tables and provenance cards, every row tied to its run id;
+    - the file's notes.
+  - Values are shown as exported (ADR-022). Rounding follows `comparison.md` and § 9.9, the exact values stay in
+    `<data value>` behind a "Show exact values" toggle, and missing values show "n/a". Nothing is ranked or
+    recomputed.
+  - No new dependency, no backend change, and the JSON is unchanged. Checked manually in headless Chrome against the
+    production build: every value equals `comparison.md` and §§ 9.9–9.10, with zero console errors. It isn't
+    end-to-end verified, because TASK-007 is still blocked.
+  - Committed as `28af9f0`..`5f5138f`, plus the closing docs.
 - 2026-10-07 Phase 3 dashboard data (TASK-017, done):
   - `captioning.evaluation.dashboard` and `python -m scripts.export_dashboard_data` turn `results/phase3-comparison/`
     and the eight `results/phase3-latency-*/` runs into `frontend/src/generated/phase3-dashboard.json`, which the SPA
@@ -162,7 +182,8 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Known issues / open debt
 
-- No frontend tests / e2e (TASK-007), no coverage measured in CI, no dependency-vulnerability scanning,
+- No frontend tests / e2e (TASK-007; the caption flow and the Phase 3 dashboard are checked manually only), no
+  coverage measured in CI, no dependency-vulnerability scanning,
   and no full-history secret scan in CI.
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
   `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).
