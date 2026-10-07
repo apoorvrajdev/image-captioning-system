@@ -15,11 +15,13 @@ description: Acceptance criteria and definition of done for evaluation and bench
 - A run is one (model, decode strategy, dataset slice). `run_meta.json` records enough to reproduce it (model id, decode params, n_samples, timestamp).
 - Corpus metrics: BLEU-1..4 (sacrebleu, deterministic tokenisation in `evaluation/tokenization.py`), CIDEr, METEOR, ROUGE-L.
 - Two runs are compared only when the slice, reference count, tokenisation, and smoothing are identical, and that sameness is stated.
+- Latency runs (Phase 3C, `EVAL_METHODOLOGY.md` § 9) write only `latency.json` to their own `results/phase3-latency-<model>-<decoding>-<device>/` via `scripts/benchmark_latency.py`, never into a quality run. Warmup is never timed, load time is separate, and raw samples are kept unfiltered.
 
 ## Edge cases (each needs a test)
 - Empty prediction / empty reference list, single-token captions, duplicate references.
 - Metric values on hand-computed tiny corpora (`tests/unit/test_evaluation_metrics.py`).
 - Reference count matters: the committed slice averages ~1.46 refs/image, while COCO standard is 5.
+- Latency (`tests/unit/test_latency_benchmark.py`): warmup excluded, exact sample count and order, a failed call writes nothing, an existing run directory is refused.
 
 ## Required tests
 | Level | File | Must cover |
