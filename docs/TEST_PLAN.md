@@ -12,7 +12,7 @@ Every change is verified against the rows for the layers it touches. The same ch
 | `src/captioning/**`, `configs/**` | `pytest tests backend/app/tests -q` · `python -m scripts.notebook_module_audit` · notebook SHA-256 | all pass · `[OK] 4/4` · hash equals `.paper-notebook.sha256` |
 | `backend/app/**` | `pytest backend/app/tests -q` then the full suite | pass; backend slice imports no TensorFlow |
 | `src/captioning/evaluation/**`, eval scripts | `pytest tests/unit/test_evaluation*.py -q` | pass; existing `results/*` unchanged |
-| `frontend/**` | `npm run lint` · `npm run build` · manual/browser flow (below) | exit 0; flow verified or reported "not browser-verified" |
+| `frontend/**` | `npm run lint` · `npm run build` · manual/browser flow (below), caption flow and Phase 3 dashboard | exit 0; flow verified or reported "not browser-verified" |
 | workflows, Dockerfile, deps, hooks | YAML parses · `SKIP=mypy pre-commit run --all-files` · full suite · `docker build .` if Docker is available | no gate removed or weakened |
 | any commit | pre-commit hooks (locally on commit; all files in CI) | pass with no rewrites |
 
@@ -51,6 +51,20 @@ then Generate shows the caption card with version/strategy/latency/request ID. A
 is rejected client-side with no request. With the backend stopped, the badge goes offline and Generate shows
 "Cannot reach backend". Browser console has zero errors.
 
+**Phase 3 dashboard (manual until TASK-007; TASK-018).** On "Phase 3 comparison":
+
+- Rendering:
+  - The quality table has a row for every model's quality run. Each value equals `results/phase3-comparison/comparison.md`, which also rounds to two decimals.
+  - The CPU and GPU latency tables have a row for every model and batch size. Each value equals `EVAL_METHODOLOGY.md` §§ 9.9–9.10, shown in seconds to 0.0001 s rather than milliseconds.
+  - Every row names its run id.
+  - The caveats are visible: not live, not held-out, not a ranking, CPU/GPU from different hosts, and sequential CNN batches.
+- Exact values: "Show exact values" shows the JSON's unrounded numbers.
+- Missing values show "n/a".
+- Requests: switching views makes no request, and the dashboard still renders with the API down.
+- Caption flow: switching back keeps the chosen file and the result.
+- Layout: no sideways page scroll at 390 px, and no clipped column at 1280 px.
+- Console: zero errors.
+
 **Deployment (post-deploy smoke, owner-run).** Follow `PHASE_2C_DEPLOYMENT_RUNBOOK.md` § 8: Space
 `/healthz` reports `model_loaded: true`, and one caption round-trip works from the Vercel origin (CORS).
 
@@ -62,5 +76,5 @@ is rejected client-side with no request. With the backend stopped, the badge goe
 
 ## Known gaps (not yet covered)
 
-No frontend unit/e2e runner (E2E proposed as TASK-007), no coverage measured in CI, no load tests, no test for beam width 1 ≡ greedy,
+No frontend unit/e2e runner (E2E proposed as TASK-007; the Phase 3 dashboard has no committed spec and was checked manually), no coverage measured in CI, no load tests, no test for beam width 1 ≡ greedy,
 and no end-to-end lifespan test with real weights (manual smoke only).
