@@ -507,7 +507,7 @@ Outcome:
   - `git diff --stat 7d9e0f3` shows only additions: the new results directories and docs.
   - No `src/` or `configs/` change, so the parity audit doesn't apply.
 
-### TASK-015 — Add a latency benchmark for all compared models            [status: todo]
+### TASK-015 — Add a latency benchmark for all compared models            [status: done] (2026-10-07)
 Area: evaluation
 Goal: measure per-model caption latency for single images and batches on a named device, through the TASK-011
 interface, and save it as a run artefact.
@@ -523,6 +523,59 @@ Verification: `pytest tests/unit/test_latency_benchmark.py -q`; `--help`; full s
 Depends on: TASK-010, TASK-011.
 Owns: the benchmark script or module, `tests/unit/test_latency_benchmark.py`, the methodology section.
 Out of scope: Space serving latency (`PredictorService` already reports it); Prometheus (Phase 4B); load testing.
+Outcome:
+- `captioning.evaluation.latency` (`b191f4a`) imports no TensorFlow, `torch` or `transformers`. It provides:
+  - `LatencySettings`: N images, batch sizes, warmup passes and measured passes. It rejects:
+    - N below 1;
+    - an empty, unsorted or repeated list of batch sizes;
+    - a batch size that doesn't divide N;
+    - zero warmup passes or zero measured passes.
+  - `time_load`: times captioner construction plus `load()` once.
+  - `measure_latency`: for each batch size, in ascending order, runs untimed warmup passes, then measured passes that
+    time every `Captioner.caption()` call with `time.perf_counter`. A failed call, a wrong caption count or a clock
+    going backwards ends the run.
+  - `summarize`: count, mean, median, min and max.
+  - `runtime_info`: Python, platform, and the installed `tensorflow`, `tensorflow-cpu`, `torch` and `transformers`
+    versions.
+- `python -m scripts.benchmark_latency --config … --images-dir … --model <id> --device cpu|cuda --environment "…"`
+  (`743e2df`):
+  - Selects, builds and identity-checks the model through TASK-012's `resolve_models`, `build_captioner` and
+    `_check_identity`. One model per invocation.
+  - Defaults (§ 9): the first 32 slice images, batch sizes 1 and 8, 1 warmup pass, 5 measured passes.
+  - Fails before any model loads on:
+    - invalid settings;
+    - a slice that isn't 500 images and 732 references;
+    - `--num-images` beyond the slice;
+    - an unknown model, or a CNN without its checkpoint;
+    - an existing run directory;
+    - a missing benchmark image.
+  - For the CNN + Transformer, `--device` is checked against the GPUs TensorFlow can see.
+  - Writes only `results/phase3-latency-<model_id>-<decoding>-<device>/latency.json`. It has no timestamps, and the
+    script never overwrites an existing run.
+- `tests/unit/test_latency_benchmark.py` (`2d30ea6`): 42 tests, offline. They use a scripted clock and fake captioners
+  (the real HF identity, and the real `CNNCaptioner` around a fake predictor). They cover:
+  - hand-computed statistics and settings validation;
+  - warmup exclusion, the exact sample count and call order, and two clock reads per sample;
+  - failures during warmup and measurement, a wrong caption count and a backwards clock;
+  - load timing and the recorded runtime versions;
+  - the full `latency.json` shape and model identity, and byte-identical output for identical timings;
+  - device propagation, every pre-load failure and the collision refusal;
+  - that only the first N images must exist, and that a failed run writes nothing;
+  - the CNN device check, imports that load no model framework, and `--help`.
+
+  A mutation that timed the warmup pass failed 4 of these tests.
+- Docs:
+  - `EVAL_METHODOLOGY.md` § 9 is the latency protocol, fixed before any run (`5b400bf`).
+  - ADR-020 is in `6df893d`.
+  - The repo map and the evaluation skill list the tooling (`dc831da`).
+- Verification:
+  - Focused 42 passed; full suite 206 passed (1 existing warning).
+  - ruff lint and format clean (100 files); mypy 0 issues (81 files).
+  - Parity audit 4/4; notebook freeze OK; pre-commit passed on every commit.
+  - `git diff --stat 39e59b9` shows no change under `results/`, `configs/`, `notebooks/` or `models/`, and none to
+    `README.md`.
+- Not run, by design: any real model, checkpoint download or timing run. No `latency.json` exists yet; TASK-016 makes
+  the first runs. No Make target was added.
 
 ### TASK-016 — Run CPU and GPU latency benchmarks and commit them            [status: todo] (owner-run)
 Area: evaluation · docs

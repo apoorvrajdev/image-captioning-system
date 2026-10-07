@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-06_
+_Last updated: 2026-10-07_
 
 ## Current phase
 
@@ -14,7 +14,9 @@ _Last updated: 2026-10-06_
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
   (TASK-013) exist. The first baseline results are committed (TASK-014): `results/phase3-comparison/`, recorded in
-  `EVAL_METHODOLOGY.md` § 8.8.
+  `EVAL_METHODOLOGY.md` § 8.8. The latency benchmark tooling exists and is tested (TASK-015), with its protocol in
+  `EVAL_METHODOLOGY.md` § 9 and ADR-020. No latency has been measured yet: TASK-016 (owner-run CPU and GPU runs) is
+  next for 3C.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -23,7 +25,7 @@ _Last updated: 2026-10-06_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 164 passed on 2026-10-06, after TASK-014 (1 pydantic `model_` namespace warning) |
+| `pytest tests backend/app/tests` | 206 passed on 2026-10-07, after TASK-015 (1 pydantic `model_` namespace warning) |
 | ruff lint + format check | clean (84 files) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
@@ -45,6 +47,18 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-07 latency benchmark tooling (TASK-015, done; no measurements):
+  - `scripts/benchmark_latency.py` times one model per invocation through the shared `Captioner.caption()` call, using
+    `captioning.evaluation.latency`.
+  - It writes only `results/phase3-latency-<model_id>-<decoding>-<device>/latency.json`. Quality runs are untouched.
+  - Protocol (`EVAL_METHODOLOGY.md` § 9, ADR-020):
+    - the first 32 slice images, batch sizes 1 and 8;
+    - 1 untimed warmup pass, then 5 measured passes;
+    - `time.perf_counter`, with load time recorded separately;
+    - count, mean, median, min and max, plus the raw samples, with nothing filtered.
+  - The CNN + Transformer captions a batch one image at a time, so its batch figures aren't like-for-like with the
+    Hugging Face models' (§ 9.5).
+  - Committed as `b191f4a`..`dc831da`.
 - 2026-10-06 Phase 3 baseline runs (TASK-014, done):
   - Real greedy runs, under the unchanged § 8 protocol, of BLIP-base, ViT-GPT2 and GIT-base-coco at their pinned
     revisions: `results/phase3-{blip-base,vit-gpt2,git-base-coco}-greedy/`.
