@@ -685,7 +685,7 @@ Owns: the Playwright config, `frontend/e2e/`, the `package.json` devDependency, 
 `TEST_PLAN.md` frontend row.
 Out of scope: dashboard specs (TASK-018).
 
-### TASK-017 — Export dashboard data from committed results            [status: todo]
+### TASK-017 — Export dashboard data from committed results            [status: done] (2026-10-07)
 Area: evaluation · frontend
 Goal: one script turns the 3B summary and the 3C latency results into a single static JSON file that the SPA
 imports at build time.
@@ -699,6 +699,48 @@ Verification: the exporter's pytest; `npm run lint` and `npm run build`; full su
 Depends on: TASK-013, TASK-015 (formats); the real data needs TASK-014 and TASK-016.
 Owns: the export script, its test, the generated JSON (the frontend lane only reads it), the ADR.
 Out of scope: backend endpoints; API contract changes.
+Outcome:
+- `captioning.evaluation.dashboard` (`36f3a96`) and `python -m scripts.export_dashboard_data` (`fd2832c`) write
+  `frontend/src/generated/phase3-dashboard.json` (`6e3791c`). The sources are `results/phase3-comparison/comparison.json`
+  and every `results/phase3-latency-*/latency.json`. Nothing imports TensorFlow, `torch` or `transformers`.
+- Contents: 4 models from 13 source runs (the 5 summary rows and the 8 latency runs).
+  - Per model, sorted by model id (not a ranking): display name, backend, Hub id and revision, source run ids.
+    - Quality rows: run id, kind, revision, decoding and settings, sample count, the seven metrics.
+    - Latency per device and batch size: run id, environment, batch mode, load time, the § 9.4 summary.
+  - Shared: the slice description (500 images, 732 references, fingerprint `6b5628bf…`), the § 8.5 overlap caveat
+    copied from `comparison.json`, and notes restating §§ 8.4, 8.8, 9.1, 9.4, 9.5 and 9.10.
+  - Values are copied verbatim. Parsing is strict, an int stays an int, and nothing is rounded, recomputed or
+    converted. Raw latency samples stay in the run directories.
+- The exporter refuses:
+  - a missing or malformed source;
+  - latency runs whose protocol, inputs, settings, timing or seed differ, or whose slice isn't the quality slice;
+  - a run directory whose name doesn't match its file;
+  - a summary that doesn't recompute from its samples, or a sample count that isn't calls × passes;
+  - runs that disagree on a model's backend, Hub id or revision;
+  - a summary row without its run directory, and a model without a display name.
+- Provenance:
+  - The CNN + Transformer's revision (`59d93b4`) comes from its latency runs.
+  - Its two quality rows predate the harness and record no revision, so theirs is `null`. A note cites the § 8.8
+    exact reproduction of the greedy row.
+  - Its latency runs are marked `batch_mode: sequential` (§ 9.5).
+- Location: `frontend/src/data/` was ruled out because the `.gitignore` dataset rule `data/` matches it. Prettier's
+  pre-commit hook excludes `frontend/src/generated/` (`2137624`), because it reflows short arrays and exponents and
+  the drift test owns the bytes.
+- Tests (`579a038`): `tests/unit/test_dashboard_export.py`, 32 offline tests.
+  - Drift: a fresh export equals the committed file. Every committed value is also checked against its raw source.
+  - 17 refusal cases, each one edit to a copy of the real results.
+  - CLI: `--check`, LF UTF-8 output, nothing written on error, `--help`. No model framework is imported.
+  - Changing one committed value failed 5 tests; reverting the strict parsing failed 2.
+- Docs: ADR-021 (`a98e707`); the repo map, the evaluation and frontend skills, and `TEST_PLAN.md` (`313ae79`).
+- Verification:
+  - Focused 32 passed; full suite 238 passed (1 existing warning).
+  - ruff lint and format clean (103 files); mypy 0 issues (83 files); parity audit 4/4; notebook freeze OK.
+  - pre-commit passed on every commit, run on the task files (README holds owner-staged edits).
+  - `npm run lint` clean and `npm run build` OK. Nothing imports the JSON yet (TASK-018). A throwaway Vite 8 build
+    outside the repo imported and bundled it.
+  - `git diff --stat 843e15d` shows no change under `results/`, `configs/`, `notebooks/`, `models/` or `backend/`,
+    none to existing frontend code, and none to `README.md`.
+- Not done, by scope: any UI (TASK-018), a Make target, or a CI step beyond the pytest drift test.
 
 ### TASK-018 — Add the comparison dashboard to the SPA            [status: todo]
 Area: frontend

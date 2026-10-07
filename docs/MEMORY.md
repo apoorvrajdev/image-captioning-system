@@ -20,7 +20,9 @@ _Last updated: 2026-10-07_
     (`results/phase3-latency-*-greedy-cuda/`, § 9.10) are committed.
   - They come from different hosts and runtimes, so they aren't a controlled CPU-vs-GPU comparison.
   - The CNN's batch-8 figures are sequential single-image calls.
-  - TASK-017 (dashboard data export) is next and hasn't started.
+  - TASK-017 is done: `python -m scripts.export_dashboard_data` writes the SPA's static
+    `frontend/src/generated/phase3-dashboard.json` from those results (ADR-021), and a test fails if it drifts.
+  - TASK-018 (dashboard UI) is next and hasn't started. TASK-007 (Playwright) still awaits install approval.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright) is deferred to the start of Phase 3D.
@@ -29,9 +31,9 @@ _Last updated: 2026-10-07_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 206 passed on 2026-10-07, after TASK-015 (1 pydantic `model_` namespace warning) |
-| ruff lint + format check | clean (84 files) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 71 files |
+| `pytest tests backend/app/tests` | 238 passed on 2026-10-07, after TASK-017 (1 pydantic `model_` namespace warning) |
+| ruff lint + format check | clean (103 files, 2026-10-07) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 83 files (2026-10-07) |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
@@ -51,6 +53,17 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-07 Phase 3 dashboard data (TASK-017, done):
+  - `captioning.evaluation.dashboard` and `python -m scripts.export_dashboard_data` turn `results/phase3-comparison/`
+    and the eight `results/phase3-latency-*/` runs into `frontend/src/generated/phase3-dashboard.json`, which the SPA
+    will import at build time. There is no backend endpoint (ADR-021).
+  - Per model: display name, Hub id and revision, metrics, latency per device and batch size, and source run ids.
+    Shared: the slice description, the § 8.5 overlap caveat and the §§ 8–9 notes. Values are copied verbatim.
+  - Inconsistent sources are refused. `tests/unit/test_dashboard_export.py` fails if the committed file drifts from
+    `results/`, so a new comparison summary or latency run needs a re-export in the same change.
+  - The file is in `generated/` because `.gitignore`'s `data/` rule matches `frontend/src/data/`. Prettier's
+    pre-commit hook skips that directory.
+  - Committed as `2137624`..`313ae79`, plus the closing docs.
 - 2026-10-07 Phase 3 GPU latency runs (TASK-016, GPU half; TASK-016 is done):
   - The same four models, pinned revisions, 32 images and § 9 protocol as the CPU half, with `--device cuda`.
   - Run in a dedicated private Kaggle kernel, `apoorvujjwal/task-016-phase-3-gpu-latency-benchmark`, on one Tesla T4
