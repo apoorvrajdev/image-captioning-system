@@ -9,7 +9,7 @@ Available metrics (all corpus-level, 0-100 scale where applicable):
 :func:`compute_all_metrics` in :mod:`runner` is the single entry point used
 by the CLI and by future Phase 3 benchmark comparisons; per-sample
 diagnostics live in :mod:`inspection`. Phase 3 latency timing lives in
-:mod:`latency`.
+:mod:`latency`, and the dashboard data export in :mod:`dashboard`.
 """
 
 from captioning.evaluation.benchmark import RunMeta, write_run_artifacts
@@ -25,6 +25,11 @@ from captioning.evaluation.comparison import (
     build_summary,
     load_run,
     render_markdown,
+)
+from captioning.evaluation.dashboard import (
+    DashboardExportError,
+    build_dashboard_data,
+    render_dashboard_json,
 )
 from captioning.evaluation.inspection import (
     SampleDiagnostics,
@@ -52,6 +57,7 @@ __all__ = [
     "BatchLatency",
     "BleuBreakdown",
     "ComparisonError",
+    "DashboardExportError",
     "EvalSlice",
     "LatencyBenchmarkError",
     "LatencySettings",
@@ -59,6 +65,7 @@ __all__ = [
     "RunMeta",
     "RunRecord",
     "SampleDiagnostics",
+    "build_dashboard_data",
     "build_summary",
     "compute_all_metrics",
     "corpus_bleu_breakdown",
@@ -72,6 +79,7 @@ __all__ = [
     "load_eval_slice",
     "load_run",
     "measure_latency",
+    "render_dashboard_json",
     "render_markdown",
     "runtime_info",
     "slice_fingerprint",
