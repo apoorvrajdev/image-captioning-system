@@ -8,7 +8,8 @@ Available metrics (all corpus-level, 0-100 scale where applicable):
 
 :func:`compute_all_metrics` in :mod:`runner` is the single entry point used
 by the CLI and by future Phase 3 benchmark comparisons; per-sample
-diagnostics live in :mod:`inspection`.
+diagnostics live in :mod:`inspection`. Phase 3 latency timing lives in
+:mod:`latency`.
 """
 
 from captioning.evaluation.benchmark import RunMeta, write_run_artifacts
@@ -32,6 +33,15 @@ from captioning.evaluation.inspection import (
     format_diagnostic_row,
     write_diagnostics_jsonl,
 )
+from captioning.evaluation.latency import (
+    BatchLatency,
+    LatencyBenchmarkError,
+    LatencySettings,
+    measure_latency,
+    runtime_info,
+    summarize,
+    time_load,
+)
 from captioning.evaluation.meteor import corpus_meteor_score
 from captioning.evaluation.rouge import corpus_rouge_l_score
 from captioning.evaluation.runner import MetricsReport, compute_all_metrics
@@ -39,9 +49,12 @@ from captioning.evaluation.slice import EvalSlice, load_eval_slice, slice_finger
 
 __all__ = [
     "MIN_SAMPLES_FOR_CIDER",
+    "BatchLatency",
     "BleuBreakdown",
     "ComparisonError",
     "EvalSlice",
+    "LatencyBenchmarkError",
+    "LatencySettings",
     "MetricsReport",
     "RunMeta",
     "RunRecord",
@@ -58,8 +71,12 @@ __all__ = [
     "format_diagnostic_row",
     "load_eval_slice",
     "load_run",
+    "measure_latency",
     "render_markdown",
+    "runtime_info",
     "slice_fingerprint",
+    "summarize",
+    "time_load",
     "write_diagnostics_jsonl",
     "write_run_artifacts",
 ]
