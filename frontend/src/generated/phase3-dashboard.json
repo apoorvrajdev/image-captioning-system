@@ -1,0 +1,529 @@
+{
+  "schema_version": 1,
+  "generated_by": "python -m scripts.export_dashboard_data",
+  "slice": {
+    "description": "500 COCO train2017 images, in the order of results/stabilized-greedy/predictions.jsonl, each scored against its stored references: 732 in total, about 1.46 per image. The latency runs time the first 32 of these images.",
+    "source": "results/stabilized-greedy/predictions.jsonl",
+    "fingerprint_sha256": "6b5628bfa410ed233ef9603beed3c05c9e63acebc8bfa31d7e63e634f9e25116",
+    "images": 500,
+    "references": 732,
+    "references_per_image": 1.46
+  },
+  "overlap_caveat": "The slice comes from COCO train2017. The CNN + Transformer held these images out of training; the Hugging Face baselines were fine-tuned on COCO training data (ViT-GPT2 possibly), so they may have seen them. These scores are not a held-out, like-for-like comparison (docs/EVAL_METHODOLOGY.md § 8.5).",
+  "quality": {
+    "protocol": "docs/EVAL_METHODOLOGY.md § 8",
+    "normalisation": "preprocess_caption -> strip_sentinels",
+    "summary_run_id": "phase3-comparison",
+    "metrics": [
+      {
+        "key": "bleu1",
+        "label": "BLEU-1"
+      },
+      {
+        "key": "bleu2",
+        "label": "BLEU-2"
+      },
+      {
+        "key": "bleu3",
+        "label": "BLEU-3"
+      },
+      {
+        "key": "bleu4",
+        "label": "BLEU-4"
+      },
+      {
+        "key": "rouge_l",
+        "label": "ROUGE-L"
+      },
+      {
+        "key": "meteor",
+        "label": "METEOR"
+      },
+      {
+        "key": "cider",
+        "label": "CIDEr"
+      }
+    ],
+    "notes": [
+      "Scores use the slice's stored references (about 1.46 per image), not the five-reference COCO setup, so they can't be compared with published COCO results (docs/EVAL_METHODOLOGY.md § 8.8).",
+      "Rows of kind \"reference\" are committed CNN + Transformer runs made before the comparison harness, so they record no revision (null). The greedy one is reproduced exactly by a harness run at the pinned revision (docs/EVAL_METHODOLOGY.md § 8.8). The beam-search row is a labelled reference and isn't compared with the greedy baselines (docs/EVAL_METHODOLOGY.md § 8.4).",
+      "Models are listed by model id. The order is not a ranking."
+    ]
+  },
+  "latency": {
+    "protocol": "docs/EVAL_METHODOLOGY.md § 9",
+    "unit": "seconds per call; one call captions one batch",
+    "statistics": [
+      "count",
+      "mean",
+      "median",
+      "min",
+      "max"
+    ],
+    "settings": {
+      "num_images": 32,
+      "batch_sizes": [
+        1,
+        8
+      ],
+      "warmup_passes": 1,
+      "measured_passes": 5
+    },
+    "timing": {
+      "clock": "time.perf_counter",
+      "sample": "one Captioner.caption() call on one batch: image reading and decoding, preprocessing, generation, token decoding and caption normalisation",
+      "load": "captioner construction plus load(), timed once and never part of a sample"
+    },
+    "notes": [
+      "Values are seconds per call, and one call captions one whole batch, so a batch-8 value is the time for eight images, not per image (docs/EVAL_METHODOLOGY.md § 9.4).",
+      "Runs with batch_mode \"sequential\" (the CNN + Transformer) caption a batch one image at a time: their batch-8 values are eight single-image calls in a row, not batched inference, and aren't like-for-like with the batched Hugging Face values (docs/EVAL_METHODOLOGY.md § 9.5).",
+      "Each device's runs come from a different host, operating system and framework build (see each run's environment). Figures compare only within one environment and device; together they are not a controlled CPU-versus-GPU comparison (docs/EVAL_METHODOLOGY.md §§ 9.5, 9.10).",
+      "load_seconds is the cold-start cost on that host: captioner construction plus load(), including framework imports and any download. It is never part of a sample (docs/EVAL_METHODOLOGY.md § 9.1).",
+      "Latency says nothing about caption quality (docs/EVAL_METHODOLOGY.md § 9.4)."
+    ]
+  },
+  "models": [
+    {
+      "model_id": "blip-base",
+      "display_name": "BLIP-base",
+      "backend": "huggingface",
+      "hub_repo": "Salesforce/blip-image-captioning-base",
+      "revision": "82a37760796d32b1411fe092ab5d4e227313294b",
+      "source_run_ids": [
+        "phase3-blip-base-greedy",
+        "phase3-latency-blip-base-greedy-cpu",
+        "phase3-latency-blip-base-greedy-cuda"
+      ],
+      "quality": [
+        {
+          "run_id": "phase3-blip-base-greedy",
+          "kind": "phase3",
+          "revision": "82a37760796d32b1411fe092ab5d4e227313294b",
+          "decode_strategy": "greedy",
+          "decode_settings": {
+            "num_beams": 1,
+            "do_sample": false,
+            "max_new_tokens": 40,
+            "repetition_penalty": 1.0,
+            "no_repeat_ngram_size": 0,
+            "precision": "float32"
+          },
+          "n_samples": 500,
+          "metrics": {
+            "bleu1": 56.60798221374851,
+            "bleu2": 39.69575689015959,
+            "bleu3": 27.864081426137425,
+            "bleu4": 19.8786337418786,
+            "rouge_l": 42.126247109844954,
+            "meteor": 17.232682230647008,
+            "cider": 1.0568021647751102
+          },
+          "metric_errors": {}
+        }
+      ],
+      "latency": [
+        {
+          "run_id": "phase3-latency-blip-base-greedy-cpu",
+          "device": "cpu",
+          "environment": "Local laptop ASUS TUF Gaming A15 FA506NFR, AMD Ryzen 7 7435HS (8 cores / 16 threads), 15.8 GiB RAM, Windows 11 Home Single Language 10.0.26200, AC power, power plan Turbo; CPU only (torch 2.3.0+cpu, tensorflow-cpu 2.15.0); Hugging Face weights from the local cache (HF_HUB_OFFLINE=1)",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 5.827522899999167,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 1.462334583125005,
+                "median": 1.4500442500002464,
+                "min": 0.8623263999998017,
+                "max": 2.7654158000004827
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 11.348299875000066,
+                "median": 11.043125150000378,
+                "min": 9.660359000001336,
+                "max": 15.848805999999968
+              }
+            }
+          ]
+        },
+        {
+          "run_id": "phase3-latency-blip-base-greedy-cuda",
+          "device": "cuda",
+          "environment": "Kaggle kernel apoorvujjwal/task-016-phase-3-gpu-latency-benchmark (accelerator NvidiaTeslaT4): Tesla T4 (15360 MiB, driver 580.178.04), GPU 0 of 2 attached, CUDA_VISIBLE_DEVICES=0; CPU Intel(R) Xeon(R) CPU @ 2.00GHz, 4 vCPUs, 31.3 GiB RAM; Python 3.10.20 (uv) in two venvs: Hugging Face models with torch 2.3.0+cu121 (CUDA 12.1) and transformers 4.41.2; CNN with tensorflow 2.15.0 with its and-cuda CUDA libraries, no TensorRT (built for CUDA 12.2, cuDNN 8); Hugging Face weights pre-fetched at the pinned revisions, HF_HUB_OFFLINE=1",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 3.805825132999985,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 0.17821090616250573,
+                "median": 0.18460971849998487,
+                "min": 0.09781708599996364,
+                "max": 0.2988815070000328
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 1.1021653022999942,
+                "median": 1.099213806000023,
+                "min": 0.9753403529999787,
+                "max": 1.235106664
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model_id": "git-base-coco",
+      "display_name": "GIT-base-coco",
+      "backend": "huggingface",
+      "hub_repo": "microsoft/git-base-coco",
+      "revision": "a13141da42abd4a8cbf283601a8104265f537cee",
+      "source_run_ids": [
+        "phase3-git-base-coco-greedy",
+        "phase3-latency-git-base-coco-greedy-cpu",
+        "phase3-latency-git-base-coco-greedy-cuda"
+      ],
+      "quality": [
+        {
+          "run_id": "phase3-git-base-coco-greedy",
+          "kind": "phase3",
+          "revision": "a13141da42abd4a8cbf283601a8104265f537cee",
+          "decode_strategy": "greedy",
+          "decode_settings": {
+            "num_beams": 1,
+            "do_sample": false,
+            "max_new_tokens": 40,
+            "repetition_penalty": 1.0,
+            "no_repeat_ngram_size": 0,
+            "precision": "float32"
+          },
+          "n_samples": 500,
+          "metrics": {
+            "bleu1": 51.59291275699312,
+            "bleu2": 36.551978928976176,
+            "bleu3": 26.049663045465223,
+            "bleu4": 18.825424051708477,
+            "rouge_l": 47.075176126963726,
+            "meteor": 21.920366933777398,
+            "cider": 1.4561785325819074
+          },
+          "metric_errors": {}
+        }
+      ],
+      "latency": [
+        {
+          "run_id": "phase3-latency-git-base-coco-greedy-cpu",
+          "device": "cpu",
+          "environment": "Local laptop ASUS TUF Gaming A15 FA506NFR, AMD Ryzen 7 7435HS (8 cores / 16 threads), 15.8 GiB RAM, Windows 11 Home Single Language 10.0.26200, AC power, power plan Turbo; CPU only (torch 2.3.0+cpu, tensorflow-cpu 2.15.0); Hugging Face weights from the local cache (HF_HUB_OFFLINE=1)",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 4.599780500000634,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 3.473495191249981,
+                "median": 3.48578925000038,
+                "min": 1.7365517999987787,
+                "max": 5.159025900000415
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 30.87369807999976,
+                "median": 29.13931109999976,
+                "min": 24.65312720000111,
+                "max": 40.41458020000027
+              }
+            }
+          ]
+        },
+        {
+          "run_id": "phase3-latency-git-base-coco-greedy-cuda",
+          "device": "cuda",
+          "environment": "Kaggle kernel apoorvujjwal/task-016-phase-3-gpu-latency-benchmark (accelerator NvidiaTeslaT4): Tesla T4 (15360 MiB, driver 580.178.04), GPU 0 of 2 attached, CUDA_VISIBLE_DEVICES=0; CPU Intel(R) Xeon(R) CPU @ 2.00GHz, 4 vCPUs, 31.3 GiB RAM; Python 3.10.20 (uv) in two venvs: Hugging Face models with torch 2.3.0+cu121 (CUDA 12.1) and transformers 4.41.2; CNN with tensorflow 2.15.0 with its and-cuda CUDA libraries, no TensorRT (built for CUDA 12.2, cuDNN 8); Hugging Face weights pre-fetched at the pinned revisions, HF_HUB_OFFLINE=1",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 3.4990459299999657,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 0.3928128732437514,
+                "median": 0.391799954000021,
+                "min": 0.19494826699997247,
+                "max": 0.5851394649999975
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 3.0892467904500167,
+                "median": 3.103833613500001,
+                "min": 2.627946960999907,
+                "max": 3.555493163000051
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model_id": "inceptionv3-transformer-stabilized",
+      "display_name": "CNN + Transformer (InceptionV3)",
+      "backend": "cnn",
+      "hub_repo": "apoorvrajdev/captioning-inceptionv3-transformer",
+      "revision": "59d93b4babb16b0ac81eef598f3abc271a355cbf",
+      "source_run_ids": [
+        "stabilized-beam-w4-lp07-rp12",
+        "stabilized-greedy",
+        "phase3-latency-inceptionv3-transformer-stabilized-greedy-cpu",
+        "phase3-latency-inceptionv3-transformer-stabilized-greedy-cuda"
+      ],
+      "quality": [
+        {
+          "run_id": "stabilized-beam-w4-lp07-rp12",
+          "kind": "reference",
+          "revision": null,
+          "decode_strategy": "beam",
+          "decode_settings": {
+            "beam_width": 4,
+            "length_penalty": 0.7,
+            "repetition_penalty": 1.2,
+            "max_length": 40
+          },
+          "n_samples": 500,
+          "metrics": {
+            "bleu1": 41.92993161784126,
+            "bleu2": 25.407254877413084,
+            "bleu3": 16.009033427971406,
+            "bleu4": 10.388352276291533,
+            "rouge_l": 36.84029057315173,
+            "meteor": 15.56136011285077,
+            "cider": 0.8260395027190287
+          },
+          "metric_errors": {}
+        },
+        {
+          "run_id": "stabilized-greedy",
+          "kind": "reference",
+          "revision": null,
+          "decode_strategy": "greedy",
+          "decode_settings": {
+            "beam_width": null,
+            "length_penalty": null,
+            "repetition_penalty": 1.0,
+            "max_length": 40
+          },
+          "n_samples": 500,
+          "metrics": {
+            "bleu1": 42.196743776968695,
+            "bleu2": 26.0895810249633,
+            "bleu3": 16.519095802602447,
+            "bleu4": 10.565569657054366,
+            "rouge_l": 37.571303951091465,
+            "meteor": 15.447442354081048,
+            "cider": 0.7891216278499353
+          },
+          "metric_errors": {}
+        }
+      ],
+      "latency": [
+        {
+          "run_id": "phase3-latency-inceptionv3-transformer-stabilized-greedy-cpu",
+          "device": "cpu",
+          "environment": "Local laptop ASUS TUF Gaming A15 FA506NFR, AMD Ryzen 7 7435HS (8 cores / 16 threads), 15.8 GiB RAM, Windows 11 Home Single Language 10.0.26200, AC power, power plan Turbo; CPU only (torch 2.3.0+cpu, tensorflow-cpu 2.15.0); Hugging Face weights from the local cache (HF_HUB_OFFLINE=1)",
+          "decode_strategy": "greedy",
+          "batch_mode": "sequential",
+          "load_seconds": 5.5126202999999805,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 1.0699519037499272,
+                "median": 1.0524734999999055,
+                "min": 0.6827608999992663,
+                "max": 1.484144699999888
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 7.888835630000267,
+                "median": 7.872501900000316,
+                "min": 7.583554000000731,
+                "max": 8.564616999999998
+              }
+            }
+          ]
+        },
+        {
+          "run_id": "phase3-latency-inceptionv3-transformer-stabilized-greedy-cuda",
+          "device": "cuda",
+          "environment": "Kaggle kernel apoorvujjwal/task-016-phase-3-gpu-latency-benchmark (accelerator NvidiaTeslaT4): Tesla T4 (15360 MiB, driver 580.178.04), GPU 0 of 2 attached, CUDA_VISIBLE_DEVICES=0; CPU Intel(R) Xeon(R) CPU @ 2.00GHz, 4 vCPUs, 31.3 GiB RAM; Python 3.10.20 (uv) in two venvs: Hugging Face models with torch 2.3.0+cu121 (CUDA 12.1) and transformers 4.41.2; CNN with tensorflow 2.15.0 with its and-cuda CUDA libraries, no TensorRT (built for CUDA 12.2, cuDNN 8); Hugging Face weights pre-fetched at the pinned revisions, HF_HUB_OFFLINE=1",
+          "decode_strategy": "greedy",
+          "batch_mode": "sequential",
+          "load_seconds": 7.65426309999998,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 0.7394496764124924,
+                "median": 0.7241683075000083,
+                "min": 0.582140440999865,
+                "max": 1.8277680539999892
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 5.776521360550009,
+                "median": 5.772675214999936,
+                "min": 5.556844185000045,
+                "max": 6.084082670000043
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "model_id": "vit-gpt2",
+      "display_name": "ViT-GPT2",
+      "backend": "huggingface",
+      "hub_repo": "nlpconnect/vit-gpt2-image-captioning",
+      "revision": "dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+      "source_run_ids": [
+        "phase3-vit-gpt2-greedy",
+        "phase3-latency-vit-gpt2-greedy-cpu",
+        "phase3-latency-vit-gpt2-greedy-cuda"
+      ],
+      "quality": [
+        {
+          "run_id": "phase3-vit-gpt2-greedy",
+          "kind": "phase3",
+          "revision": "dc68f91c06a1ba6f15268e5b9c13ae7a7c514084",
+          "decode_strategy": "greedy",
+          "decode_settings": {
+            "num_beams": 1,
+            "do_sample": false,
+            "max_new_tokens": 40,
+            "repetition_penalty": 1.0,
+            "no_repeat_ngram_size": 0,
+            "precision": "float32"
+          },
+          "n_samples": 500,
+          "metrics": {
+            "bleu1": 49.12276232739276,
+            "bleu2": 33.41039138807018,
+            "bleu3": 22.91337848185665,
+            "bleu4": 15.84152396302579,
+            "rouge_l": 44.509803731649235,
+            "meteor": 19.782713178028878,
+            "cider": 1.2629916931297422
+          },
+          "metric_errors": {}
+        }
+      ],
+      "latency": [
+        {
+          "run_id": "phase3-latency-vit-gpt2-greedy-cpu",
+          "device": "cpu",
+          "environment": "Local laptop ASUS TUF Gaming A15 FA506NFR, AMD Ryzen 7 7435HS (8 cores / 16 threads), 15.8 GiB RAM, Windows 11 Home Single Language 10.0.26200, AC power, power plan Turbo; CPU only (torch 2.3.0+cpu, tensorflow-cpu 2.15.0); Hugging Face weights from the local cache (HF_HUB_OFFLINE=1)",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 8.378400899999178,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 0.8519261706250972,
+                "median": 0.8422909499995512,
+                "min": 0.704062700000577,
+                "max": 1.0762851999988925
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 4.37677557499992,
+                "median": 4.331842450000295,
+                "min": 4.130009399999835,
+                "max": 4.846336599999631
+              }
+            }
+          ]
+        },
+        {
+          "run_id": "phase3-latency-vit-gpt2-greedy-cuda",
+          "device": "cuda",
+          "environment": "Kaggle kernel apoorvujjwal/task-016-phase-3-gpu-latency-benchmark (accelerator NvidiaTeslaT4): Tesla T4 (15360 MiB, driver 580.178.04), GPU 0 of 2 attached, CUDA_VISIBLE_DEVICES=0; CPU Intel(R) Xeon(R) CPU @ 2.00GHz, 4 vCPUs, 31.3 GiB RAM; Python 3.10.20 (uv) in two venvs: Hugging Face models with torch 2.3.0+cu121 (CUDA 12.1) and transformers 4.41.2; CNN with tensorflow 2.15.0 with its and-cuda CUDA libraries, no TensorRT (built for CUDA 12.2, cuDNN 8); Hugging Face weights pre-fetched at the pinned revisions, HF_HUB_OFFLINE=1",
+          "decode_strategy": "greedy",
+          "batch_mode": "batched",
+          "load_seconds": 8.930645156999958,
+          "batches": [
+            {
+              "batch_size": 1,
+              "calls_per_pass": 32,
+              "summary_seconds": {
+                "count": 160,
+                "mean": 0.19880920695625476,
+                "median": 0.19774194149999857,
+                "min": 0.1580758780000906,
+                "max": 0.2499033500000678
+              }
+            },
+            {
+              "batch_size": 8,
+              "calls_per_pass": 4,
+              "summary_seconds": {
+                "count": 20,
+                "mean": 0.4307725802500045,
+                "median": 0.4276745530000312,
+                "min": 0.4065939839999828,
+                "max": 0.45947973199997705
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
