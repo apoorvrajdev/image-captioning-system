@@ -587,14 +587,12 @@ the defaults.
   §§ 9.1–9.6 is a dated amendment that gives its reason, as in § 8.7. Runs made
   under changed settings go to new run directories and aren't compared with runs
   made under these settings.
-- **Status:** the CPU runs exist (§ 9.9). The Kaggle GPU runs (TASK-016) haven't
-  been made yet.
+- **Status:** the CPU runs (§ 9.9) and the Kaggle GPU runs (§ 9.10) exist.
 
 ### 9.9 Results: CPU (TASK-016, 2026-10-07)
 
 These are the first runs under §§ 9.1–9.6. Nothing in the protocol was changed.
-Only CPU runs exist so far. The Kaggle GPU runs that TASK-016 also requires
-haven't been made yet.
+The GPU runs are in § 9.10.
 
 **Runs.** Each was written by `scripts/benchmark_latency.py`, one invocation per
 model, with the protocol defaults and `--device cpu`:
@@ -670,3 +668,117 @@ model id. The order is not a ranking.
 - **What a sample includes:** reading the image file and generating until each
   caption ends (§ 9.1). The spread within a row therefore includes differences
   in caption length between images.
+
+### 9.10 Results: GPU (TASK-016, 2026-10-07)
+
+These runs use the same protocol as § 9.9. Nothing in §§ 9.1–9.6 was changed.
+
+**Runs.** Each was written by `scripts/benchmark_latency.py`, one invocation per
+model, with the protocol defaults and `--device cuda`:
+
+| `model_id` | Run directory | Revision | Load (s) |
+|---|---|---|---|
+| `blip-base` | [`results/phase3-latency-blip-base-greedy-cuda/`](../results/phase3-latency-blip-base-greedy-cuda/) | `82a37760796d32b1411fe092ab5d4e227313294b` | 3.8 |
+| `vit-gpt2` | [`results/phase3-latency-vit-gpt2-greedy-cuda/`](../results/phase3-latency-vit-gpt2-greedy-cuda/) | `dc68f91c06a1ba6f15268e5b9c13ae7a7c514084` | 8.9 |
+| `git-base-coco` | [`results/phase3-latency-git-base-coco-greedy-cuda/`](../results/phase3-latency-git-base-coco-greedy-cuda/) | `a13141da42abd4a8cbf283601a8104265f537cee` | 3.5 |
+| `inceptionv3-transformer-stabilized` | [`results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cuda/`](../results/phase3-latency-inceptionv3-transformer-stabilized-greedy-cuda/) | `59d93b4babb16b0ac81eef598f3abc271a355cbf` (tag `v2.0.0`) | 7.7 |
+
+**Execution.**
+
+- **Host:** the private Kaggle kernel
+  `apoorvujjwal/task-016-phase-3-gpu-latency-benchmark` (version 1), with the
+  `NvidiaTeslaT4` accelerator.
+  - GPUs: two Tesla T4s (15360 MiB, driver 580.178.04). Every run used GPU 0
+    only, through `CUDA_VISIBLE_DEVICES=0`.
+  - CPU and OS: Intel Xeon @ 2.00GHz, 4 vCPUs, 31.3 GiB RAM, Linux 6.18
+    (glibc 2.39).
+  - Every run's `environment` field records this verbatim, together with the
+    runtime below.
+- **Runtime:**
+  - The Kaggle image runs Python 3.13.15. `tensorflow` 2.15.0 has wheels only
+    for Python 3.9–3.11, so the kernel used uv 0.11.15 to build two Python
+    3.10.20 environments. Both hold the `requirements.txt` pins without
+    `tensorflow-cpu`, and the repository at `03a8f9e`, installed without
+    dependencies.
+  - Hugging Face models: the `[hf]` extra, with `torch` 2.3.0+cu121 (CUDA 12.1)
+    and `transformers` 4.41.2.
+  - CNN + Transformer: `tensorflow==2.15.0` plus the 12 CUDA library pins of
+    its own `and-cuda` extra. TensorFlow was built for CUDA 12.2 and cuDNN 8.
+    - The extra's three TensorRT packages were left out. They can't be
+      installed from PyPI, and only TF-TRT uses them; the CNN doesn't.
+  - Two environments were needed because `torch` 2.3.0 and `tensorflow` 2.15.0
+    pin different builds of the same CUDA libraries. For example, they require
+    cuDNN 8.9.2.26 and 8.9.4.25 respectively.
+  - Each run's `runtime.packages` therefore lists only its own environment's
+    frameworks.
+  - The repository pin `tensorflow-cpu==2.15.0` is unchanged (ADR-019).
+- **GPU checks before any run:**
+  - `torch` reported CUDA available and ran a convolution on `cuda:0`.
+  - TensorFlow listed `/physical_device:GPU:0` (Tesla T4, compute capability
+    7.5) and ran a convolution and a matrix multiply on it.
+  - The CNN run records `runtime.tensorflow_gpus` as
+    `["/physical_device:GPU:0"]`, so its § 9.5 device check passed.
+- **Weights:**
+  - Before the runs, each baseline was loaded once at its pinned revision. In
+    each case the loaded config's `_commit_hash` equalled the § 8.1 SHA. The
+    classes were `BlipForConditionalGeneration`, `VisionEncoderDecoderModel`
+    and `GitForCausalLM`.
+  - The runs then loaded from that cache, with `HF_HUB_OFFLINE=1`.
+  - The CNN files came from Hub commit `59d93b4`. The SHA-256 of `model.h5`
+    (`74963a3f…`) and of `vocab.pkl` (`178029c9…`) matched the Hub's LFS hashes
+    before the run.
+- **CNN load time:** building the CNN + Transformer first creates InceptionV3
+  with Keras's ImageNet weights, which the checkpoint then overwrites.
+  - The fresh Kaggle machine had no Keras cache, so this run's `load_seconds`
+    includes downloading `inception_v3_weights_tf_dim_ordering_tf_kernels_notop.h5`
+    (88 MB). The local CPU run (§ 9.9) had that file cached.
+  - This affects the load time only, not the samples. § 9.1 counts downloads in
+    the load time.
+- **Inputs:** the same 32 images, read from
+  `/kaggle/input/datasets/awsaf49/coco-2017-dataset/coco2017/train2017/`. The
+  slice fingerprint is `6b5628bf…`.
+- **Run:**
+  - All four runs ran in the same session, one after another. All completed; no
+    call failed and nothing was retried.
+  - The kernel only set up the environment and called the CLI. It timed
+    nothing itself.
+  - The four `latency.json` files were downloaded with `kaggle kernels output`
+    and committed unchanged; the SHA-256 was checked after copying.
+
+**Checks on the committed files.** Each `latency.json` was checked to have:
+
+- the § 8.1 model id, Hub repository and revision, and the § 8.4 decode
+  settings;
+- `device` `cuda`, and the same environment, platform and Python version;
+- the same 32 file names, slice fingerprint, settings and timing definition;
+- batch sizes 1 and 8, with 32 and 4 calls per pass;
+- 160 and 20 positive samples;
+- summary statistics equal to those recomputed from the raw samples;
+- no timestamp.
+
+Their inputs, settings, timing definition, revisions and decode settings also
+equal those of the matching CPU run in § 9.9.
+
+**Statistics.** Values come from each file's `summary_seconds`, shown here in
+milliseconds per call (that is, per batch), rounded to 0.1 ms. Rows are sorted by
+model id. The order is not a ranking.
+
+| Model | Batch size | Samples | Mean | Median | Min | Max |
+|---|---|---|---|---|---|---|
+| blip-base | 1 | 160 | 178.2 | 184.6 | 97.8 | 298.9 |
+| blip-base | 8 | 20 | 1102.2 | 1099.2 | 975.3 | 1235.1 |
+| git-base-coco | 1 | 160 | 392.8 | 391.8 | 194.9 | 585.1 |
+| git-base-coco | 8 | 20 | 3089.2 | 3103.8 | 2627.9 | 3555.5 |
+| inceptionv3-transformer-stabilized | 1 | 160 | 739.4 | 724.2 | 582.1 | 1827.8 |
+| inceptionv3-transformer-stabilized | 8 | 20 | 5776.5 | 5772.7 | 5556.8 | 6084.1 |
+| vit-gpt2 | 1 | 160 | 198.8 | 197.7 | 158.1 | 249.9 |
+| vit-gpt2 | 8 | 20 | 430.8 | 427.7 | 406.6 | 459.5 |
+
+- **The CNN + Transformer at batch size 8** is eight single-image predictions in
+  a row (§ 9.5). It is not batched inference, and it isn't like-for-like with the
+  Hugging Face models' batch-8 rows.
+- **Scope of these figures:** they hold for this Kaggle T4 session, with these
+  settings, only.
+- **CPU vs GPU:** § 9.9 and this section come from different hosts, operating
+  systems and framework builds. Together they are not a controlled CPU-versus-GPU
+  comparison, and no such claim is made.
