@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-07_
+_Last updated: 2026-10-08_
 
 ## Current phase
 
@@ -14,9 +14,10 @@ _Last updated: 2026-10-07_
 - **Phase 3 is complete.** TASK-007 added Playwright E2E, so the SPA's caption flow and Phase 3 dashboard are now
   verified end to end in CI (ADR-023). The README's Phase 3 section cites the run ids, the quality and latency
   results and the dashboard (`7e7464d`, `53add09`).
-- **Phase 4 is planned:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
-  [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is next and must land before 2026-10-19, when GitHub moves
-  `ubuntu-latest` to Ubuntu 26.
+- **Phase 4 is in progress:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
+  [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is done (2026-10-08, ADR-024): every job runs on
+  `ubuntu-24.04` with Node 24 action majors, ahead of the 2026-10-19 `ubuntu-latest` move. TASK-020 (serving dependency
+  security) is next.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -47,7 +48,8 @@ _Last updated: 2026-10-07_
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
 | Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
-| CI on `main` for `4dec153` (run `37645312836`) | green, all 6 jobs incl. `pre-commit` and the frontend E2E |
+| CI on `main` for `bd91c3c` (run `37799586272`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04` with Node 24 actions, 0 annotations (TASK-019) |
+| `deploy-backend.yml` (run `37799794182`, automatic, `bd91c3c`) | **success** on `ubuntu-24.04`: Space `RUNNING`, healthy, `v2.0.0` |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
 | `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
@@ -62,6 +64,14 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-08 CI platform currency (TASK-019, done; first Phase 4 task):
+  - All seven jobs run on `ubuntu-24.04` instead of `ubuntu-latest`, which moves to Ubuntu 26 on 2026-10-19.
+  - Actions moved to their Node 24 majors: `checkout`, `setup-python`, `setup-node` and `upload-artifact` `@v7`,
+    `cache@v6`. The `frontend` job runs Node 24 (LTS).
+  - Python 3.10 stays in the pytest matrix and `requires-python` past its end of life, while `tensorflow-cpu==2.15.0`
+    holds (ADR-024).
+  - CI run `37799586272` was green with no annotations, and deploy run `37799794182` passed its gate.
+  - Committed as `620881f`..`bd91c3c`, plus the closing docs.
 - 2026-10-07 Playwright E2E (TASK-007, done; Phase 3 complete):
   - `@playwright/test` 1.63.0 is a devDependency, with Chromium only. The lock was first resynced, because the
     committed one failed `npm ci` (optional wasm32 `@emnapi` entries).

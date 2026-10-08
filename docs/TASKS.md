@@ -872,7 +872,7 @@ day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
 
 **Deadline:** TASK-019 must land before **2026-10-19**, when GitHub moves `ubuntu-latest` to Ubuntu 26.
 
-- [ ] **4A** — CI platform currency → TASK-019
+- [x] **4A** — CI platform currency → TASK-019 (done 2026-10-08)
 - [ ] **4B** — Serving dependency security → TASK-020
 - [ ] **4C** — Dependency and secret scanning in CI → TASK-021
 - [ ] **4D** — Deploy only when the production image changes → TASK-022
@@ -913,7 +913,7 @@ TASK-019 (CI platform) ─┬─► TASK-020 (serving deps) ─► TASK-021 (sca
                         └─► TASK-022 (deploy on image change) ─► TASK-023 (post-deploy smoke test)
 ```
 
-### TASK-019 — CI platform currency            [status: todo] (deadline 2026-10-19)
+### TASK-019 — CI platform currency            [status: done] (2026-10-08, deadline 2026-10-19)
 Area: deployment
 Goal: CI and the deploy workflow run on an explicitly chosen, supported platform before GitHub moves `ubuntu-latest`
 to Ubuntu 26 and retires the Node 20 Actions runtime.
@@ -941,6 +941,23 @@ Owns: `.github/workflows/{ci,deploy-backend,no-ai-attribution}.yml`, `docs/CI.md
 Out of scope: serving dependency upgrades (TASK-020); vulnerability or secret scanners (TASK-021); redesigning the
 deploy trigger (TASK-022); the TensorFlow / Keras migration; adopting Ubuntu 26; the Dockerfile base image; unrelated
 application changes.
+Outcome:
+- Runner (`620881f`): all seven jobs name `ubuntu-24.04`, and `grep -rn "ubuntu-latest" .github/workflows` finds
+  nothing.
+- Actions (`98b9a56`): `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7`, `actions/cache@v6`
+  and `actions/upload-artifact@v7`. Each tag exists upstream and its `action.yml` declares `runs.using: node24`.
+- Node (`aa11845`): the `frontend` job runs Node 24 (LTS). Nothing else pins Node.
+- Python 3.10 stays in the pytest matrix and in `requires-python`, for the reasons in ADR-024. `pyproject.toml` is
+  unchanged.
+- Docs: ADR-024 (`3b463db`), `CI.md` § Platform (`1fe5b63`), and the deployment skill's DoD and verification commands
+  (`bd91c3c`). The runbook names no runner or Node version, so it needed no change.
+- Verification:
+  - All three workflows parse, and pre-commit passed on the changed docs.
+  - CI run `37799586272` on `bd91c3c`: all 6 jobs green on image `ubuntu-24.04` (20261004.327.1), with 0 annotations
+    on every job, so no Node 20 deprecation notice.
+  - Deploy run `37799794182` on the same image: Space `RUNNING`, then "Healthy: model_version=v2.0.0". The public
+    `/healthz` returned `model_loaded: true`, `v2.0.0`.
+- Not done, by scope: Ubuntu 26, SHA-pinned actions, the Dockerfile base image, the TensorFlow / Keras migration.
 
 ### TASK-020 — Fix vulnerable serving dependencies            [status: todo]
 Area: inference-api · deployment
