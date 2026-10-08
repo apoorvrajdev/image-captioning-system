@@ -7,7 +7,7 @@
 <p align="center">
   <img alt="Python 3.10+"     src="https://img.shields.io/badge/python-3.10%2B-3776AB?style=flat-square&logo=python&logoColor=white">
   <img alt="TensorFlow 2.15"  src="https://img.shields.io/badge/TensorFlow-2.15-FF6F00?style=flat-square&logo=tensorflow&logoColor=white">
-  <img alt="FastAPI"          src="https://img.shields.io/badge/FastAPI-0.111-009688?style=flat-square&logo=fastapi&logoColor=white">
+  <img alt="FastAPI"          src="https://img.shields.io/badge/FastAPI-0.133-009688?style=flat-square&logo=fastapi&logoColor=white">
   <img alt="Pydantic v2"      src="https://img.shields.io/badge/Pydantic-v2-E92063?style=flat-square&logo=pydantic&logoColor=white">
   <img alt="React 19"         src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=black">
   <img alt="Vite 8"           src="https://img.shields.io/badge/Vite-8-646CFF?style=flat-square&logo=vite&logoColor=white">
@@ -111,7 +111,7 @@ This project demonstrates that conversion end-to-end at a scale one engineer can
                        └──────────────────┬────────────────────┘
                                           │ multipart/form-data
                        ┌──────────────────▼────────────────────┐
-                       │      FastAPI 0.111 (Pydantic v2)      │
+                       │      FastAPI 0.133 (Pydantic v2)      │
                        │  RequestContextMiddleware · /healthz · /v1/captions  │
                        └──────────────────┬────────────────────┘
                                           │
@@ -409,7 +409,7 @@ eight images. Median, min and max are in §§ 9.9–9.10. Rows are ordered by mo
 |---|---|
 | **Core ML** | Python 3.10–3.12, TensorFlow-CPU 2.15.0 (pinned), NumPy, Pillow |
 | **Model** | InceptionV3 encoder (frozen) + custom multi-head Transformer decoder |
-| **Backend** | FastAPI 0.111, Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
+| **Backend** | FastAPI 0.133 (Starlette 1.3), Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
 | **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config, Playwright E2E (Chromium) |
 | **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations; Phase 3 baselines via `transformers` 4.41.2 + `torch` 2.3.0 (optional `[hf]` extra) |
 | **Tooling** | Ruff (lint + format), mypy, pytest 8, pre-commit, nbstripout, gitleaks |
@@ -443,7 +443,7 @@ image-captioning-system/
 │   └── app/
 │       ├── main.py                              # App factory + lifespan-managed predictor singleton
 │       ├── api/routes.py                        # Thin HTTP — /healthz, /v1/captions
-│       ├── core/                                # BackendSettings, structlog setup, RequestContextMiddleware
+│       ├── core/                                # BackendSettings, structlog setup, RequestContextMiddleware, body-size cap
 │       ├── schemas/                             # Pydantic request/response models
 │       ├── services/predictor_service.py        # bytes → caption + latency (anyio thread offload)
 │       ├── utils/image.py                       # Content-type allow-list + ImageDecodeError
@@ -596,7 +596,7 @@ Phase 2A delivers a production-style inference service rather than a thin demo w
 | `GET`  | `/docs`         | Interactive Swagger UI, auto-generated from the Pydantic schemas. |
 | `GET`  | `/openapi.json` | Raw OpenAPI 3.1 spec for client codegen. |
 
-`POST /v1/captions` enforces input validation at the boundary: **415** on disallowed content types, **413** on oversized uploads (`serve.max_upload_bytes`), **422** on undecodable image bytes, **400** on empty uploads, **503** while the predictor is still loading during a rolling restart. All six status codes are covered by the [`backend/app/tests/`](backend/app/tests/) suite added in Phase 2C WS-D.
+`POST /v1/captions` enforces input validation at the boundary: **415** on disallowed content types, **413** on oversized uploads (`serve.max_upload_bytes`; a body over that limit plus 64 KiB of multipart framing is refused before it is buffered), **422** on undecodable image bytes, **400** on empty uploads, **503** while the predictor is still loading during a rolling restart. All six status codes are covered by the [`backend/app/tests/`](backend/app/tests/) suite added in Phase 2C WS-D.
 
 ---
 
