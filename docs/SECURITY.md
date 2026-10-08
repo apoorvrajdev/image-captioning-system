@@ -69,7 +69,11 @@ Remaining, each with its reason:
 |---|---|---|---|---|
 | `keras` | 2.15.0 | 13: CVE-2024-55459, CVE-2025-9906, CVE-2025-12058, CVE-2025-12060, CVE-2026-1462, CVE-2026-9335, CVE-2026-11816, CVE-2026-12479 to CVE-2026-12482, CVE-2026-12484, CVE-2026-12570 | Fixed only in Keras 3. `tensorflow-cpu==2.15.0` requires Keras 2.15, and TF 2.16+ brings Keras 3, which breaks `TextVectorization` save/load. | No. Each needs an untrusted model file or archive (`load_model`, HDF5 links, `get_file`). Serving loads only its own weights, from the pinned, immutable Hub tag. |
 | `protobuf` | 4.25.9 | CVE-2026-0994 | Fixed in 5.29.6 and 6.33.5. TF 2.15 requires protobuf < 5. | No. It needs untrusted JSON parsed with `json_format.ParseDict`, and serving parses none. |
-| `click` | 8.1.7 | CVE-2026-7246 | Fixed in 8.3.3. Outside TASK-020's scope. | No. It's command injection through `click.edit()`, which nothing calls. |
+
+`click` 8.1.7 was also on this list, for CVE-2026-7246 (PYSEC-2026-2132, command injection through `click.edit()`,
+which nothing calls). OSV withdrew PYSEC-2026-2132 on 2026-10-07 and the CVE is now marked disputed, so pip-audit no
+longer reports it. Its baseline entry went stale, and the first CI run of the gate failed on it, so it was removed in
+TASK-021.
 
 CI enforces this list through the pip-audit baseline (§ CI scanning policy).
 
@@ -84,9 +88,9 @@ before anything deploys, so a failing scan also stops the backend deploy.
 | `npm audit --omit=dev` (npm 11.6.2) | `frontend` | the production dependencies in `frontend/package-lock.json`, which are what ships in the bundle | it reports any advisory, at any severity |
 | gitleaks 8.18.4 `detect --redact` | `security` | every commit reachable from the tested commit (full-history checkout), with the default rules the pre-commit hook uses. It scans git history only, never the working tree | it finds anything |
 
-- **Known findings.** The pip-audit baseline holds exactly the 15 findings TASK-020 reviewed (§ Dependency audit):
-  `keras` 2.15.0 (13), `protobuf` 4.25.9 (1) and `click` 8.1.7 (1). pip-audit's summary line counts them as 26,
-  because it lists some advisories more than once. Each entry names one package, one exact version
+- **Known findings.** The pip-audit baseline holds exactly the 14 findings TASK-020 reviewed that pip-audit still
+  reports (§ Dependency audit): `keras` 2.15.0 (13) and `protobuf` 4.25.9 (1). pip-audit's summary line counts them
+  as 25, because it lists some advisories more than once. Each entry names one package, one exact version
   and one vulnerability id, and matches only a finding with that exact id. Every run prints it as `[baseline]`, with
   its aliases (the CVE ids in § Dependency audit). Nothing is ignored by package, severity or class.
 - **Version changes.** An entry is pinned to its version. `protobuf` floats within TensorFlow's `<5` range, so a new

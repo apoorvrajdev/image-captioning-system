@@ -262,7 +262,7 @@ Format: **Decision · Why · Evidence**.
     - pip-audit 2.10.1, in its own venv, audits `requirements.txt` (the image's dependency layer), resolved on Python 3.11 like the image, and writes JSON.
     - `scripts/check_pip_audit.py` gates that report against `.github/pip-audit-baseline.txt`. Each entry is an exact `<package> <version> <vulnerability id>`, grouped with its reason and removal condition. An entry matches one finding with that exact id. Aliases, such as the CVE ids `SECURITY.md` cites, are printed but never matched.
     - The gate prints every finding as `[baseline]` or `[NEW]`. It fails on a finding missing from the baseline, a baseline entry that matches no finding, a dependency pip-audit couldn't audit, or a missing or malformed report. An audited dependency without its version or its `vulns` list is malformed, never read as clean.
-    - The baseline is TASK-020's 15 reviewed findings: 13 in `keras` 2.15.0, 1 in `protobuf` 4.25.9, 1 in `click` 8.1.7. pip-audit's own summary says 26, because it lists some advisories more than once; the gate counts each package, version and id once. There's no package-wide or severity-wide ignore.
+    - The baseline is the 14 findings TASK-020 reviewed that pip-audit still reports: 13 in `keras` 2.15.0 and 1 in `protobuf` 4.25.9. TASK-020's `click` 8.1.7 finding isn't in it. OSV withdrew that advisory (PYSEC-2026-2132) on 2026-10-07, and the gate's first CI run failed on the stale entry until it was removed. pip-audit's own summary says 25, because it lists some advisories more than once; the gate counts each package, version and id once. There's no package-wide or severity-wide ignore.
     - Only `requirements.txt` is audited. `requirements-dev.txt` and `requirements-eval.txt` aren't.
   - `npm audit --omit=dev`, with npm pinned to 11.6.2 through `npx`, is the frontend job's last step and runs even if an earlier step failed. An advisory at any severity fails it. Dev dependencies aren't audited in CI.
   - gitleaks:
@@ -271,11 +271,11 @@ Format: **Decision · Why · Evidence**.
     - There's no allowlist, because the history is clean. A false positive would get a one-finding `.gitleaksignore` fingerprint. A real secret is rotated first and never only allowlisted.
   - Workflow permissions stay `contents: read`, no repository secret is added, and no existing job or step changes.
 - **Why:**
-  - Blocking from the start, not report-only: TASK-020 left no unreviewed finding in the serving set. Its 15 residual findings are reviewed exceptions (ADR-025), so with them baselined the scan starts clean, which is TASK-021's condition for blocking.
+  - Blocking from the start, not report-only: TASK-020 left no unreviewed finding in the serving set. Its residual findings are reviewed exceptions (ADR-025), so with them baselined the scan starts clean, which is TASK-021's condition for blocking.
   - pip-audit alone would fail on TASK-020's reviewed findings forever. `--ignore-vuln` matches an id on any package or version, drops ignored findings from the log, and keeps a stale ignore silently. The gate pins each exception to a package and version, shows it in every run, and fails once it stops matching. At the TensorFlow / Keras migration, for example, keras moves and its 13 entries fail the gate until they're removed.
   - The gate uses only the standard library, so CI runs it on the bare interpreter without installing the project. Its unit tests cover passing, a new finding, version pinning, an alias not standing in for an id, stale entries, unaudited dependencies and malformed input.
   - Negative check: gating the pre-TASK-020 `requirements.txt` reports the 33 findings TASK-020 fixed as `[NEW]` and exits 1.
-  - The same 15 findings come up on Linux with Python 3.11, from the package set CI installed in run `37808914615`, as on Windows. The dev and eval files aren't gated:
+  - On Linux with Python 3.11, CI audits 68 dependencies, 2 fewer than Windows (`tensorflow-intel` and `colorama` are Windows-only), with the same `keras` and `protobuf` findings. The dev and eval files aren't gated:
     - neither is in the image;
     - they add 43 findings in tooling that runs offline on trusted inputs: 42 in `nltk` 3.8.1, 1 in `pytest` 8.2.2;
     - gating them is a separate decision, recorded as a known gap in `SECURITY.md`.
@@ -298,7 +298,7 @@ Format: **Decision · Why · Evidence**.
   - `protobuf` isn't pinned in `requirements.txt`. It's a transitive dependency of TensorFlow and floats within `<5`. If a new 4.25.x patch still carries CVE-2026-0994, the gate fails, with a new finding plus a stale entry, until the baseline line's version is updated in a reviewed one-line change. Pinning it in `requirements.txt` would be a dependency change, which is outside this task.
   - An advisory that's renamed, or split into a new record, also fails until it's reviewed.
   - No scheduled scan: a quiet repository isn't rescanned until the next push or pull request.
-  - Results depend on the advisory databases at run time, so a rerun of the same commit can differ.
+  - Results depend on the advisory databases at run time, so a rerun of the same commit can differ. PyPI's CDN can also lag a withdrawal: on 2026-10-09, a local run still reported the withdrawn `click` advisory after CI had stopped seeing it.
   - Not covered: container image scanning, dev and eval Python dependencies, dev npm dependencies, Dependabot, and secrets kept outside git (Space variables, repository secrets).
 - **Evidence:** `.github/workflows/ci.yml` (`security`, `frontend`), `scripts/check_pip_audit.py`, `tests/unit/test_check_pip_audit.py`, `.github/pip-audit-baseline.txt`, `docs/SECURITY.md` § CI scanning policy, `docs/CI.md`; the local runs and negative checks recorded in TASK-021 in `TASKS.md`; the gitleaks v8.18.4 release checksums; ADR-016, ADR-017, ADR-024, ADR-025.
 

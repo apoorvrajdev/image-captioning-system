@@ -1078,8 +1078,8 @@ Outcome:
 - Implementation:
   - `ci.yml`: a new `security` job runs pip-audit 2.10.1, gated by `scripts/check_pip_audit.py`, then gitleaks 8.18.4
     over the full history. The `frontend` job ends with `npm audit --omit=dev` (npm 11.6.2). All three block.
-  - `.github/pip-audit-baseline.txt`: TASK-020's 15 reviewed findings, each pinned to package, version and id, with its
-    reason and removal condition.
+  - `.github/pip-audit-baseline.txt`: the 14 findings TASK-020 reviewed that pip-audit still reports (13 in `keras`,
+    1 in `protobuf`), each pinned to package, version and id, with its reason and removal condition.
   - `tests/unit/test_check_pip_audit.py`: 20 tests.
   - Docs: ADR-026, `SECURITY.md` § CI scanning policy and § Known gaps, `CI.md`, `TEST_PLAN.md`, the deployment skill,
     the repo map and `CLAUDE.md`.
@@ -1092,11 +1092,18 @@ Outcome:
     which runs on Node 20 (ADR-024). No allowlist: the history is clean.
 - Review: the security review before commit found that the gate read an audited dependency with no `vulns` list, or
   a non-list one, as clean. It now fails closed, and three regression tests fail without the fix. No other findings.
+- First CI run on `main` (`37826940578`, on `b207f10`): six jobs green, "Security scans" red. On Linux with
+  Python 3.11, pip-audit audited 68 dependencies and no longer reported `click` 8.1.7, so the gate failed on its
+  baseline entry as stale. OSV withdrew that advisory (PYSEC-2026-2132) on 2026-10-07, and CVE-2026-7246 is now
+  marked disputed. The local run still showed it because PyPI's CDN served a stale gzip copy of `click`'s JSON,
+  while the uncompressed copy was current. A follow-up commit removed the entry and its `SECURITY.md` row.
 - Verification, locally on 2026-10-09:
   - 20 gate tests; ruff, ruff format and mypy clean; the three workflows parse; pre-commit passed on the changed
     files.
   - pip-audit 2.10.1 on `requirements.txt` (Windows, Python 3.10): 70 dependencies, 26 rows in 3 packages, 15
-    distinct findings. The gate reports all 15 as `[baseline]`, with 0 new, 0 stale and 0 unaudited, and exits 0.
+    distinct findings, the withdrawn `click` one included (stale CDN data). Against the 14-entry baseline the gate
+    fails on that one as `[NEW]`. Without it, all 14 are `[baseline]`, with 0 new, 0 stale and 0 unaudited, and
+    the gate exits 0.
   - gitleaks 8.18.4: 201 commits scanned, the same count as `git rev-list HEAD --count`, and no leaks.
   - `npm audit --omit=dev` (npm 11.6.2): 0 vulnerabilities.
   - Negative checks, each exiting 1:

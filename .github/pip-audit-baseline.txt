@@ -27,7 +27,3 @@ keras 2.15.0 PYSEC-2026-3856
 # protobuf 4.25.9: fixed in 5.29.6 / 6.33.5, but TF 2.15 requires protobuf < 5. Not reachable from serving: it
 # needs untrusted JSON parsed with json_format.ParseDict (CVE-2026-0994). Remove with the TensorFlow migration.
 protobuf 4.25.9 PYSEC-2026-1805
-
-# click 8.1.7: command injection through click.edit() (CVE-2026-7246), fixed in 8.3.3. Nothing calls
-# click.edit(). Kept out of TASK-020's scope. Remove when click is upgraded to >= 8.3.3.
-click 8.1.7 PYSEC-2026-2132

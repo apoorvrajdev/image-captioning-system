@@ -57,7 +57,7 @@ _Last updated: 2026-10-09_
 | `deploy-backend.yml` (run `37819590272`, automatic, `b21b97a`) | **success**: image change deployed, Space `RUNNING`, healthy, `v2.0.0`; recorded as deployment `6942786830` (Space commit `7d45a58`) |
 | `deploy-backend.yml` (run `37820817700`, automatic, `fbf55d8`) | **skipped** (green): docs only, no image input changed since `b21b97a`, and the Space was still on `7d45a58` |
 | `pip-audit -r requirements.txt` (2.10.1, 2026-10-08) | 26 findings in 3 packages (`keras`, `protobuf`, `click`), each listed in `SECURITY.md` with its reason |
-| Security scans (local, 2026-10-09, TASK-021) | pip-audit gate: 15 distinct findings, all `[baseline]`, 0 new, 0 stale; gitleaks 8.18.4: 201 commits, no leaks; `npm audit --omit=dev`: 0 vulnerabilities |
+| Security scans (local, 2026-10-09, TASK-021) | pip-audit gate: 14 findings in `keras` and `protobuf`, all `[baseline]`, 0 new, 0 stale; gitleaks 8.18.4: 201 commits, no leaks; `npm audit --omit=dev`: 0 vulnerabilities |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
 | `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
@@ -77,8 +77,8 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 - 2026-10-09 dependency and secret scanning in CI (TASK-021, done; Phase 4 complete):
   - A new `security` job runs pip-audit 2.10.1 over `requirements.txt`, gated by `scripts/check_pip_audit.py`
-    against `.github/pip-audit-baseline.txt` (TASK-020's 15 reviewed findings, each pinned to package, version and
-    id), then gitleaks 8.18.4 over the full history. The `frontend` job ends with `npm audit --omit=dev`. All
+    against `.github/pip-audit-baseline.txt` (the 14 TASK-020 findings pip-audit still reports, each pinned to
+    package, version and id), then gitleaks 8.18.4 over the full history. The `frontend` job ends with `npm audit --omit=dev`. All
     three block CI, and so the deploy.
   - The gate fails on a new finding, a stale entry, an unaudited dependency or a malformed report. Policy in
     `SECURITY.md` § CI scanning policy.
@@ -260,8 +260,8 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 - No frontend unit tests (Playwright E2E only, Chromium only), and no coverage measured in CI.
 - CI's scans cover only what ships: dev and eval Python dependencies and dev npm dependencies aren't gated, and
   there's no scheduled or container image scan (`SECURITY.md` § Known gaps).
-- `keras` 2.15.0, `protobuf` 4.25.9 and `click` 8.1.7 still have audit findings, none reachable from serving. The first
-  two are held back by the TF 2.15 pin (`SECURITY.md` § Dependency audit).
+- `keras` 2.15.0 and `protobuf` 4.25.9 still have audit findings, none reachable from serving, both held back by the
+  TF 2.15 pin (`SECURITY.md` § Dependency audit). The `click` 8.1.7 advisory was withdrawn on 2026-10-07.
 - Starlette 1.x prints a `TestClient` notice asking for `httpx2` instead of `httpx` (test-only, dev dependency).
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
   `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).

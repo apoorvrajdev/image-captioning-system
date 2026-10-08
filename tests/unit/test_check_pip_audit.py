@@ -218,6 +218,5 @@ def test_the_committed_baseline_parses_and_covers_only_the_reviewed_packages() -
     assert {(e.package, e.version) for e in entries} == {
         ("keras", "2.15.0"),
         ("protobuf", "4.25.9"),
-        ("click", "8.1.7"),
     }
-    assert len(entries) == 15
+    assert len(entries) == 14
