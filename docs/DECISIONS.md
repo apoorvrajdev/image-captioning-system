@@ -194,3 +194,26 @@ Format: **Decision · Why · Evidence**.
   - Without retries, a flaky test fails visibly instead of passing on a second try.
   - The narrow console allowance keeps "zero console errors" meaningful. Without it, the "API unreachable" case could never pass.
 - **Evidence:** `frontend/playwright.config.js`, `frontend/e2e/`, `frontend/package.json`, `.github/workflows/ci.yml` (`frontend` job), `docs/TEST_PLAN.md`, ADR-021, ADR-022.
+
+### ADR-024 — CI runs on a pinned platform: `ubuntu-24.04`, Node 24 action majors and Node 24 LTS; Python 3.10 stays past its end of life
+- **Decision:**
+  - Every job in `ci.yml`, `deploy-backend.yml` and `no-ai-attribution.yml` runs on `ubuntu-24.04`. No job uses `ubuntu-latest`. Moving to a newer image, such as Ubuntu 26, is a separate, reviewed change.
+  - Actions use their current major tags, all of which declare the `node24` runtime: `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7`, `actions/cache@v6` and `actions/upload-artifact@v7`. They stay pinned to major tags (`@vN`), as before. Pinning to commit SHAs isn't part of this decision.
+  - The `frontend` job runs on Node 24 (`node-version: "24"`). Nothing else pins Node: `frontend/package.json` gets no `engines` field and there's no `.nvmrc`, because `engines` would also change the Node version Vercel builds with. Vercel's Node version stays in its project settings.
+  - Python 3.10 stays in the pytest matrix (3.10 and 3.11) and in `requires-python`, although it reached end of life on 2026-10-01. Production isn't affected: the image runs Python 3.11 (`python:3.11-slim-bookworm`), which the matrix and the other Python jobs test.
+- **Why:**
+  - `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19. Every job already ran on the `ubuntu-24.04` image (24.04.5) through that label, so pinning it keeps the exact platform CI and the deploy gate were verified on.
+  - Every job warned that `checkout@v4`, `setup-python@v5`, `setup-node@v4` and `cache@v4` target the deprecated Node 20 runtime and were being forced onto Node 24. The latest majors are the ones that get fixes, and their breaking changes don't touch these workflows' inputs:
+    - checkout v6 keeps persisted credentials in a separate file. The deploy pushes to the Space through its own token URL.
+    - checkout v7 refuses to check out fork pull-request code under `workflow_run`. Deploys come from `push` CI runs on `main`, which the check skips. A fork PR from a branch named `main`, already skipped by the superseded-commit guard, is now refused at checkout instead.
+    - setup-python v7 removed the `pip-install` input, which isn't used. setup-node v5+ auto-caches only when `package.json` has a `packageManager` field, and the job sets `cache: npm` itself.
+    - upload-artifact v7 still zips uploads by default.
+  - Node 20 reached end of life on 2026-04-30. Node 24 is the current LTS line: active until 2026-10-20, then maintenance to 2028-04-30. Node 26 becomes LTS only on 2026-10-28.
+    - Node 24 satisfies all 135 `engines.node` ranges in `frontend/package-lock.json`. Node 22 would need 22.13 or later, for ESLint 10.
+    - Local development already uses Node 24. Lint, build and the Playwright suite (14/14) passed on Node 24.12.0 before CI moved.
+  - Python 3.10:
+    - It's the declared development interpreter: `.python-version`, the local venv (3.10.11), ruff `target-version = "py310"` and mypy `python_version = "3.10"`. The committed Kaggle GPU latency runs used Python 3.10 environments (TASK-016).
+    - `tensorflow-cpu==2.15.0` publishes wheels for Python 3.9–3.11 only. Dropping 3.10 would leave CI testing a single interpreter and force a development-environment migration, and the matrix can't add 3.12 without the TensorFlow migration.
+    - The 3.10 leg still resolves on the pinned runner, to CPython 3.10.21 from the image's tool cache.
+    - Revisit at the TensorFlow / Keras migration, or as soon as the pinned runner or `setup-python` stops providing 3.10, whichever comes first. Then move `.python-version`, the venv, `requires-python`, the ruff and mypy targets, the matrix and `CLAUDE.md` together.
+- **Evidence:** `.github/workflows/{ci,deploy-backend,no-ai-attribution}.yml`, `docs/CI.md`; the annotations of CI run `37657374067` and deploy run `37653146361` (Node 20 deprecation warning, `ubuntu-latest` migration notice, image `ubuntu-24.04` 20260927.320.1); each action's release notes and `action.yml` (`runs.using: node24`); the Node.js release schedule; PEP 619; `frontend/package-lock.json`; `pyproject.toml`; `.python-version`; `Dockerfile`.
