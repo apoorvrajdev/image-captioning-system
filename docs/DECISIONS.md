@@ -254,3 +254,40 @@ Format: **Decision · Why · Evidence**.
   - `test_refused_upload_leaves_no_temp_file_open` fails on anyio 4.4.0, so a downgrade is caught.
   - Under Starlette 1.x, `TestClient` warns that `httpx` is deprecated in favour of `httpx2`. It's test-only, and dev dependencies are out of scope here.
 - **Evidence:** `requirements.txt`, `pyproject.toml`, `backend/app/core/body_limit.py`, `backend/app/main.py`, `backend/app/api/routes.py`, `backend/app/tests/test_body_size_limit.py`, `docs/SECURITY.md` § Dependency audit; OSV and `pip-audit` 2.10.1 output for both requirement sets; the FastAPI 0.133.0 and 0.135.2 release notes and its per-release `requires_dist` on PyPI; the Starlette 1.0–1.3.1 and `python-multipart` 0.0.31–0.0.32 release notes; the Pillow 11.0 and 12.0 release notes; `fastapi/routing.py` (0.133.0), `starlette/formparsers.py` (1.3.1) and `WorkerThread.run` in `anyio/_backends/_asyncio.py` (4.4.0 vs 4.14.2); TASK-020 in `TASKS.md` for the measurements.
+
+### ADR-027 — The Space rebuilds only when an image input changed since the last successful deploy (revises ADR-017)
+- **Decision:**
+  - `deploy-backend.yml` still runs after every green CI run on `main`. It still deploys only the exact tested commit, skips a commit `main` has moved past, and verifies manual runs' CI first (ADR-017). After those guards, `python3 -m scripts.deploy_scope decide` decides. If no image input changed, the run ends green with a "Space deploy skipped" notice and job summary giving the reason, and nothing is pushed to the Space.
+  - Image inputs (`IMAGE_INPUTS` in `scripts/deploy_scope.py`):
+    - the Dockerfile's `COPY` sources: `requirements.txt`, `pyproject.toml`, `README.md`, `src/`, `backend/`, `configs/`, `models/`;
+    - `Dockerfile` and `.dockerignore`, the build recipe and its context filter;
+    - `.gitattributes`, because the Space builds from a git checkout of the deploy commit and this file decides how that checkout materialises files (LFS filters, line endings);
+    - `.github/workflows/deploy-backend.yml`, which writes the Space's README config header, and `scripts/deploy_scope.py`. A change to the deploy procedure is proven by the run that introduces it.
+    - A unit test fails if a Dockerfile `COPY` source isn't covered, so a new one can't fall outside the rule.
+  - The comparison is a tree diff, `git diff --name-only --no-renames <baseline> <commit>`. A change reverted before it was ever pushed doesn't count, and a file moved out of an image directory does.
+  - The baseline is the last successful deploy, recorded as a GitHub deployment in the `huggingface-space` environment.
+    - The workflow creates it as its last step, only after the Space reports `RUNNING` and `/healthz` reports `model_loaded: true`. It names the GitHub commit and, in its payload, the commit pushed to the Space (`space_commit`), and gets a `success` status.
+    - The next run reads the newest record created by `github-actions[bot]`. It skips only if that record has a `success` status, the Space's repository is still on its `space_commit` (public HF API, no token), and no image input differs.
+  - Anything unknown deploys: no record, a record without `success`, an API error, a Space head other than `space_commit`, a baseline missing from the checkout, or a failed diff.
+  - A manual `workflow_dispatch` run always deploys, after its CI verification.
+  - Permissions: the workflow adds `deployments: write`. Its checkout sets `persist-credentials: false`, so the token reaches only the two steps given it.
+  - `README.md` is an image input, so a README-only commit redeploys.
+- **Why:**
+  - Under ADR-017 every green commit force-pushed and rebuilt the Space, and restarted the model, docs-only commits included. `workflow_run` has no path filter, so the check has to run inside the job.
+  - The baseline is the last deploy that actually reached the Space and passed its gate, not the parent commit. With A deployed, B (an image change) skipped, superseded, cancelled or failed, and then C (docs only), comparing C with its parent B would skip, and the Space would never get B. A run that doesn't pass the gate writes no record, so the baseline never advances past what the Space really serves.
+  - The `space_commit` check covers a deploy that pushed and then failed its gate. That deploy leaves the Space on its commit with no record. If the next commit reverts it, its tree equals the baseline's, but the Space isn't on the baseline. Comparing the Space's head with the recorded commit catches this, and any push made outside the workflow.
+  - GitHub deployments are the repository's own record of what is deployed where. They hold an explicit SHA, show under the repository's Environments, and need no new service or storage. `deployments: write` can't change code or secrets. The alternatives each fell short:
+    - a git tag or ref needs `contents: write`;
+    - the run history has no explicit deployed SHA, and ties the rule to step names;
+    - artifacts expire;
+    - Space variables restart the Space when they're written.
+  - `README.md` is copied into the image on purpose. `pyproject.toml` declares `readme = "README.md"` for the in-image `pip install -e .`, so it's package metadata, and the deploy commit prepends the Space's config header, so the deployed copy is the Space's card. Skipping README-only commits would leave both out of step with `main`. The cost is that README edits still rebuild.
+  - Race safety: the `deploy-backend` concurrency group (no cancellation) runs deploys one at a time, so a lookup and a record can't interleave with another deploy. The superseded-commit guard runs before the decision, and only `DEPLOY_SHA` is pushed and recorded.
+- **Consequences:**
+  - Docs, tests, frontend, results, notebooks and CI-only commits no longer restart the Space. Changes under `backend/`, including `backend/app/tests/`, still redeploy, because `backend/` is copied whole.
+  - A skip doesn't check the live Space's health. A Space that breaks without a push (a runtime error, HF infrastructure) is no longer rebuilt by the next unrelated commit; run the workflow manually.
+  - Skipped runs don't pick up a new `python:3.11-slim-bookworm` base image or newer unpinned transitive dependencies. Those arrive with the next image change or a manual run.
+  - Space variables and secrets (weights revision, CORS origins) live outside git and outside this rule. Changing one restarts the Space by itself (ADR-018).
+  - The first run after this change finds no record, so it deploys and writes the first baseline.
+  - If writing the record fails after a healthy deploy, that step fails the run, and the next run, finding no trusted baseline, redeploys.
+- **Evidence:** `.github/workflows/deploy-backend.yml`, `scripts/deploy_scope.py`, `tests/unit/test_deploy_scope.py`, `Dockerfile`, `.dockerignore`, `pyproject.toml` (`readme`), `docs/CI.md` § `deploy-backend.yml`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` § 7; the rule run over real ranges and the deploy runs recorded in TASK-022 in `TASKS.md`; ADR-017, ADR-018.
