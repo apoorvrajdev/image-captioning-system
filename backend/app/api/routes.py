@@ -100,7 +100,7 @@ async def caption_image(
         )
     if len(payload) > service.max_upload_bytes:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"Image exceeds the {service.max_upload_bytes}-byte upload limit.",
         )
 
@@ -108,7 +108,7 @@ async def caption_image(
         caption, latency_ms = await service.caption_image_bytes(payload)
     except ImageDecodeError as exc:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail=str(exc),
         ) from exc
 
