@@ -38,8 +38,9 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 
 **API contract.** `/healthz` always 200 with readiness in the body. `/v1/captions` returns
 200/400/413/415/422/503 exactly as documented, and `x-request-id` is echoed or generated
-(`backend/app/tests/test_captions.py`, `test_health.py`). Weights resolve from Hub or local paths offline
-(`test_weights_loader.py`).
+(`backend/app/tests/test_captions.py`, `test_health.py`). A body over the upload limit plus multipart framing gets
+the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). Weights resolve from
+Hub or local paths offline (`test_weights_loader.py`).
 
 **Evaluation.** Metric implementations match hand-checkable tiny corpora, and run artefacts follow the
 `write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`). The SPA's Phase 3 dashboard data

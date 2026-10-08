@@ -20,7 +20,7 @@ Rebuild the generated files after adding/moving modules:
 | `src/captioning/utils/` | structlog setup, `set_global_seed`, SHA-256 hashing | — | rarely | — |
 | `backend/app/main.py` | `create_app()` factory + lifespan (load config → resolve weights → predictor → warmup → `app.state.predictor_service`) | captioning.inference, services | startup / middleware / CORS | inference-api |
 | `backend/app/api/routes.py` | `/healthz`, `POST /v1/captions` (thin: validate → service → schema) | schemas, services, utils | endpoint contract | inference-api |
-| `backend/app/core/` | `BackendSettings` (env prefix `BACKEND_`), structlog + `RequestContextMiddleware` (`x-request-id`) | — | serving knobs, logging | inference-api |
+| `backend/app/core/` | `BackendSettings` (env prefix `BACKEND_`), structlog + `RequestContextMiddleware` (`x-request-id`), `BodySizeLimitMiddleware` (request-body cap) | — | serving knobs, logging | inference-api |
 | `backend/app/schemas/caption.py` | `CaptionResponse`, `HealthResponse`, `ErrorResponse` — the wire contract | — | any response shape change (frontend must follow) | inference-api |
 | `backend/app/services/` | `PredictorService` (anyio thread offload, latency), `weights_loader.resolve_weights` (HF Hub `snapshot_download`, injectable downloader) | captioning.inference | serving logic | inference-api |
 | `backend/app/utils/image.py` | content-type allow-list, `bytes_to_tensor` → `preprocess_image_tensor`, `ImageDecodeError` | preprocessing | upload decoding | inference-api |

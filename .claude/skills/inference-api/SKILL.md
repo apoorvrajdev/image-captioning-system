@@ -15,12 +15,14 @@ Wire contract consumers: `frontend/src/services/api.js`, `CaptionResult.jsx`, `S
 - GIVEN the lifespan hasn't finished WHEN `GET /healthz` THEN still 200 with `status:"loading", model_loaded:false`; WHEN `POST /v1/captions` THEN 503.
 - GIVEN a valid JPEG/PNG/WebP/BMP upload ≤ `serve.max_upload_bytes` THEN 200 `CaptionResponse{caption, model_version, decode_strategy, latency_ms, request_id}` and an `x-request-id` response header.
 - Content type not in `ALLOWED_CONTENT_TYPES` → 415. Empty body → 400. Over the limit → 413. Undecodable bytes → 422 (`ImageDecodeError`). Errors use `{"detail": ...}`.
+- A request body over `serve.max_upload_bytes` + 64 KiB of multipart framing → the same 413 from `BodySizeLimitMiddleware` (`core/body_limit.py`), before the parser buffers it: no byte read when `Content-Length` declares it, and reading stops at the cap when it doesn't. Under the cap the middleware is transparent and the route's exact limit decides (ADR-025).
 - Uploaded bytes pass through `bytes_to_tensor` → `preprocess_image_tensor` (the training function). No other preprocessing path.
 - One `CaptionPredictor` per process, built in the lifespan, `warmup()` when `BACKEND_WARMUP=true`, TF work via `anyio.to_thread.run_sync`.
 - `BACKEND_WEIGHTS_HUB_REPO` set → `resolve_weights` uses `snapshot_download` at the pinned revision. Unset → local paths.
 
 ## Edge cases (each needs a test)
 - Every status code above (existing: `backend/app/tests/test_captions.py`, `test_health.py`).
+- Body-size cap: declared oversize body (0 bytes read), undeclared oversize body (stops at the cap), under-cap body reaches the route, a refused upload leaves no temp file open (needs `anyio` ≥ 4.14.2) (`test_body_size_limit.py`, raw ASGI so bytes read can be counted).
 - Incoming `x-request-id` is echoed. Missing → a generated UUID.
 - Weights loader: local vs hub mode, downloader args incl. revision, cache dir, custom filename (`test_weights_loader.py`, injected downloader, no network). Not yet covered: download failure → startup error.
 - Beam decoder: length penalty, repetition penalty, n-gram blocking, EOS termination, detokenise (`tests/unit/test_beam_decoder.py`). Not yet covered: beam width 1 ≡ greedy.
