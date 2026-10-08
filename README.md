@@ -412,7 +412,7 @@ eight images. Median, min and max are in §§ 9.9–9.10. Rows are ordered by mo
 | **Backend** | FastAPI 0.133 (Starlette 1.3), Pydantic v2, `pydantic-settings` 2.x, structlog 24, anyio 4 |
 | **Frontend** | React 19, Vite 8, Tailwind v4, ESLint flat config, Playwright E2E (Chromium) |
 | **Evaluation** | sacrebleu, custom CIDEr / METEOR / ROUGE-L implementations; Phase 3 baselines via `transformers` 4.41.2 + `torch` 2.3.0 (optional `[hf]` extra) |
-| **Tooling** | Ruff (lint + format), mypy, pytest 8, pre-commit, nbstripout, gitleaks |
+| **Tooling** | Ruff (lint + format), mypy, pytest 8, pre-commit, nbstripout, gitleaks, pip-audit |
 | **Infra** | HuggingFace Hub (weights), HuggingFace Spaces (backend), Vercel (frontend), GitHub Actions (CI/CD) |
 
 ---
@@ -682,9 +682,10 @@ make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 |---|---|---|
 | Lint + format | [Ruff](https://docs.astral.sh/ruff/) (replaces black + isort + flake8) | ✅ clean |
 | Type-check | [mypy](https://mypy.readthedocs.io/) with `pandas-stubs`, `types-PyYAML`, `types-requests` | ✅ 0 errors |
-| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 238 passing |
+| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 258 passing |
 | Notebook hygiene | [`nbstripout`](https://github.com/kynan/nbstripout) (pre-commit) | ✅ outputs stripped on commit |
-| Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) (pre-commit) | ✅ enabled |
+| Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) 8.18.4: pre-commit on staged changes, plus a full-history scan in CI | ✅ blocking in CI |
+| Dependency audit | [`pip-audit`](https://github.com/pypa/pip-audit) on the serving requirements against a reviewed baseline, and `npm audit --omit=dev` on the shipped frontend dependencies ([ADR-026](docs/DECISIONS.md)) | ✅ blocking in CI |
 | Notebook integrity | SHA-256 freeze via [`make freeze-paper-notebook`](Makefile) | ✅ locked |
 | Parity audit | [`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py) — 4 stages | ✅ all passing |
 | Browser E2E | [Playwright](https://playwright.dev/) 1.63 on Chromium — [`frontend/e2e/`](frontend/e2e/) | ✅ 14 passing, run in CI |
@@ -790,15 +791,17 @@ The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-02
 - [x] **3C** — Per-model latency benchmarking (single-image, batch, CPU vs. GPU). It covers the § 9 protocol and tool, CPU runs on a local laptop and GPU runs on a Kaggle Tesla T4 (TASK-015, TASK-016). Each device ran on its own host, so this is not a controlled CPU-vs-GPU comparison.
 - [x] **3D** — Comparison-result dashboard exposed through the existing SPA. It covers the static build-time JSON export with a drift test, the **Phase 3 comparison** view, and Playwright E2E for the caption flow and the dashboard, run in CI (TASK-017, TASK-018, TASK-007).
 
-### Phase 4 — Production hardening and supply-chain reliability ⏳ (planned)
+### Phase 4 — Production hardening and supply-chain reliability ✅ (complete)
 
-Phase 4 hardens the system that already ships rather than adding features. Each item is one task in [`docs/TASKS.md`](docs/TASKS.md), done in this order.
+Phase 4 hardens the system that already ships rather than adding features. Each item is one task in [`docs/TASKS.md`](docs/TASKS.md).
 
 - [x] **4A** — CI platform currency (TASK-019, done 2026-10-08): every workflow job is pinned to `ubuntu-24.04` ahead of GitHub's 2026-10-19 move of `ubuntu-latest` to Ubuntu 26. The actions run on their Node 24 majors, the frontend job runs Node 24 LTS, and Python 3.10 stays in the test matrix while the TensorFlow 2.15 pin holds ([ADR-024](docs/DECISIONS.md)).
 - [x] **4B** — Serving dependency security (TASK-020, done 2026-10-08): FastAPI 0.133, Starlette 1.3.1 (now pinned), `python-multipart` 0.0.31, Pillow 12.3.0 and anyio 4.14.2 clear every known advisory in those packages, and `tensorflow-cpu==2.15.0` stays pinned. A request-body cap now returns 413 before an oversized upload is buffered. The remaining audit findings are listed in [`docs/SECURITY.md`](docs/SECURITY.md) ([ADR-025](docs/DECISIONS.md)).
-- [ ] **4C** — Dependency and secret scanning in CI (TASK-021): `pip-audit`, `npm audit` on production dependencies, and a full-history `gitleaks` scan. They become a blocking gate only after TASK-020 leaves a clean baseline.
+- [x] **4C** — Dependency and secret scanning in CI (TASK-021, done 2026-10-09): CI blocks on `pip-audit` of `requirements.txt` against a reviewed baseline of the remaining TASK-020 findings, on `npm audit --omit=dev` of the shipped frontend dependencies, and on a full-history `gitleaks` scan, so a new finding also stops the deploy ([ADR-026](docs/DECISIONS.md)).
 - [x] **4D** — Deploy only when the production image changes (TASK-022, done 2026-10-08): the Space rebuilds only when an image input changed since the last deploy that passed its health gate. The image inputs are the Dockerfile `COPY` sources, the build files and the deploy procedure, and each passing deploy is recorded as a GitHub deployment. Docs-only commits now skip with a notice. `README.md` still redeploys, because it's copied into the image ([ADR-027](docs/DECISIONS.md)).
-- [ ] **4E** — Real-model post-deploy smoke test (TASK-023): one real caption request against the live Space and a CORS check from the Vercel origin, tolerant of Space cold starts. Builds on the TASK-022 deploy workflow.
+- [x] **4E** — Real-model post-deploy smoke test (TASK-023, done 2026-10-08): after the health gate, each deploy sends one real caption request to the live Space with a PNG generated in code. It passes only on HTTP 200 with a non-empty caption, the model version `/healthz` reports, and `Access-Control-Allow-Origin` matching the Vercel origin. A waking Space is retried for up to 5 minutes ([ADR-028](docs/DECISIONS.md)).
+
+Maintenance after Phase 4: TASK-024 (done 2026-10-09) made `CAPTIONING__*` environment variables outrank the YAML in `load_config`, so the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` reaches the app ([ADR-029](docs/DECISIONS.md)).
 
 Detailed phase notes live under [`docs/`](docs/): [restructure plan](docs/restructure-plan.md) · [Phase 0 notes](docs/PHASE_0_NOTES.md) · [Phase 1 notes](docs/PHASE_1_NOTES.md) · [Stabilized training runbook](docs/STABILIZED_TRAINING_RUNBOOK.md) · [Evaluation-methodology audit](docs/EVAL_METHODOLOGY.md).
 
