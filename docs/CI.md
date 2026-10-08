@@ -51,20 +51,57 @@ The job:
    and `actions: read`). It refuses unless a run matches the exact SHA, branch `main`,
    and `completed`/`success`. A success for another commit or an API error refuses too
 1. Checks out the exact commit CI tested (`github.event.workflow_run.head_sha`,
-   or `github.sha` for manual runs) with full history
+   or `github.sha` for manual runs) with full history. The token isn't kept in
+   `.git/config` (`persist-credentials: false`), because nothing pushes to GitHub
 2. Skips the deploy if `main` has already moved past that commit (the newer
    commit's own CI run deploys it), so a slow older run can't roll the Space back
-3. Builds a deployment commit on top of it that prepends the Space's YAML
+3. Decides whether the image changed (`python3 -m scripts.deploy_scope decide`,
+   [ADR-027](DECISIONS.md)); see [When the Space is rebuilt](#when-the-space-is-rebuilt).
+   A skip ends the run green with a "Space deploy skipped" notice and a job summary
+   giving the reason. Every later step runs only when this step outputs `deploy=true`
+4. Builds a deployment commit on top of it that prepends the Space's YAML
    config header (`sdk: docker`, `app_port: 7860`, …) to `README.md`. GitHub's
    README has no header, because GitHub renders it as a table
-4. Force-pushes that commit to the Space with the `HF_TOKEN` secret
-5. Polls the HF API (`/api/spaces/<id>` for the repo head, `/api/spaces/<id>/runtime`
+5. Force-pushes that commit to the Space with the `HF_TOKEN` secret
+6. Polls the HF API (`/api/spaces/<id>` for the repo head, `/api/spaces/<id>/runtime`
    for the stage) until a rebuild of the new commit reaches `RUNNING`. Fails on
    `CONFIG_ERROR`, `BUILD_ERROR`, `RUNTIME_ERROR` and other error stages
-6. Polls `https://<space-domain>/healthz` until it reports `model_loaded: true`
+7. Polls `https://<space-domain>/healthz` until it reports `model_loaded: true`
+8. Records the deploy (`python3 -m scripts.deploy_scope record`): a GitHub deployment
+   of the tested commit in the `huggingface-space` environment, with the Space's
+   commit in its payload and a `success` status. This is the next run's baseline.
+   A run that fails or is cancelled before this step records nothing
 
 Timeouts: 10 min for a rebuild to start, 30 min to reach `RUNNING`, 10 min for
-`/healthz`, 50 min for the whole job. See
+`/healthz`, 50 min for the whole job.
+
+### When the Space is rebuilt
+
+A run rebuilds the Space only if an **image input** differs between the last
+successfully deployed commit and the commit being deployed. The image inputs are the
+Dockerfile's `COPY` sources (`requirements.txt`, `pyproject.toml`, `README.md`, `src/`,
+`backend/`, `configs/`, `models/`), plus `Dockerfile`, `.dockerignore`, `.gitattributes`,
+this workflow and `scripts/deploy_scope.py`. Anything else (`docs/`, `tests/`,
+`frontend/`, `results/`, `notebooks/`, `ci.yml`, other scripts) doesn't rebuild it.
+`test_deploy_scope.py` fails if a Dockerfile `COPY` source is missing from the list.
+
+- **Baseline.** The newest `huggingface-space` deployment that this workflow recorded,
+  shown under the repository's Environments. It's never the parent commit, so an image
+  change whose deploy was skipped, superseded, cancelled or failed is still in the
+  range the next run compares.
+- **The Space must still be on it.** A skip also needs the Space's repository head
+  (public HF API) to equal the commit that deploy pushed. A deploy that pushed but then
+  failed its gate, or a push made by hand, makes the next run deploy, even if the change
+  was reverted.
+- **Unknown means deploy.** No record yet, a record without `success`, an API error, a
+  baseline missing from the checkout, or a failed diff all deploy.
+- **`README.md` redeploys.** It's in the image (`pyproject.toml` `readme`), and its
+  deployed copy, with the config header, is the Space's card.
+- **Forcing a rebuild.** Run the workflow manually (`workflow_dispatch`). A manual run
+  always deploys once its CI check passes. Use it after a Space breaks without a push,
+  or to pick up a new base image.
+
+See
 [`PHASE_2C_DEPLOYMENT_RUNBOOK.md`](PHASE_2C_DEPLOYMENT_RUNBOOK.md) for the
 end-to-end deployment topology and smoke tests.
 
@@ -73,6 +110,10 @@ end-to-end deployment topology and smoke tests.
 - `HF_TOKEN` — HuggingFace personal access token, **Write** scope. Used only
   by `deploy-backend.yml`, to push to the Space remote and to read the Space's
   status from the HF API. Never sent to the app itself.
+
+No other secret is needed. `deploy-backend.yml` also uses the built-in `github.token`,
+with `actions: read` for the manual-run CI check and `deployments: write` to read and
+write the deploy record ([ADR-027](DECISIONS.md)).
 
 Set under repo Settings → Secrets and variables → Actions → New repository
 secret.

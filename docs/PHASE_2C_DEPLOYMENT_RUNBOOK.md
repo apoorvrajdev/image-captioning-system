@@ -196,6 +196,17 @@ Two workflows under [`.github/workflows/`](../.github/workflows/):
   passes only once the HF API reports `RUNNING` and `/healthz` reports
   `model_loaded: true`. `workflow_dispatch` (on `main`) redeploys the tip of
   `main`, but only if that exact commit has a successful CI run. Details: [`CI.md`](CI.md).
+  - **It rebuilds the Space only when the image can change** (ADR-027). A commit that
+    changes no image input (`Dockerfile` `COPY` sources, `Dockerfile`, `.dockerignore`,
+    `.gitattributes`, the workflow, `scripts/deploy_scope.py`) since the last successful
+    deploy ends green with a "Space deploy skipped" notice. `README.md` counts as an image
+    input. The last successful deploy is the newest `huggingface-space` deployment under
+    the repository's Environments, written only after the health gate passes.
+  - **After a failed deploy** nothing is recorded, so the next green commit deploys
+    again, whatever it changed. That includes a docs-only commit, or a revert of the
+    failed change.
+  - **To force a rebuild**, for example after the Space broke without a push or to pick
+    up a new base image, run the workflow manually.
 
 ### Required GitHub secret
 

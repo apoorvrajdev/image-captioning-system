@@ -10,7 +10,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 - **Input validation at the boundary:** content-type allow-list, size limit, empty check, and safe decode mapped to 4xx. Every request/response body goes through a Pydantic schema.
 - **CORS:** explicit origin list from config/env, `allow_credentials=False`, methods limited to GET/POST/OPTIONS. Never `*`.
 - **Logging:** structured, with a request ID. Never log image bytes, tokens, or env values.
-- **CI:** workflows keep `permissions: contents: read`. Secrets are referenced only through `${{ secrets.* }}` and never echoed.
+- **CI:** workflows keep `permissions: contents: read`. `deploy-backend.yml` adds `actions: read` (the manual-run CI check) and `deployments: write` (its deploy record, ADR-027), and its checkout doesn't persist the token. Secrets are referenced only through `${{ secrets.* }}` and never echoed.
 - **Dependencies:** pinned. New dependencies need a stated reason. Starlette is pinned explicitly, because FastAPI's own range admits vulnerable releases.
 
 ## Controls in place
