@@ -11,7 +11,7 @@ description: Acceptance criteria and definition of done for CI/CD, the Docker im
 `frontend/.env.example`, `docs/CI.md`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`, `Makefile`.
 
 ## Topology (current)
-GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · frontend lint+build+Playwright E2E)
+GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · pre-commit · security: pip-audit gate + full-history gitleaks · frontend lint+build+Playwright E2E+`npm audit --omit=dev`)
 → on green `deploy-backend.yml` pushes to HF Space `apoorvrajdev/image-captioning-api` (Docker SDK, cpu-basic, port 7860, 1 worker)
 → lifespan pulls weights from HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` at a pinned tag.
 Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS comes from the `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` Space variable.
@@ -28,6 +28,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 - [ ] Every job names the pinned runner (`ubuntu-24.04`), never `ubuntu-latest`. Action majors run on Node 24, and the `frontend` job uses Node 24. Changing any of these updates `docs/CI.md` § Platform (ADR-024).
 - [ ] `permissions: contents: read` kept (`deploy-backend.yml` adds only `actions: read` and `deployments: write`, ADR-027). Secrets only via `${{ secrets.* }}`, never echoed.
 - [ ] Dependency changes keep `tensorflow-cpu==2.15.0` + `numpy<2`. Runtime deps stay in `requirements.txt` (the Docker layer) *and* `pyproject.toml`. Starlette stays pinned in both, because FastAPI's own range admits vulnerable releases (ADR-025).
+- [ ] Dependency changes pass the pip-audit gate (`docs/CI.md` § Local equivalents). `.github/pip-audit-baseline.txt` changes only in a reviewed edit naming the package, exact version, vulnerability id, reason and removal condition, with `SECURITY.md` § Dependency audit in step. No package-, severity- or path-wide ignore in any scanner (ADR-026).
 - [ ] New env var ⇒ `.env.example` + runbook updated. No real values committed.
 - [ ] `docs/CI.md` matches the workflows after the change.
 - [ ] Production actions (Space variables, HF Hub uploads/tags, Vercel settings, pushes) are **prepared as instructions for the user**, never executed.
@@ -36,6 +37,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 ```bash
 .venv/Scripts/python.exe -c "import yaml;[yaml.safe_load(open(f, encoding='utf-8')) for f in ['.github/workflows/ci.yml','.github/workflows/deploy-backend.yml','.github/workflows/no-ai-attribution.yml']];print('ok')"
 grep -rn "ubuntu-latest" .github/workflows   # must print nothing
+.venv/Scripts/pytest.exe tests/unit/test_check_pip_audit.py -q   # pip-audit gate + committed baseline
 .venv/Scripts/pytest.exe tests/unit/test_deploy_scope.py -q   # deploy scope rule, record and workflow wiring
 .venv/Scripts/pytest.exe tests/unit/test_smoke_caption.py -q  # post-deploy caption check, against the real app stack
 .venv/Scripts/pytest.exe tests backend/app/tests -q

@@ -1,0 +1,33 @@
+# pip-audit baseline: findings in the serving requirements that were reviewed and accepted (ADR-025, ADR-026).
+#
+# One accepted finding per line: <package> <exact version> <vulnerability id>
+# The CI gate (scripts/check_pip_audit.py) fails on any finding missing from this file, and on any entry here
+# that no longer matches a finding. Adding a line is a reviewed change: name the reason and the removal condition
+# beside it, and keep docs/SECURITY.md § Dependency audit in step. Never add a package without a version or a
+# finding without its id.
+
+# keras 2.15.0: tensorflow-cpu==2.15.0 requires Keras 2.15, and every fix needs Keras 3, which arrives with
+# TF >= 2.16 and breaks TextVectorization save/load (ADR-003). Not reachable from serving: each needs an
+# untrusted model file or archive, and serving loads only its own weights from the pinned Hub tag.
+# Remove with the TensorFlow / Keras migration.
+keras 2.15.0 CVE-2025-12060
+keras 2.15.0 PYSEC-2025-121
+keras 2.15.0 PYSEC-2025-76
+keras 2.15.0 PYSEC-2026-1487
+keras 2.15.0 PYSEC-2026-2324
+keras 2.15.0 PYSEC-2026-2547
+keras 2.15.0 PYSEC-2026-3629
+keras 2.15.0 PYSEC-2026-3630
+keras 2.15.0 PYSEC-2026-3631
+keras 2.15.0 PYSEC-2026-3632
+keras 2.15.0 PYSEC-2026-3633
+keras 2.15.0 PYSEC-2026-3634
+keras 2.15.0 PYSEC-2026-3856
+
+# protobuf 4.25.9: fixed in 5.29.6 / 6.33.5, but TF 2.15 requires protobuf < 5. Not reachable from serving: it
+# needs untrusted JSON parsed with json_format.ParseDict (CVE-2026-0994). Remove with the TensorFlow migration.
+protobuf 4.25.9 PYSEC-2026-1805
+
+# click 8.1.7: command injection through click.edit() (CVE-2026-7246), fixed in 8.3.3. Nothing calls
+# click.edit(). Kept out of TASK-020's scope. Remove when click is upgraded to >= 8.3.3.
+click 8.1.7 PYSEC-2026-2132

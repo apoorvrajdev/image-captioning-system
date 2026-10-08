@@ -17,7 +17,7 @@ Changing any of these is a reviewed edit to the workflows and to this section.
 
 ## `ci.yml` — quality + tests
 
-Triggered on every push and pull request to `main`. Five parallel jobs:
+Triggered on every push and pull request to `main`. Six parallel jobs:
 
 | Job | What it runs | Why |
 |---|---|---|
@@ -25,10 +25,12 @@ Triggered on every push and pull request to `main`. Five parallel jobs:
 | `python-tests` | `pytest` matrix on Python **3.10 / 3.11**, then the 4-stage notebook parity audit (`python -m scripts.notebook_module_audit`) | Confirm the package keeps working on every supported interpreter and still matches the notebook |
 | `notebook-freeze` | `make freeze-paper-notebook` (SHA-256 check) | Fail if the IEEE notebook is mutated — it is the canonical research artefact |
 | `pre-commit` | `pre-commit run --all-files` with the repo's pinned hooks (`SKIP=mypy`, which `python-quality` covers) | Enforce the same hygiene, nbstripout, prettier, and secret-scan hooks as local commits, including commits made without hooks installed |
-| `frontend` | `npm install`, `npm run lint`, `npm run build`, then Playwright Chromium (`npx playwright install --with-deps --only-shell chromium`) and `npm run test:e2e` on Node 24; traces uploaded as `playwright-test-results` on failure | Catch ESLint + Vite build regressions, and break the caption flow or Phase 3 dashboard in a real browser against the production bundle with a mocked API (ADR-023) |
+| `security` | Full-history checkout. pip-audit 2.10.1 over `requirements.txt` on Python 3.11, gated by `python -m scripts.check_pip_audit` against `.github/pip-audit-baseline.txt`; then gitleaks 8.18.4 (release binary, SHA-256 checked) `detect --redact --verbose` over every commit. Both steps always run | Block known-vulnerable serving dependencies outside the reviewed baseline, and committed secrets anywhere in history, including commits made without hooks (TASK-021, ADR-026; policy in `SECURITY.md` § CI scanning policy) |
+| `frontend` | `npm install`, `npm run lint`, `npm run build`, then Playwright Chromium (`npx playwright install --with-deps --only-shell chromium`) and `npm run test:e2e` on Node 24; traces uploaded as `playwright-test-results` on failure; last, `npx --yes npm@11.6.2 audit --omit=dev` (always runs) | Catch ESLint + Vite build regressions, and break the caption flow or Phase 3 dashboard in a real browser against the production bundle with a mocked API (ADR-023). The audit blocks any advisory in the production dependencies that ship in the bundle; dev tooling isn't gated (ADR-026) |
 
 Caching:
-- pip via `actions/setup-python` (key derived from `requirements*.txt` + `pyproject.toml`)
+- pip via `actions/setup-python` (key derived from `requirements*.txt` + `pyproject.toml`; the `security` job keys on
+  `requirements.txt` alone)
 - npm via `actions/setup-node` (key derived from `frontend/package-lock.json`)
 
 Concurrency: stacked runs on the same ref cancel each other so only the
@@ -143,4 +145,18 @@ cd frontend                        # Node 24, as in CI
 npm ci && npm run lint && npm run build
 npx playwright install chromium   # once per machine
 npm run test:e2e                  # builds, serves with vite preview, runs e2e/ on Chromium
+npx --yes npm@11.6.2 audit --omit=dev   # production dependency audit
 ```
+
+Security scans, as the `security` job runs them (pip-audit in its own venv, so the dev environment is untouched; on
+Windows the venv's tools live in `Scripts/` instead of `bin/`):
+
+```bash
+python -m venv /tmp/pip-audit && /tmp/pip-audit/bin/pip install pip-audit==2.10.1
+/tmp/pip-audit/bin/pip-audit -r requirements.txt --progress-spinner off --format json --output /tmp/pip-audit.json
+python -m scripts.check_pip_audit /tmp/pip-audit.json --baseline .github/pip-audit-baseline.txt
+gitleaks detect --source . --redact --verbose --no-banner   # gitleaks 8.18.4; committed history only
+```
+
+pip-audit exits 1 whenever it finds anything, including baselined findings; the gate's exit code is the result. The
+pre-commit hook's own gitleaks build (under `~/.cache/pre-commit/`) is the same 8.18.4 and can run the history scan.

@@ -864,7 +864,7 @@ Outcome:
 
 ---
 
-## Phase 4 — Production hardening and supply-chain reliability (planned 2026-10-07)
+## Phase 4 — Production hardening and supply-chain reliability (done 2026-10-09)
 
 Phase 4 hardens the system that already ships. It adds no features. Scope and rationale come from the Phase 4
 reconnaissance, reviewed and approved on 2026-10-07. The facts below were re-checked against the repository the same
@@ -874,7 +874,7 @@ day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
 
 - [x] **4A** — CI platform currency → TASK-019 (done 2026-10-08)
 - [x] **4B** — Serving dependency security → TASK-020 (done 2026-10-08)
-- [ ] **4C** — Dependency and secret scanning in CI → TASK-021
+- [x] **4C** — Dependency and secret scanning in CI → TASK-021 (done 2026-10-09)
 - [x] **4D** — Deploy only when the production image changes → TASK-022 (done 2026-10-08)
 - [x] **4E** — Real-model post-deploy smoke test → TASK-023 (done 2026-10-08)
 
@@ -1046,7 +1046,7 @@ Outcome:
   - CI scanning (TASK-021);
   - a real caption request against production (TASK-023).
 
-### TASK-021 — Dependency and secret scanning in CI            [status: todo]
+### TASK-021 — Dependency and secret scanning in CI            [status: done] (2026-10-09)
 Area: deployment
 Goal: CI catches known-vulnerable dependencies and committed secrets, instead of relying on hooks that only scan
 staged changes on machines that have them installed.
@@ -1074,6 +1074,38 @@ Owns: `.github/workflows/ci.yml` (the scan steps), any scanner config such as a 
 `SECURITY.md`, the ADR.
 Out of scope: fixing vulnerabilities (TASK-020); container image scanning; Dependabot or automated update pull
 requests; gating on dev-only npm dependencies.
+Outcome:
+- Implementation:
+  - `ci.yml`: a new `security` job runs pip-audit 2.10.1, gated by `scripts/check_pip_audit.py`, then gitleaks 8.18.4
+    over the full history. The `frontend` job ends with `npm audit --omit=dev` (npm 11.6.2). All three block.
+  - `.github/pip-audit-baseline.txt`: TASK-020's 15 reviewed findings, each pinned to package, version and id, with its
+    reason and removal condition.
+  - `tests/unit/test_check_pip_audit.py`: 20 tests.
+  - Docs: ADR-026, `SECURITY.md` § CI scanning policy and § Known gaps, `CI.md`, `TEST_PLAN.md`, the deployment skill,
+    the repo map and `CLAUDE.md`.
+- Acceptance clarifications (ADR-026):
+  - **Blocking, not report-only.** TASK-020's residual findings are reviewed exceptions (ADR-025), so with them
+    baselined the scan starts clean.
+  - **Only `requirements.txt` is audited.** The dev and eval files aren't in the image. Their 43 findings (42 in
+    `nltk` 3.8.1, 1 in `pytest` 8.2.2) are a known gap in `SECURITY.md`.
+  - **gitleaks** matches the hook's v8.18.4. CI uses the release binary, SHA-256 checked, not `gitleaks-action`,
+    which runs on Node 20 (ADR-024). No allowlist: the history is clean.
+- Review: the security review before commit found that the gate read an audited dependency with no `vulns` list, or
+  a non-list one, as clean. It now fails closed, and three regression tests fail without the fix. No other findings.
+- Verification, locally on 2026-10-09:
+  - 20 gate tests; ruff, ruff format and mypy clean; the three workflows parse; pre-commit passed on the changed
+    files.
+  - pip-audit 2.10.1 on `requirements.txt` (Windows, Python 3.10): 70 dependencies, 26 rows in 3 packages, 15
+    distinct findings. The gate reports all 15 as `[baseline]`, with 0 new, 0 stale and 0 unaudited, and exits 0.
+  - gitleaks 8.18.4: 201 commits scanned, the same count as `git rev-list HEAD --count`, and no leaks.
+  - `npm audit --omit=dev` (npm 11.6.2): 0 vulnerabilities.
+  - Negative checks, each exiting 1:
+    - the gate on the pre-TASK-020 `requirements.txt`: 48 findings, 33 `[NEW]` (anyio 2, Pillow 17,
+      python-multipart 7, Starlette 7);
+    - gitleaks on a throwaway clone with a fake GitHub token committed and then deleted: found in history as
+      `github-pat`, with the value `REDACTED` and absent from the log;
+    - `npm audit --omit=dev` with `minimist` 1.2.5 as a production dependency. As a dev dependency it passes.
+- Not done, by scope: container image scanning, gating dev and eval dependencies, Dependabot, and a scheduled scan.
 
 ### TASK-022 — Deploy only when the production image changes            [status: done] (2026-10-08)
 Area: deployment

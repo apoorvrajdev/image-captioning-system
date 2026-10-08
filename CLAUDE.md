@@ -136,10 +136,11 @@ Python is the repo venv: `.venv/Scripts/python.exe` (3.10). Tools: `.venv/Script
 | notebook freeze | `python -c "import hashlib;print(hashlib.sha256(open('notebooks/01_ieee_inceptionv3_transformer.ipynb','rb').read()).hexdigest())"` must equal `.paper-notebook.sha256` |
 | frontend checks | `cd frontend && npm run lint && npm run build && npm run test:e2e` (Playwright E2E; once per machine: `npx playwright install chromium`) |
 | pre-commit (all hooks) | `SKIP=mypy .venv/Scripts/pre-commit.exe run --all-files` (rewrites files on failure; review the diff) |
+| security scans | pip-audit gate, gitleaks history scan, `npm audit --omit=dev`: exact commands in `docs/CI.md` § Local equivalents (policy: `docs/SECURITY.md` § CI scanning policy) |
 | refresh code index | `.venv/Scripts/python.exe .claude/context/build_index.py` (also runs at session start) |
 | make dry run | `mingw32-make -n <target>` (prints the commands, runs nothing) |
 
-CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build + Playwright E2E. Local DoD = these.
+CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, pytest on 3.10/3.11 + parity audit, notebook freeze, pre-commit (all hooks except mypy), frontend lint + build + Playwright E2E + `npm audit --omit=dev`, security (pip-audit of `requirements.txt` gated by `.github/pip-audit-baseline.txt`, full-history gitleaks). Local DoD = these; run the security scans locally when dependencies, the baseline or the workflows change.
 
 ## Invariants — never break silently
 

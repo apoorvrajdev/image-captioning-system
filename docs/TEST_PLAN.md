@@ -13,7 +13,7 @@ Every change is verified against the rows for the layers it touches. The same ch
 | `backend/app/**` | `pytest backend/app/tests -q` then the full suite | pass; backend slice imports no TensorFlow |
 | `src/captioning/evaluation/**`, eval scripts | `pytest tests/unit/test_evaluation*.py -q` | pass; existing `results/*` unchanged |
 | `frontend/**` | `npm run lint` · `npm run build` · `npm run test:e2e` (Playwright, Chromium; first run `npx playwright install chromium`) | exit 0; all specs pass with zero console errors |
-| workflows, Dockerfile, deps, hooks | YAML parses · `SKIP=mypy pre-commit run --all-files` · full suite · `docker build .` if Docker is available | no gate removed or weakened |
+| workflows, Dockerfile, deps, hooks | YAML parses · `SKIP=mypy pre-commit run --all-files` · full suite · the security scans (`docs/CI.md` § Local equivalents) · `docker build .` if Docker is available | no gate removed or weakened; the pip-audit gate and `npm audit --omit=dev` pass |
 | any commit | pre-commit hooks (locally on commit; all files in CI) | pass with no rewrites |
 
 ## What each area must demonstrate
@@ -41,6 +41,10 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 (`backend/app/tests/test_captions.py`, `test_health.py`). A body over the upload limit plus multipart framing gets
 the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). Weights resolve from
 Hub or local paths offline (`test_weights_loader.py`).
+
+**Supply chain (TASK-021, ADR-026).** The pip-audit gate passes baselined findings, and fails on a new finding, a
+version change, an alias standing in for an id, a stale entry, an unaudited dependency or malformed input. The committed baseline covers only the
+reviewed packages (`test_check_pip_audit.py`). CI runs the scans themselves (`docs/SECURITY.md` § CI scanning policy).
 
 **Deploy scope (TASK-022, ADR-027).** The deploy rule, run against throwaway git repositories:
 - docs-only commits skip;

@@ -3,24 +3,26 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-08_
+_Last updated: 2026-10-09_
 
 ## Current phase
 
 - **Completed:** Phase 0 (bootstrap), Phase 1 (modularisation), Phase 1b (training stabilisation +
   metric suite + stabilized checkpoint), Phase 2A (FastAPI), Phase 2B (SPA), Phase 2C (public deployment),
   Stage 0 evaluation-methodology gate (verdict: **reframe, do not retrain**), engineering-workflow setup,
-  Phase 3 (multimodal baselines, 3A–3D: TASK-007, TASK-009 – TASK-018, done 2026-10-07).
+  Phase 3 (multimodal baselines, 3A–3D: TASK-007, TASK-009 – TASK-018, done 2026-10-07), Phase 4 (production
+  hardening and supply-chain reliability, TASK-019 – TASK-023, done 2026-10-09).
 - **Phase 3 is complete.** TASK-007 added Playwright E2E, so the SPA's caption flow and Phase 3 dashboard are now
   verified end to end in CI (ADR-023). The README's Phase 3 section cites the run ids, the quality and latency
   results and the dashboard (`7e7464d`, `53add09`).
-- **Phase 4 is in progress:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
+- **Phase 4 is complete:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
   [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is done (2026-10-08, ADR-024): every job runs on
   `ubuntu-24.04` with Node 24 action majors, ahead of the 2026-10-19 `ubuntu-latest` move. TASK-020 (serving dependency
   security) is done (2026-10-08, ADR-025). TASK-022 (deploy only when the production image changes) is done
   (2026-10-08, ADR-027). TASK-023 (real-model post-deploy smoke test) is done (2026-10-08, ADR-028): every deploy now
   captions one generated image on the live Space before it passes. TASK-021 (dependency and secret scanning in CI)
-  hasn't landed on `main` yet.
+  is done (2026-10-09, ADR-026): CI blocks on pip-audit of `requirements.txt` against a reviewed baseline, on
+  `npm audit --omit=dev`, and on a full-history gitleaks scan.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -55,6 +57,7 @@ _Last updated: 2026-10-08_
 | `deploy-backend.yml` (run `37819590272`, automatic, `b21b97a`) | **success**: image change deployed, Space `RUNNING`, healthy, `v2.0.0`; recorded as deployment `6942786830` (Space commit `7d45a58`) |
 | `deploy-backend.yml` (run `37820817700`, automatic, `fbf55d8`) | **skipped** (green): docs only, no image input changed since `b21b97a`, and the Space was still on `7d45a58` |
 | `pip-audit -r requirements.txt` (2.10.1, 2026-10-08) | 26 findings in 3 packages (`keras`, `protobuf`, `click`), each listed in `SECURITY.md` with its reason |
+| Security scans (local, 2026-10-09, TASK-021) | pip-audit gate: 15 distinct findings, all `[baseline]`, 0 new, 0 stale; gitleaks 8.18.4: 201 commits, no leaks; `npm audit --omit=dev`: 0 vulnerabilities |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
 | `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
@@ -72,6 +75,14 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-09 dependency and secret scanning in CI (TASK-021, done; Phase 4 complete):
+  - A new `security` job runs pip-audit 2.10.1 over `requirements.txt`, gated by `scripts/check_pip_audit.py`
+    against `.github/pip-audit-baseline.txt` (TASK-020's 15 reviewed findings, each pinned to package, version and
+    id), then gitleaks 8.18.4 over the full history. The `frontend` job ends with `npm audit --omit=dev`. All
+    three block CI, and so the deploy.
+  - The gate fails on a new finding, a stale entry, an unaudited dependency or a malformed report. Policy in
+    `SECURITY.md` § CI scanning policy.
+  - ADR-026.
 - 2026-10-08 real-model post-deploy smoke test (TASK-023, done):
   - After the health gate, `scripts/smoke_caption.py` sends one `POST /v1/captions` with a 64×64 PNG built in code.
     It needs HTTP 200, a `CaptionResponse` shape, a non-empty caption (the text isn't asserted), the `/healthz` model
@@ -246,9 +257,9 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Known issues / open debt
 
-- No frontend unit tests (Playwright E2E only, Chromium only), no
-  coverage measured in CI, no dependency-vulnerability scanning,
-  and no full-history secret scan in CI (TASK-021).
+- No frontend unit tests (Playwright E2E only, Chromium only), and no coverage measured in CI.
+- CI's scans cover only what ships: dev and eval Python dependencies and dev npm dependencies aren't gated, and
+  there's no scheduled or container image scan (`SECURITY.md` § Known gaps).
 - `keras` 2.15.0, `protobuf` 4.25.9 and `click` 8.1.7 still have audit findings, none reachable from serving. The first
   two are held back by the TF 2.15 pin (`SECURITY.md` § Dependency audit).
 - Starlette 1.x prints a `TestClient` notice asking for `httpx2` instead of `httpx` (test-only, dev dependency).

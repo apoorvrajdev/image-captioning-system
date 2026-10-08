@@ -130,6 +130,58 @@ jobs:
           SKIP: mypy
         run: pre-commit run --all-files --show-diff-on-failure
 
+  # Repository-level security gates (TASK-021, ADR-026). A separate job because
+  # only gitleaks needs the full history, and because a newly published advisory
+  # should turn this job red, not the lint or test jobs.
+  security:
+    name: Security scans (pip-audit + gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0   # gitleaks scans every commit reachable from the tested one
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      # Audits requirements.txt, the dependency layer the image installs,
+      # resolved on Python 3.11 as in the image. pip-audit exits 1 on any
+      # finding, the reviewed baseline included, so the gate decides: it prints
+      # every finding and fails on a new one, on a stale baseline entry, or on a
+      # dependency that couldn't be audited.
+      - name: pip-audit (requirements.txt, against the reviewed baseline)
+        run: |
+          python -m venv "$RUNNER_TEMP/pip-audit"
+          "$RUNNER_TEMP/pip-audit/bin/pip" install --quiet pip-audit==2.10.1
+          "$RUNNER_TEMP/pip-audit/bin/pip-audit" --version
+          "$RUNNER_TEMP/pip-audit/bin/pip-audit" -r requirements.txt --progress-spinner off \
+            --format json --output "$RUNNER_TEMP/pip-audit.json" || true
+          python -m scripts.check_pip_audit "$RUNNER_TEMP/pip-audit.json" \
+            --baseline .github/pip-audit-baseline.txt
+
+      # Same version as the pre-commit hook, verified against the release checksum.
+      - name: Install gitleaks 8.18.4
+        if: ${{ !cancelled() }}
+        run: |
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tar.gz" \
+            https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz
+          echo "ba6dbb656933921c775ee5a2d1c13a91046e7952e9d919f9bac4cec61d628e7d  $RUNNER_TEMP/gitleaks.tar.gz" \
+            | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/gitleaks.tar.gz" -C "$RUNNER_TEMP" gitleaks
+
+      # Committed history only, never the working tree, with the default rules
+      # the pre-commit hook uses. --redact keeps secret values out of the log.
+      - name: gitleaks (full history)
+        if: ${{ !cancelled() }}
+        run: |
+          "$RUNNER_TEMP/gitleaks" version
+          "$RUNNER_TEMP/gitleaks" detect --source . --redact --verbose --no-banner
+
   frontend:
     name: Frontend (lint + build + e2e)
     runs-on: ubuntu-24.04
@@ -171,3 +223,11 @@ jobs:
           name: playwright-test-results
           path: frontend/test-results/
           retention-days: 7
+
+      # Production dependencies only, which are what ships in the Vercel bundle
+      # (TASK-021, ADR-026). An advisory at any severity fails the job; dev
+      # tooling isn't gated. npm is pinned so the audit can't drift with Node.
+      # Last, so its result never hides the lint, build or E2E signal.
+      - name: npm audit (production dependencies)
+        if: ${{ !cancelled() }}
+        run: npx --yes npm@11.6.2 audit --omit=dev

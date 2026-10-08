@@ -28,6 +28,8 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | Non-root container (UID 1000), minimal slim image, HEALTHCHECK | `Dockerfile` |
 | `detect-private-key`, large-file guard (pre-commit locally **and** the CI `pre-commit` job) | `.pre-commit-config.yaml`, `ci.yml` |
 | gitleaks on staged changes (local pre-commit only; its `--staged` mode scans nothing in CI) | `.pre-commit-config.yaml` |
+| CI dependency audit: `pip-audit` of `requirements.txt` against the reviewed baseline, and `npm audit --omit=dev`. Both block CI, and so the deploy (TASK-021, § CI scanning policy) | `ci.yml` (`security`, `frontend`), `scripts/check_pip_audit.py`, `.github/pip-audit-baseline.txt` |
+| CI secret scan: gitleaks over the full committed history, with values redacted in the log (TASK-021) | `ci.yml` (`security`) |
 | Least-privilege CI permissions, secret-presence guard in deploy | `.github/workflows/*.yml` |
 | Research-artefact integrity (SHA-256 notebook lock) | `.paper-notebook.sha256`, `ci.yml` |
 | Development-tooling guardrails: no reads of `.env` files, no edits to the frozen notebook, `models/`, or `results/`, confirmation before commit/push/tag | `.claude/settings.json` |
@@ -39,8 +41,8 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | A body up to the cap is still received: without `Content-Length`, up to about 10 MiB can be spooled to a temporary file before the 413. A client that keeps sending after the 413 still uses bandwidth, though uvicorn discards the bytes. The HF Spaces proxy in front of the app can't be configured | bandwidth, and bounded disk use per request on a small Space | rate limiting or a platform-level body cap, if abuse appears |
 | No rate limiting | abuse can starve the single worker | platform-level limits or a lightweight limiter, if abuse appears |
 | No security headers (CSP, HSTS, X-Content-Type-Options) | low for a JSON API; relevant for the SPA host | configure on Vercel (`vercel.json` headers) |
-| No full-history secret scan in CI (the pre-commit job's gitleaks hook is staged-only) | a commit made without hooks isn't scanned | add a `gitleaks detect` CI step |
-| No continuous dependency or container vulnerability scanning. The 2026-10-08 audit was a one-off, and three packages still have findings (§ Dependency audit) | new CVEs go unnoticed | `pip-audit` + `npm audit` in CI (TASK-021) |
+| CI audits only what ships: not the dev and eval Python requirements (43 findings on 2026-10-08: 42 in `nltk` 3.8.1, 1 in `pytest` 8.2.2), and not dev npm dependencies (8 advisories in build tooling such as `vite` and `postcss`) | tooling that runs locally, in CI or on Kaggle, on trusted inputs | upgrade or gate them in a separate task |
+| No scheduled scan and no container image scan | an advisory published while no one pushes isn't seen until the next push, and OS packages in the image aren't audited | a scheduled CI run, an image scanner |
 | Production CORS isn't enforced by the app. The HF Spaces proxy answers CORS itself and reflects any `Origin`, preflights included. The Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app either: `load_config` passes `base.yaml` as constructor arguments, which outrank environment variables, so the app allows only the localhost origins. Found in TASK-023 (ADR-028). | low while the API is public and sends no credentials (`allow_credentials=False`), but the SPA works only through the proxy's reflection | make environment variables outrank the YAML in `load_config` (this changes every `CAPTIONING__*` override), then verify the app's allow-list locally; the proxy's reflection can't be configured |
 | No authentication | by design (public demo) | revisit only if paid or expensive models are served |
 
@@ -69,7 +71,41 @@ Remaining, each with its reason:
 | `protobuf` | 4.25.9 | CVE-2026-0994 | Fixed in 5.29.6 and 6.33.5. TF 2.15 requires protobuf < 5. | No. It needs untrusted JSON parsed with `json_format.ParseDict`, and serving parses none. |
 | `click` | 8.1.7 | CVE-2026-7246 | Fixed in 8.3.3. Outside TASK-020's scope. | No. It's command injection through `click.edit()`, which nothing calls. |
 
-TASK-021 decides whether its CI scan blocks on these or starts report-only.
+CI enforces this list through the pip-audit baseline (§ CI scanning policy).
+
+## CI scanning policy
+
+Three scans run on every push and pull request to `main`, and all three block (TASK-021, ADR-026). CI must be green
+before anything deploys, so a failing scan also stops the backend deploy.
+
+| Scan | Job | What it checks | Fails CI when |
+|---|---|---|---|
+| pip-audit 2.10.1, gated by `scripts/check_pip_audit.py` | `security` | `requirements.txt`, the image's dependency layer, resolved on Python 3.11 like the image | a finding isn't in `.github/pip-audit-baseline.txt`, a baseline entry matches no finding, or a dependency couldn't be audited |
+| `npm audit --omit=dev` (npm 11.6.2) | `frontend` | the production dependencies in `frontend/package-lock.json`, which are what ships in the bundle | it reports any advisory, at any severity |
+| gitleaks 8.18.4 `detect --redact` | `security` | every commit reachable from the tested commit (full-history checkout), with the default rules the pre-commit hook uses. It scans git history only, never the working tree | it finds anything |
+
+- **Known findings.** The pip-audit baseline holds exactly the 15 findings TASK-020 reviewed (§ Dependency audit):
+  `keras` 2.15.0 (13), `protobuf` 4.25.9 (1) and `click` 8.1.7 (1). pip-audit's summary line counts them as 26,
+  because it lists some advisories more than once. Each entry names one package, one exact version
+  and one vulnerability id, and matches only a finding with that exact id. Every run prints it as `[baseline]`, with
+  its aliases (the CVE ids in § Dependency audit). Nothing is ignored by package, severity or class.
+- **Version changes.** An entry is pinned to its version. `protobuf` floats within TensorFlow's `<5` range, so a new
+  4.25.x patch that still carries CVE-2026-0994 fails the gate until the entry's version is updated in a reviewed
+  change. A renamed or split advisory fails the same way.
+- **New findings** fail CI, even when the code didn't change. Upgrade the package if a fixed release fits the pins.
+  Otherwise, check whether serving can reach it, then add a baseline line with the reason and the removal condition,
+  plus a row in § Dependency audit, in one reviewed change.
+- **False positives.** For pip-audit, an advisory that doesn't apply is recorded like any accepted finding: one
+  baseline line, with the reason. npm has no ignore list here; a production false positive needs a reviewed
+  decision before anything is suppressed. For gitleaks, a false positive gets a `.gitleaksignore` entry for that
+  single finding (commit, file, rule, line) with a comment. A real secret is rotated first, never only
+  allowlisted.
+- **Removing an exception.** When a baselined package is upgraded, for example at the TensorFlow / Keras migration,
+  its entries stop matching and the gate fails until they and their § Dependency audit rows are removed. An
+  exception can't outlive its reason.
+- **Output.** gitleaks runs with `--redact`, so secret values never reach the log. pip-audit and npm print package
+  names, versions and advisory ids only.
+- **Reproducing it locally:** see `docs/CI.md` § Local equivalents.
 
 ## Reporting
 

@@ -255,6 +255,53 @@ Format: **Decision · Why · Evidence**.
   - Under Starlette 1.x, `TestClient` warns that `httpx` is deprecated in favour of `httpx2`. It's test-only, and dev dependencies are out of scope here.
 - **Evidence:** `requirements.txt`, `pyproject.toml`, `backend/app/core/body_limit.py`, `backend/app/main.py`, `backend/app/api/routes.py`, `backend/app/tests/test_body_size_limit.py`, `docs/SECURITY.md` § Dependency audit; OSV and `pip-audit` 2.10.1 output for both requirement sets; the FastAPI 0.133.0 and 0.135.2 release notes and its per-release `requires_dist` on PyPI; the Starlette 1.0–1.3.1 and `python-multipart` 0.0.31–0.0.32 release notes; the Pillow 11.0 and 12.0 release notes; `fastapi/routing.py` (0.133.0), `starlette/formparsers.py` (1.3.1) and `WorkerThread.run` in `anyio/_backends/_asyncio.py` (4.4.0 vs 4.14.2); TASK-020 in `TASKS.md` for the measurements.
 
+### ADR-026 — CI blocks on three scans: pip-audit of the serving requirements against a reviewed baseline, `npm audit` of production dependencies, and a full-history gitleaks scan
+- **Decision:**
+  - A new `security` job in `ci.yml` runs pip-audit and gitleaks, and the `frontend` job gains an `npm audit` step. All three block: a failure fails CI, so the deploy, which runs only after green CI (ADR-017), doesn't happen.
+  - pip-audit:
+    - pip-audit 2.10.1, in its own venv, audits `requirements.txt` (the image's dependency layer), resolved on Python 3.11 like the image, and writes JSON.
+    - `scripts/check_pip_audit.py` gates that report against `.github/pip-audit-baseline.txt`. Each entry is an exact `<package> <version> <vulnerability id>`, grouped with its reason and removal condition. An entry matches one finding with that exact id. Aliases, such as the CVE ids `SECURITY.md` cites, are printed but never matched.
+    - The gate prints every finding as `[baseline]` or `[NEW]`. It fails on a finding missing from the baseline, a baseline entry that matches no finding, a dependency pip-audit couldn't audit, or a missing or malformed report. An audited dependency without its version or its `vulns` list is malformed, never read as clean.
+    - The baseline is TASK-020's 15 reviewed findings: 13 in `keras` 2.15.0, 1 in `protobuf` 4.25.9, 1 in `click` 8.1.7. pip-audit's own summary says 26, because it lists some advisories more than once; the gate counts each package, version and id once. There's no package-wide or severity-wide ignore.
+    - Only `requirements.txt` is audited. `requirements-dev.txt` and `requirements-eval.txt` aren't.
+  - `npm audit --omit=dev`, with npm pinned to 11.6.2 through `npx`, is the frontend job's last step and runs even if an earlier step failed. An advisory at any severity fails it. Dev dependencies aren't audited in CI.
+  - gitleaks:
+    - gitleaks 8.18.4, the pre-commit hook's version, is downloaded from its GitHub release and checked against the release's SHA-256.
+    - It runs `detect --redact --verbose` over every commit reachable from the tested commit (`fetch-depth: 0`), with the default rules, as the hook uses.
+    - There's no allowlist, because the history is clean. A false positive would get a one-finding `.gitleaksignore` fingerprint. A real secret is rotated first and never only allowlisted.
+  - Workflow permissions stay `contents: read`, no repository secret is added, and no existing job or step changes.
+- **Why:**
+  - Blocking from the start, not report-only: TASK-020 left no unreviewed finding in the serving set. Its 15 residual findings are reviewed exceptions (ADR-025), so with them baselined the scan starts clean, which is TASK-021's condition for blocking.
+  - pip-audit alone would fail on TASK-020's reviewed findings forever. `--ignore-vuln` matches an id on any package or version, drops ignored findings from the log, and keeps a stale ignore silently. The gate pins each exception to a package and version, shows it in every run, and fails once it stops matching. At the TensorFlow / Keras migration, for example, keras moves and its 13 entries fail the gate until they're removed.
+  - The gate uses only the standard library, so CI runs it on the bare interpreter without installing the project. Its unit tests cover passing, a new finding, version pinning, an alias not standing in for an id, stale entries, unaudited dependencies and malformed input.
+  - Negative check: gating the pre-TASK-020 `requirements.txt` reports the 33 findings TASK-020 fixed as `[NEW]` and exits 1.
+  - The same 15 findings come up on Linux with Python 3.11, from the package set CI installed in run `37808914615`, as on Windows. The dev and eval files aren't gated:
+    - neither is in the image;
+    - they add 43 findings in tooling that runs offline on trusted inputs: 42 in `nltk` 3.8.1, 1 in `pytest` 8.2.2;
+    - gating them is a separate decision, recorded as a known gap in `SECURITY.md`.
+  - npm:
+    - The production tree is `react`, `react-dom` and `scheduler`, which is what ships, and `--omit=dev` reports 0. The full tree has 8 advisories (1 low, 1 moderate, 6 high) in `vite`, `postcss`, `source-map-js` and other build tooling that doesn't ship. TASK-021 excludes gating on dev-only dependencies.
+    - Negative check: the same vulnerable package fails as a production dependency and passes as a dev dependency.
+    - npm is pinned because Node 24's bundled npm moves with each Node release.
+  - gitleaks:
+    - The pre-commit hook scans only staged changes, so it does nothing in CI (ADR-016).
+    - `gitleaks-action` would bring back a Node 20 action (ADR-024), and it needs a licence for organisations. So the job downloads the binary and verifies its checksum instead.
+    - Using the hook's version keeps local and CI results the same.
+    - Negative check: a fake token, committed in a throwaway clone and then deleted, was still found in history, with its value redacted.
+  - A separate job, because:
+    - only gitleaks needs the full history;
+    - pip-audit resolves the serving set on its own, not the quality job's dev + eval environment;
+    - a newly published advisory turns "Security scans" red rather than lint or tests.
+    - `npm audit` sits in the `frontend` job, which already has Node and the lockfile.
+- **Consequences:**
+  - A newly published advisory fails CI on the next push, even with no code change, and blocks the deploy until it's triaged. Triage means upgrading the package, or reviewing it and adding a baseline line with its reason plus a row in `SECURITY.md` § Dependency audit.
+  - `protobuf` isn't pinned in `requirements.txt`. It's a transitive dependency of TensorFlow and floats within `<5`. If a new 4.25.x patch still carries CVE-2026-0994, the gate fails, with a new finding plus a stale entry, until the baseline line's version is updated in a reviewed one-line change. Pinning it in `requirements.txt` would be a dependency change, which is outside this task.
+  - An advisory that's renamed, or split into a new record, also fails until it's reviewed.
+  - No scheduled scan: a quiet repository isn't rescanned until the next push or pull request.
+  - Results depend on the advisory databases at run time, so a rerun of the same commit can differ.
+  - Not covered: container image scanning, dev and eval Python dependencies, dev npm dependencies, Dependabot, and secrets kept outside git (Space variables, repository secrets).
+- **Evidence:** `.github/workflows/ci.yml` (`security`, `frontend`), `scripts/check_pip_audit.py`, `tests/unit/test_check_pip_audit.py`, `.github/pip-audit-baseline.txt`, `docs/SECURITY.md` § CI scanning policy, `docs/CI.md`; the local runs and negative checks recorded in TASK-021 in `TASKS.md`; the gitleaks v8.18.4 release checksums; ADR-016, ADR-017, ADR-024, ADR-025.
+
 ### ADR-027 — The Space rebuilds only when an image input changed since the last successful deploy (revises ADR-017)
 - **Decision:**
   - `deploy-backend.yml` still runs after every green CI run on `main`. It still deploys only the exact tested commit, skips a commit `main` has moved past, and verifies manual runs' CI first (ADR-017). After those guards, `python3 -m scripts.deploy_scope decide` decides. If no image input changed, the run ends green with a "Space deploy skipped" notice and job summary giving the reason, and nothing is pushed to the Space.
