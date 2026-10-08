@@ -18,13 +18,14 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 
 ## Expected behaviour
 - A red CI never deploys. Deploy uses only the `HF_TOKEN` secret and fails loudly if it's unset.
+- A green CI rebuilds the Space only if an image input changed since the last successful deploy, as recorded in the `huggingface-space` deployment, and only while the Space is still on that deploy's commit (`scripts/deploy_scope.py`, ADR-027). A new `COPY` source in the `Dockerfile` must be added to `IMAGE_INPUTS`; `test_deploy_scope.py` fails until it is.
 - Container runs as UID 1000, `HEALTHCHECK` on `/healthz`, no weights baked into the Space git tree.
 - Local DoD commands ≡ CI jobs (see CLAUDE.md Commands). A new gate is added to both.
 
 ## Definition of done — ALL must pass
 - [ ] Workflow YAML parses (`python -c "import yaml,sys;yaml.safe_load(open(sys.argv[1], encoding='utf-8'))" <file>`), and no gate was removed or weakened.
 - [ ] Every job names the pinned runner (`ubuntu-24.04`), never `ubuntu-latest`. Action majors run on Node 24, and the `frontend` job uses Node 24. Changing any of these updates `docs/CI.md` § Platform (ADR-024).
-- [ ] `permissions: contents: read` kept. Secrets only via `${{ secrets.* }}`, never echoed.
+- [ ] `permissions: contents: read` kept (`deploy-backend.yml` adds only `actions: read` and `deployments: write`, ADR-027). Secrets only via `${{ secrets.* }}`, never echoed.
 - [ ] Dependency changes keep `tensorflow-cpu==2.15.0` + `numpy<2`. Runtime deps stay in `requirements.txt` (the Docker layer) *and* `pyproject.toml`. Starlette stays pinned in both, because FastAPI's own range admits vulnerable releases (ADR-025).
 - [ ] New env var ⇒ `.env.example` + runbook updated. No real values committed.
 - [ ] `docs/CI.md` matches the workflows after the change.
@@ -34,6 +35,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 ```bash
 .venv/Scripts/python.exe -c "import yaml;[yaml.safe_load(open(f, encoding='utf-8')) for f in ['.github/workflows/ci.yml','.github/workflows/deploy-backend.yml','.github/workflows/no-ai-attribution.yml']];print('ok')"
 grep -rn "ubuntu-latest" .github/workflows   # must print nothing
+.venv/Scripts/pytest.exe tests/unit/test_deploy_scope.py -q   # deploy scope rule, record and workflow wiring
 .venv/Scripts/pytest.exe tests backend/app/tests -q
 docker build -t captioning-backend:local .   # only if Docker is available; otherwise report "not run"
 ```

@@ -42,6 +42,16 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). Weights resolve from
 Hub or local paths offline (`test_weights_loader.py`).
 
+**Deploy scope (TASK-022, ADR-027).** The deploy rule, run against throwaway git repositories:
+- docs-only commits skip;
+- `README.md`, dependency, config and build changes deploy;
+- an image change anywhere in the range deploys, including one whose deploy failed or was skipped before a docs-only
+  commit, and a file moved out of an image directory;
+- the Space being off the recorded commit, no record, or an unreadable one all deploy.
+
+Every Dockerfile `COPY` source must be an image input. The deploy workflow keeps its guard → decision → push → health
+→ record order, with no step after the decision running on failure (`test_deploy_scope.py`).
+
 **Evaluation.** Metric implementations match hand-checkable tiny corpora, and run artefacts follow the
 `write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`). The SPA's Phase 3 dashboard data
 (`frontend/src/generated/phase3-dashboard.json`) equals a fresh export from the committed results
