@@ -794,7 +794,7 @@ The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-02
 
 Phase 4 hardens the system that already ships rather than adding features. Each item is one task in [`docs/TASKS.md`](docs/TASKS.md), done in this order.
 
-- [ ] **4A** — CI platform currency (TASK-019): pin the runner to an explicit supported image (proposed `ubuntu-24.04`) before GitHub moves `ubuntu-latest` to Ubuntu 26 on 2026-10-19. Clear the GitHub Actions Node 20 deprecation, move the frontend job off Node 20, and record the Python 3.10 end-of-life decision.
+- [x] **4A** — CI platform currency (TASK-019, done 2026-10-08): every workflow job is pinned to `ubuntu-24.04` ahead of GitHub's 2026-10-19 move of `ubuntu-latest` to Ubuntu 26. The actions run on their Node 24 majors, the frontend job runs Node 24 LTS, and Python 3.10 stays in the test matrix while the TensorFlow 2.15 pin holds ([ADR-024](docs/DECISIONS.md)).
 - [ ] **4B** — Serving dependency security (TASK-020): patch FastAPI / Starlette / `python-multipart`, and Pillow where appropriate, without moving the `tensorflow-cpu==2.15.0` pin. The backend contract tests are the safety net. Also reassess the full-body upload buffering gap in [`docs/SECURITY.md`](docs/SECURITY.md).
 - [ ] **4C** — Dependency and secret scanning in CI (TASK-021): `pip-audit`, `npm audit` on production dependencies, and a full-history `gitleaks` scan. They become a blocking gate only after TASK-020 leaves a clean baseline.
 - [ ] **4D** — Deploy only when the production image changes (TASK-022): skip the Space rebuild for commits that can't change the image. `README.md` is copied into the image, so it is part of that decision. Needs an ADR revising [ADR-017](docs/DECISIONS.md).
