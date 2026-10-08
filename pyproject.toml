@@ -75,7 +75,7 @@ dependencies = [
     "python-multipart>=0.0.31",  # FastAPI multipart form data (image upload)
     "huggingface-hub>=0.23,<1.0",  # Pulls weights from HF Hub at startup
     "structlog>=24.1,<25.0",     # Structured JSON logs in prod, pretty in dev
-    "anyio>=4.3,<5.0",           # Thread-pool offload for sync TF inference
+    "anyio>=4.14.2,<5.0",        # Thread-pool offload for sync TF inference
     "tqdm>=4.66,<5.0",
     "click>=8.1,<9.0",           # CLI for scripts/
 ]
