@@ -23,6 +23,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import router
+from app.core.body_limit import BodySizeLimitMiddleware
 from app.core.config import BackendSettings, get_backend_settings
 from app.core.logging import RequestContextMiddleware, configure_app_logging
 from app.services.predictor_service import PredictorService
@@ -92,6 +93,7 @@ def create_app() -> FastAPI:
     app.state.app_config = config
     app.state.predictor_service = None
 
+    app.add_middleware(BodySizeLimitMiddleware, max_upload_bytes=config.serve.max_upload_bytes)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=config.serve.cors_allowed_origins,
