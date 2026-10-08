@@ -2,6 +2,19 @@
 
 GitHub Actions runs three workflows (`ci.yml`, `deploy-backend.yml`, and the commit-message policy gate `no-ai-attribution.yml`) out of [`.github/workflows/`](../.github/workflows/).
 
+## Platform
+
+Pinned explicitly ([ADR-024](DECISIONS.md)), so a GitHub default change can't move CI silently:
+
+- Runner: every job runs on `ubuntu-24.04`. No job uses `ubuntu-latest`.
+- Actions: major tags that run on the Node 24 runtime: `actions/checkout@v7`, `actions/setup-python@v7`,
+  `actions/setup-node@v7`, `actions/cache@v6`, `actions/upload-artifact@v7`.
+- Node: 24 (LTS) for the `frontend` job.
+- Python: 3.11 for the quality, freeze and pre-commit jobs, and 3.10 + 3.11 for pytest. 3.10 is past its upstream end
+  of life (2026-10-01) and stays for the reasons in ADR-024.
+
+Changing any of these is a reviewed edit to the workflows and to this section.
+
 ## `ci.yml` — quality + tests
 
 Triggered on every push and pull request to `main`. Five parallel jobs:
@@ -12,7 +25,7 @@ Triggered on every push and pull request to `main`. Five parallel jobs:
 | `python-tests` | `pytest` matrix on Python **3.10 / 3.11**, then the 4-stage notebook parity audit (`python -m scripts.notebook_module_audit`) | Confirm the package keeps working on every supported interpreter and still matches the notebook |
 | `notebook-freeze` | `make freeze-paper-notebook` (SHA-256 check) | Fail if the IEEE notebook is mutated — it is the canonical research artefact |
 | `pre-commit` | `pre-commit run --all-files` with the repo's pinned hooks (`SKIP=mypy`, which `python-quality` covers) | Enforce the same hygiene, nbstripout, prettier, and secret-scan hooks as local commits, including commits made without hooks installed |
-| `frontend` | `npm install`, `npm run lint`, `npm run build`, then Playwright Chromium (`npx playwright install --with-deps --only-shell chromium`) and `npm run test:e2e` on Node 20; traces uploaded as `playwright-test-results` on failure | Catch ESLint + Vite build regressions, and break the caption flow or Phase 3 dashboard in a real browser against the production bundle with a mocked API (ADR-023) |
+| `frontend` | `npm install`, `npm run lint`, `npm run build`, then Playwright Chromium (`npx playwright install --with-deps --only-shell chromium`) and `npm run test:e2e` on Node 24; traces uploaded as `playwright-test-results` on failure | Catch ESLint + Vite build regressions, and break the caption flow or Phase 3 dashboard in a real browser against the production bundle with a mocked API (ADR-023) |
 
 Caching:
 - pip via `actions/setup-python` (key derived from `requirements*.txt` + `pyproject.toml`)
@@ -76,7 +89,7 @@ python -m scripts.notebook_module_audit   # 4-stage notebook parity audit
 make freeze-paper-notebook   # SHA-256 freeze check
 SKIP=mypy pre-commit run --all-files   # same hooks as the pre-commit job
 
-cd frontend
+cd frontend                        # Node 24, as in CI
 npm ci && npm run lint && npm run build
 npx playwright install chromium   # once per machine
 npm run test:e2e                  # builds, serves with vite preview, runs e2e/ on Chromium
