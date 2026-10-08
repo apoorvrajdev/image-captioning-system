@@ -17,7 +17,8 @@ _Last updated: 2026-10-08_
 - **Phase 4 is in progress:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
   [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is done (2026-10-08, ADR-024): every job runs on
   `ubuntu-24.04` with Node 24 action majors, ahead of the 2026-10-19 `ubuntu-latest` move. TASK-020 (serving dependency
-  security) is done (2026-10-08, ADR-025). TASK-021 (dependency and secret scanning in CI) is next.
+  security) is done (2026-10-08, ADR-025). TASK-022 (deploy only when the production image changes) is done
+  (2026-10-08, ADR-027). TASK-021 (dependency and secret scanning in CI) hasn't landed on `main` yet.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -48,8 +49,9 @@ _Last updated: 2026-10-08_
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
 | Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
-| CI on `main` for `e8c3eda` (run `37806775992`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04`, 243 passed on 3.10 and 3.11, 0 annotations (TASK-020) |
-| `deploy-backend.yml` (run `37808007611`, automatic, `e8c3eda`) | **success**: image rebuilt on the TASK-020 pins, Space `RUNNING`, healthy, `v2.0.0` |
+| CI on `main` for `fbf55d8` (run `37820623531`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04`, 310 passed on 3.10 and 3.11 (TASK-022) |
+| `deploy-backend.yml` (run `37819590272`, automatic, `b21b97a`) | **success**: image change deployed, Space `RUNNING`, healthy, `v2.0.0`; recorded as deployment `6942786830` (Space commit `7d45a58`) |
+| `deploy-backend.yml` (run `37820817700`, automatic, `fbf55d8`) | **skipped** (green): docs only, no image input changed since `b21b97a`, and the Space was still on `7d45a58` |
 | `pip-audit -r requirements.txt` (2.10.1, 2026-10-08) | 26 findings in 3 packages (`keras`, `protobuf`, `click`), each listed in `SECURITY.md` with its reason |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
@@ -57,7 +59,9 @@ _Last updated: 2026-10-08_
 
 SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 `https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
-is enabled and set to auto-deploy every CI-green commit on `main` (ADR-017). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
+is enabled and runs after every CI-green commit on `main`. It rebuilds the Space only when an image input changed since the
+last successful deploy, recorded as a `huggingface-space` GitHub deployment, and otherwise ends with a "Space deploy
+skipped" notice (ADR-017, ADR-027). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
 `apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
 (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
 (beam CIDEr 0.826; 5-ref BLEU-4 25.91). The Phase 3 baseline comparison is `results/phase3-comparison/`. It is not a
@@ -65,6 +69,13 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-08 deploy only when the production image changes (TASK-022, done):
+  - `scripts/deploy_scope.py` decides each deploy from the image inputs: the Dockerfile `COPY` sources, plus
+    `Dockerfile`, `.dockerignore`, `.gitattributes`, the deploy workflow and the script. It compares them with the
+    last successful deploy, a `huggingface-space` GitHub deployment written only after the health gate, and needs
+    the Space to still be on that deploy's commit. `README.md` redeploys. Manual runs always deploy.
+  - Observed on `main`: run `37819590272` deployed and recorded `b21b97a`; run `37820817700` skipped a docs-only push.
+  - Committed as `b286300`..`fbf55d8`, plus the closing docs. ADR-027.
 - 2026-10-08 serving dependency security (TASK-020, done):
   - Serving pins: FastAPI 0.133.0, Starlette 1.3.1 (now pinned explicitly), `python-multipart` 0.0.31, Pillow 12.3.0
     (range `>=12.3,<13.0`) and `anyio` 4.14.2 (owner-approved). `tensorflow-cpu==2.15.0`, `numpy` and Pydantic are

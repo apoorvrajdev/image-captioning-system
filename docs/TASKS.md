@@ -875,7 +875,7 @@ day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
 - [x] **4A** — CI platform currency → TASK-019 (done 2026-10-08)
 - [x] **4B** — Serving dependency security → TASK-020 (done 2026-10-08)
 - [ ] **4C** — Dependency and secret scanning in CI → TASK-021
-- [ ] **4D** — Deploy only when the production image changes → TASK-022
+- [x] **4D** — Deploy only when the production image changes → TASK-022 (done 2026-10-08)
 - [ ] **4E** — Real-model post-deploy smoke test → TASK-023
 
 Facts the tasks rely on (checked 2026-10-07):
@@ -1075,7 +1075,7 @@ Owns: `.github/workflows/ci.yml` (the scan steps), any scanner config such as a 
 Out of scope: fixing vulnerabilities (TASK-020); container image scanning; Dependabot or automated update pull
 requests; gating on dev-only npm dependencies.
 
-### TASK-022 — Deploy only when the production image changes            [status: todo]
+### TASK-022 — Deploy only when the production image changes            [status: done] (2026-10-08)
 Area: deployment
 Goal: commits that can't change the production image (docs, tests, frontend, results and the like) no longer rebuild
 and restart the HF Space.
@@ -1103,6 +1103,55 @@ Depends on: TASK-019 (same workflow file; the runner pin lands first).
 Owns: `.github/workflows/deploy-backend.yml`, the ADR, `docs/CI.md`, the deployment runbook.
 Out of scope: changing what the image contains; the CI workflow's own trigger; the post-deploy smoke test (TASK-023);
 Vercel deploys (handled by Vercel's GitHub integration).
+Outcome:
+- Implementation:
+  - `scripts/deploy_scope.py` (`b286300`) decides and records.
+  - `deploy-backend.yml` (`36a7253`) runs the decision after the superseded-commit guard, gates every later step on it,
+    and records the deploy last.
+  - 67 tests (`b21b97a`).
+  - Docs: ADR-027 (`d8ee2ce`), `CI.md`, the runbook and `SECURITY.md` (`8fd05f1`), and the skill, test plan and repo map
+    (`fbf55d8`).
+- Image inputs: the Dockerfile's `COPY` sources (`requirements.txt`, `pyproject.toml`, `README.md`, `src/`, `backend/`,
+  `configs/`, `models/`), plus `Dockerfile`, `.dockerignore`, `.gitattributes`, `deploy-backend.yml` and
+  `scripts/deploy_scope.py`. A test fails if a Dockerfile `COPY` source is missing from the list.
+- Baseline: the newest `huggingface-space` GitHub deployment that the workflow wrote. It's written only after the Space
+  is `RUNNING` and `/healthz` reports `model_loaded: true`, and it names both the tested commit and the Space commit
+  pushed. A run skips only if that record has `success`, the Space's head is still that commit, and no image input
+  differs. Anything unknown deploys, and manual runs always deploy. The workflow adds `deployments: write` and stops
+  persisting the checkout token.
+- `README.md` redeploys: it's package metadata in the image and, with the config header, the Space's card (ADR-027).
+- Acceptance clarifications:
+  - The comparison is a tree diff, so a change reverted before it was pushed doesn't deploy.
+  - The review found that comparing against the last successful deploy alone isn't enough. A deploy that pushed and
+    then failed leaves the Space on its commit, and a later revert would compare as unchanged. The Space-head check
+    covers that case.
+- Verification:
+  - Locally:
+    - 67 deploy-scope tests and 98 with the backend and Makefile tests;
+    - ruff and mypy clean, all three workflows parse, pre-commit passed on every commit;
+    - the six regressions the tests must catch (dropping `--no-renames`, comparing with the parent, dropping the
+      Space-head check, dropping `README.md`, recording with `always()`, persisting the token) each fail them;
+    - real ranges: `e8c3eda..05859ca` (docs) skips, `05859ca..f01b2e0` (README) deploys, and
+      `4e6a957~1..05859ca` deploys, though `05859ca` alone against its parent would skip.
+  - `/code-review`: 10 findings.
+    - Five fixed: the failed-deploy revert (now the Space-head check), a manual run waiting on the diff, a diff failure
+      crashing the step, the lookup paging through records, and a missing step output skipping silently.
+    - Token scope narrowed with `persist-credentials: false`.
+    - Declined: sharing the manual-run CI check's API client (out of scope), and checking the live Space's health on a
+      skip (monitoring).
+  - `/security-review`: no findings.
+  - Image change on `main`:
+    - CI run `37819440661` on `b21b97a`: all 6 jobs green, 310 passed on 3.10 and 3.11.
+    - Deploy run `37819590272` found no record and deployed: Space `RUNNING`, "Healthy: model_version=v2.0.0".
+    - It recorded deployment `6942786830` (`b21b97a`, Space commit `7d45a58`, `success`).
+  - Docs-only push on `main`:
+    - CI run `37820623531` on `fbf55d8`: all 6 jobs green.
+    - Deploy run `37820817700` skipped in 11 s, with the notice "No image input changed since b21b97a…, and the Space
+      is still on it". Nothing was pushed: the Space head stayed `7d45a58`, and no new record was written.
+- Not done, by scope:
+  - checking the live Space's stage on a skip;
+  - rebuilding for a new base image without a manual run;
+  - the post-deploy caption smoke test (TASK-023).
 
 ### TASK-023 — Real-model post-deploy smoke test            [status: todo]
 Area: deployment · inference-api
