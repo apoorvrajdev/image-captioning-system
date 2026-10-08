@@ -293,6 +293,8 @@ def real_app(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[Any]:
         return TestClient(app), predictor  # no `with`: the lifespan would load real weights
 
     monkeypatch.chdir(REPO_ROOT)
+    # The env variable outranks the YAML, so a value exported in the shell would leak in.
+    monkeypatch.delenv("CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS", raising=False)
     yield build
     get_backend_settings.cache_clear()
 
@@ -322,6 +324,19 @@ def test_the_smoke_test_fails_when_the_app_does_not_allow_the_origin(real_app: A
     client, _ = real_app(["http://localhost:5173"])
     with pytest.raises(smoke.SmokeFailure, match="Access-Control-Allow-Origin is None"):
         smoke.run(_through(client), BASE, ORIGIN, REQUEST_ID, timeout=5)
+
+
+def test_the_app_takes_its_origins_from_the_environment_over_the_yaml(
+    real_app: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Production's wiring: the Space's ``CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS`` over a YAML
+    that doesn't list the SPA's origin (runbook § 4, TASK-024)."""
+    monkeypatch.setenv("CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS", json.dumps([ORIGIN]))
+    client, _ = real_app(["http://localhost:5173"])
+    smoke.run(_through(client), BASE, ORIGIN, REQUEST_ID, timeout=5)
+    # The variable replaces the YAML list, so the YAML-only origin is no longer allowed.
+    refused = client.get("/healthz", headers={"Origin": "http://localhost:5173"})
+    assert "access-control-allow-origin" not in refused.headers
 
 
 # ------------------------------------------------------------------- the CLI

@@ -1299,3 +1299,70 @@ Outcome:
   - uptime monitoring between deploys;
   - fixing the CORS env-override precedence;
   - the README's 4E line, left for the owner.
+
+---
+
+## Maintenance after Phase 4
+
+### TASK-024 — Environment overrides outrank the YAML in `load_config`            [status: done] (2026-10-09)
+Area: ml-core · deployment
+Goal: every `CAPTIONING__*` environment variable overrides the YAML value at the same path, as `configs/base.yaml`,
+`AppConfig`'s docstring, `.env.example` and both runbooks already say, so the Space's
+`CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` reaches the app.
+Problem (found in TASK-023):
+- `load_config` built `AppConfig(**yaml)`. pydantic-settings ranks constructor arguments above environment variables
+  and deep-merges them, so an override was ignored for every field the YAML set, and applied only to fields it left
+  out.
+- Affected:
+  - the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS`: the app served `base.yaml`'s localhost origins, and the SPA
+    worked only through the HF proxy's reflection;
+  - the Kaggle runbook's `CAPTIONING__DATA__BASE_PATH`, because `stabilized.yaml` sets `data.base_path`;
+  - an invalid override for a YAML-set field, such as `CAPTIONING__TRAIN__BATCH_SIZE=abc`, which was ignored instead
+    of rejected.
+Acceptance criteria:
+- GIVEN no override THEN the YAML value applies.
+- GIVEN an override for a scalar, a nested field at any depth, or a list THEN it replaces the YAML value. A list
+  replaces the YAML list whole.
+- GIVEN an override for one field THEN every other YAML value is kept.
+- GIVEN a malformed or misspelled override THEN loading fails, and a malformed JSON value isn't echoed.
+- The fix is generic: no CORS-specific code, no hard-coded origin, no wildcard. Constructing `AppConfig(...)` directly
+  behaves as before.
+Out of scope: the HF proxy's CORS reflection; the CORS middleware settings; the smoke test's behaviour; any other
+config change.
+Outcome:
+- `load_config` parses the environment with pydantic-settings' `EnvSettingsSource(AppConfig)`, the source and rules
+  `AppConfig` already uses: prefix, `__` delimiter, case, JSON for lists and sections. It merges the result over the
+  YAML (sections merge key by key; scalars and lists replace) and validates as before. Precedence, highest first:
+  environment, YAML, schema defaults. ADR-029.
+- Rejected:
+  - a CORS-only override, which would leave every other YAML-set field broken;
+  - the Vercel origin in `base.yaml`, which would move a deployment value into the research config;
+  - reordering `AppConfig`'s own sources. Tried: with any `CAPTIONING__SERVE__*` variable set,
+    `AppConfig(serve=ServeConfig(decode_strategy="beam", beam_width=7))` came back `greedy` with width 3.
+- Tests, 11 new:
+  - `test_config.py`, 10:
+    - YAML only; a scalar; nested at two and three levels, including the Kaggle `data.base_path` override;
+    - the Space's CORS list over the real `configs/base.yaml`, replacing it whole;
+    - one override keeping its siblings, other sections and defaults;
+    - each load reading the current environment;
+    - an invalid value, a misspelled key and malformed JSON each failing, the last without echoing the value.
+    - An autouse fixture clears `CAPTIONING__*`, so a shell export can't leak into the module.
+  - `test_smoke_caption.py`, 1: the deploy's smoke check passes against `create_app()` when the origin comes only from
+    `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS`, and the YAML-only origin gets no CORS header. The `real_app` fixture
+    now clears that variable, which would otherwise outrank its YAML.
+  - On the old loader, 8 fail: every override test, the invalid-value test, and the app-level test.
+- Verification, locally:
+  - pytest: 384 passed;
+  - ruff and mypy clean;
+  - parity audit 4/4, notebook hash unchanged;
+  - pre-commit passed on the changed files.
+- Production CORS:
+  - The HF proxy still sets `Access-Control-Allow-Origin` for any `Origin`, so this task doesn't make production
+    refuse an origin.
+  - The app's own allow-list is visible anyway. Starlette's `CORSMiddleware` adds a separate `vary: Origin` header
+    only for origins on the list.
+  - Before the fix, `/healthz` showed it for `http://localhost:5173` (in `base.yaml`), but not for the Vercel origin
+    or `https://not-allowed.invalid`.
+  - The same probe showed the proxy keeps a single `Access-Control-Allow-Origin` when the app also sends one, so the
+    app's header won't trip the smoke check's repeated-header rule.
+  - Check after the deploy: the Vercel origin gets `vary: Origin`, and `https://not-allowed.invalid` still doesn't.

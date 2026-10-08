@@ -37,6 +37,8 @@ _Last updated: 2026-10-09_
     `frontend/src/generated/phase3-dashboard.json` from those results (ADR-021), and a test fails if it drifts.
   - TASK-018 is done: the SPA's "Phase 3 comparison" view renders that file (ADR-022). TASK-007 is done: Playwright
     E2E covers that view and the caption flow.
+- **After Phase 4:** TASK-024 is done (2026-10-09, ADR-029): `load_config` ranks `CAPTIONING__*` environment
+  variables above the YAML, so the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` reaches the app.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
@@ -45,9 +47,9 @@ _Last updated: 2026-10-09_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 243 passed on 2026-10-08, after TASK-020 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
-| ruff lint + format check | clean (105 files, 2026-10-08) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 85 files (2026-10-08) |
+| `pytest tests backend/app/tests` | 384 passed on 2026-10-09, after TASK-024 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
+| ruff lint + format check | clean (111 files, 2026-10-09) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 88 files (2026-10-09) |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
@@ -75,6 +77,15 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-09 env overrides outrank the YAML (TASK-024, done):
+  - `load_config` used to build `AppConfig(**yaml)`, and pydantic-settings ranks constructor arguments above the
+    environment. So every YAML-set field ignored its `CAPTIONING__*` override, the Space's CORS list included.
+  - It now merges `EnvSettingsSource(AppConfig)` over the YAML, then validates. Precedence: env, YAML, defaults.
+    Sections merge, lists replace whole, and direct `AppConfig(...)` construction is unchanged.
+  - An invalid override for a YAML-set field now fails at load instead of being ignored.
+  - 11 new tests in `test_config.py` and `test_smoke_caption.py`. 8 of them fail on the old loader.
+  - The HF proxy still reflects any `Origin`, so production can't refuse an origin at the edge. The app's own list
+    shows as a `vary: Origin` header from Starlette (TASK-024 in `TASKS.md`). ADR-029.
 - 2026-10-09 dependency and secret scanning in CI (TASK-021, done; Phase 4 complete):
   - A new `security` job runs pip-audit 2.10.1 over `requirements.txt`, gated by `scripts/check_pip_audit.py`
     against `.github/pip-audit-baseline.txt` (the 14 TASK-020 findings pip-audit still reports, each pinned to

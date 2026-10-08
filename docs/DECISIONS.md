@@ -381,3 +381,19 @@ Format: **Decision · Why · Evidence**.
   - A Space that is healthy but can't caption now fails its deploy instead of passing it.
   - Not covered: caption quality, latency budgets, uptime monitoring between deploys, and enforcing the CORS allow-list.
 - **Evidence:** `.github/workflows/deploy-backend.yml`, `scripts/smoke_caption.py`, `tests/unit/test_smoke_caption.py`, `backend/app/api/routes.py`, `backend/app/core/logging.py`, `backend/app/main.py`, `src/captioning/config/loader.py`; the live probes and the pre-push smoke run recorded in TASK-023 in `TASKS.md`; ADR-017, ADR-018, ADR-027.
+
+### ADR-029 — `CAPTIONING__*` environment variables outrank the YAML in `load_config` (resolves ADR-028's configuration finding)
+- **Decision:** `load_config` ranks its sources, highest first: `CAPTIONING__*` environment variables, the YAML file, the schema defaults. It reads the environment with pydantic-settings' `EnvSettingsSource(AppConfig)` and merges it over the YAML: sections merge key by key, scalars and lists replace whole. Constructing `AppConfig(...)` directly keeps pydantic-settings' own order, with arguments above the environment.
+- **Why:**
+  - The bug: `load_config` built `AppConfig(**yaml)`. pydantic-settings ranks constructor arguments above the environment, so every field the YAML set ignored its override. The Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` never reached the app (ADR-028), and the Kaggle runbook's `CAPTIONING__DATA__BASE_PATH` was shadowed by `stabilized.yaml`.
+  - Env over YAML is the documented design, not a new one. `configs/base.yaml`'s header, `AppConfig`'s docstring, `.env.example`, the deployment runbook (§ 4, § 6) and the Kaggle runbook all describe env vars overriding the file.
+  - Generic, not CORS-specific. The fault was the source order, and it hit every YAML-set field. A CORS-only branch would leave the rest broken and add a second override path. Listing the Vercel origin in `base.yaml` would put a deployment value in the research config, the same for every environment.
+  - Reusing `EnvSettingsSource` keeps the prefix, delimiter, case and JSON rules in one place, `AppConfig.model_config`. No new dependency or config framework.
+  - Rejected: reordering `AppConfig`'s own sources (`settings_customise_sources`). It would also put the environment above arguments in code and tests. Worse, pydantic-settings replaces a model-instance argument whole when the environment sets one of its fields. Tried: with any `CAPTIONING__SERVE__*` set, `AppConfig(serve=ServeConfig(decode_strategy="beam", beam_width=7))` came back `greedy` with width 3.
+- **Compatibility and safety:**
+  - Without overrides, every config loads exactly as before. Defaults and notebook parity are unchanged.
+  - An override that was silently ignored now applies. An invalid one for a YAML-set field, such as `CAPTIONING__TRAIN__BATCH_SIZE=abc`, now fails at load instead of being ignored. Malformed JSON and unknown keys already failed, and still do.
+  - Parsing is pydantic-settings' JSON decoding plus Pydantic validation: no `eval`, dynamic import or shell. A malformed-JSON error names the field, not the value. `AppConfig` holds no secrets (tokens are `BACKEND_*` settings or CI and Space secrets), so a validation error that echoes an input exposes none.
+  - The CORS policy is unchanged: an explicit list, `allow_credentials=False`, no wildcard. Production's list now comes from the Space variable.
+  - The HF Spaces proxy still reflects any `Origin` (ADR-028), so production still doesn't refuse a disallowed origin at the edge. This decision doesn't change that.
+- **Evidence:** `src/captioning/config/loader.py`, `tests/unit/test_config.py`, `tests/unit/test_smoke_caption.py`; TASK-024 in `TASKS.md`; ADR-004, ADR-028.

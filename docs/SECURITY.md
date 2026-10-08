@@ -23,7 +23,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | Request-body cap: a body over `max_upload_bytes` + 64 KiB of multipart framing gets the same 413 before the multipart parser buffers it. With `Content-Length`, no byte is read. Without it, reading stops at the cap (TASK-020) | `core/body_limit.py`, `main.py`, `backend/app/tests/test_body_size_limit.py` |
 | Serving dependencies with no known advisory in FastAPI, Starlette, `python-multipart`, Pillow or `anyio`, as of the 2026-10-08 audit (§ Dependency audit) | `requirements.txt`, `pyproject.toml` |
 | Client-side type/size validation (mirrors backend) | `frontend/src/components/UploadZone.jsx` |
-| Explicit CORS allow-list from config / `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `backend/app/main.py`, `configs/base.yaml` |
+| Explicit CORS allow-list from config / `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS`, the variable outranking the YAML (TASK-024) | `backend/app/main.py`, `configs/base.yaml`, `src/captioning/config/loader.py` |
 | Request-ID correlated structured logs | `backend/app/core/logging.py` |
 | Non-root container (UID 1000), minimal slim image, HEALTHCHECK | `Dockerfile` |
 | `detect-private-key`, large-file guard (pre-commit locally **and** the CI `pre-commit` job) | `.pre-commit-config.yaml`, `ci.yml` |
@@ -43,7 +43,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | No security headers (CSP, HSTS, X-Content-Type-Options) | low for a JSON API; relevant for the SPA host | configure on Vercel (`vercel.json` headers) |
 | CI audits only what ships: not the dev and eval Python requirements (43 findings on 2026-10-08: 42 in `nltk` 3.8.1, 1 in `pytest` 8.2.2), and not dev npm dependencies (8 advisories in build tooling such as `vite` and `postcss`) | tooling that runs locally, in CI or on Kaggle, on trusted inputs | upgrade or gate them in a separate task |
 | No scheduled scan and no container image scan | an advisory published while no one pushes isn't seen until the next push, and OS packages in the image aren't audited | a scheduled CI run, an image scanner |
-| Production CORS isn't enforced by the app. The HF Spaces proxy answers CORS itself and reflects any `Origin`, preflights included. The Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app either: `load_config` passes `base.yaml` as constructor arguments, which outrank environment variables, so the app allows only the localhost origins. Found in TASK-023 (ADR-028). | low while the API is public and sends no credentials (`allow_credentials=False`), but the SPA works only through the proxy's reflection | make environment variables outrank the YAML in `load_config` (this changes every `CAPTIONING__*` override), then verify the app's allow-list locally; the proxy's reflection can't be configured |
+| Production CORS isn't enforced at the edge. The HF Spaces proxy answers CORS itself and reflects any `Origin`, preflights included, so a disallowed origin is allowed whatever the app's list says. Found in TASK-023 (ADR-028). The app's own list does come from the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS`: TASK-024 made environment variables outrank the YAML (ADR-029). | low while the API is public and sends no credentials (`allow_credentials=False`) | none on HF Spaces, because the proxy's reflection can't be configured. A host that passes the app's CORS headers through would enforce the app's list |
 | No authentication | by design (public demo) | revisit only if paid or expensive models are served |
 
 ## Dependency audit

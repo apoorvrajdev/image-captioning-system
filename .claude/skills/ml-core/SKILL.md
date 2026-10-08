@@ -14,6 +14,7 @@ Decoding (`inference/`) → see `inference-api`. Metrics → see `evaluation`.
 ## Expected behaviour
 - GIVEN default config (`configs/base.yaml`) WHEN any module runs THEN behaviour matches the IEEE notebook (parity audit 4/4).
 - GIVEN a YAML or env override with an unknown or misspelled key WHEN loading `AppConfig` THEN load fails with a `ValidationError` naming the field.
+- GIVEN a YAML value and a `CAPTIONING__*` env var for the same field WHEN `load_config` runs THEN the env value wins and every other YAML value is kept; a list is replaced whole (ADR-029).
 - GIVEN a new training or decoding improvement WHEN added THEN it's behind a config flag whose default preserves notebook behaviour (pattern: `TrainConfig` stability flags, `configs/train/stabilized.yaml`).
 - GIVEN any stochastic code path WHEN run twice with the same `train.seed` THEN results are identical (`set_global_seed`).
 - GIVEN a tokenizer save → load round-trip THEN vocab and encodings are identical (pickle + JSON sidecar).
