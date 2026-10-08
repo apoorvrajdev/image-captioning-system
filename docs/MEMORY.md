@@ -17,7 +17,7 @@ _Last updated: 2026-10-08_
 - **Phase 4 is in progress:** production hardening and supply-chain reliability, TASK-019 – TASK-023 in
   [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is done (2026-10-08, ADR-024): every job runs on
   `ubuntu-24.04` with Node 24 action majors, ahead of the 2026-10-19 `ubuntu-latest` move. TASK-020 (serving dependency
-  security) is next.
+  security) is done (2026-10-08, ADR-025). TASK-021 (dependency and secret scanning in CI) is next.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -40,16 +40,17 @@ _Last updated: 2026-10-08_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 238 passed on 2026-10-07, after TASK-007 (1 pydantic `model_` namespace warning) |
-| ruff lint + format check | clean (103 files, 2026-10-07) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 83 files (2026-10-07) |
+| `pytest tests backend/app/tests` | 243 passed on 2026-10-08, after TASK-020 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
+| ruff lint + format check | clean (105 files, 2026-10-08) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 85 files (2026-10-08) |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
 | Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
-| CI on `main` for `bd91c3c` (run `37799586272`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04` with Node 24 actions, 0 annotations (TASK-019) |
-| `deploy-backend.yml` (run `37799794182`, automatic, `bd91c3c`) | **success** on `ubuntu-24.04`: Space `RUNNING`, healthy, `v2.0.0` |
+| CI on `main` for `e8c3eda` (run `37806775992`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04`, 243 passed on 3.10 and 3.11, 0 annotations (TASK-020) |
+| `deploy-backend.yml` (run `37808007611`, automatic, `e8c3eda`) | **success**: image rebuilt on the TASK-020 pins, Space `RUNNING`, healthy, `v2.0.0` |
+| `pip-audit -r requirements.txt` (2.10.1, 2026-10-08) | 26 findings in 3 packages (`keras`, `protobuf`, `click`), each listed in `SECURITY.md` with its reason |
 | `deploy-backend.yml` (run `37140993110`, manual, `915112b`) | **success**: Space commit `123c5aa`, health gate passed |
 | Backend Space (HF runtime API, 2026-10-03) | **`RUNNING`** (cpu-basic), no error message |
 | `GET /healthz` (public, 2026-10-03T18:12Z) | HTTP 200, `model_loaded: true`, `model_version: v2.0.0` |
@@ -64,6 +65,16 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-08 serving dependency security (TASK-020, done):
+  - Serving pins: FastAPI 0.133.0, Starlette 1.3.1 (now pinned explicitly), `python-multipart` 0.0.31, Pillow 12.3.0
+    (range `>=12.3,<13.0`) and `anyio` 4.14.2 (owner-approved). `tensorflow-cpu==2.15.0`, `numpy` and Pydantic are
+    unchanged.
+  - `BodySizeLimitMiddleware` (`backend/app/core/body_limit.py`) returns the route's 413 before the multipart parser
+    buffers a body over `max_upload_bytes` + 64 KiB. Status codes and response shapes are unchanged.
+  - `pip-audit`: 89 findings in 7 packages before, 26 in 3 after, none in the upgraded packages (`SECURITY.md`
+    § Dependency audit).
+  - CI run `37806775992` was green, and deploy run `37808007611` rebuilt the Space and passed its gate.
+  - Committed as `4e6a957`..`e8c3eda`, plus the closing docs. ADR-025.
 - 2026-10-08 CI platform currency (TASK-019, done; first Phase 4 task):
   - All seven jobs run on `ubuntu-24.04` instead of `ubuntu-latest`, which moves to Ubuntu 26 on 2026-10-19.
   - Actions moved to their Node 24 majors: `checkout`, `setup-python`, `setup-node` and `upload-artifact` `@v7`,
@@ -212,7 +223,10 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 - No frontend unit tests (Playwright E2E only, Chromium only), no
   coverage measured in CI, no dependency-vulnerability scanning,
-  and no full-history secret scan in CI.
+  and no full-history secret scan in CI (TASK-021).
+- `keras` 2.15.0, `protobuf` 4.25.9 and `click` 8.1.7 still have audit findings, none reachable from serving. The first
+  two are held back by the TF 2.15 pin (`SECURITY.md` § Dependency audit).
+- Starlette 1.x prints a `TestClient` notice asking for `httpx2` instead of `httpx` (test-only, dev dependency).
 - Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
   `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).
 

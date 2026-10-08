@@ -873,7 +873,7 @@ day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
 **Deadline:** TASK-019 must land before **2026-10-19**, when GitHub moves `ubuntu-latest` to Ubuntu 26.
 
 - [x] **4A** — CI platform currency → TASK-019 (done 2026-10-08)
-- [ ] **4B** — Serving dependency security → TASK-020
+- [x] **4B** — Serving dependency security → TASK-020 (done 2026-10-08)
 - [ ] **4C** — Dependency and secret scanning in CI → TASK-021
 - [ ] **4D** — Deploy only when the production image changes → TASK-022
 - [ ] **4E** — Real-model post-deploy smoke test → TASK-023
@@ -959,7 +959,7 @@ Outcome:
     `/healthz` returned `model_loaded: true`, `v2.0.0`.
 - Not done, by scope: Ubuntu 26, SHA-pinned actions, the Dockerfile base image, the TensorFlow / Keras migration.
 
-### TASK-020 — Fix vulnerable serving dependencies            [status: todo]
+### TASK-020 — Fix vulnerable serving dependencies            [status: done] (2026-10-08)
 Area: inference-api · deployment
 Goal: the serving image ships no FastAPI, Starlette, `python-multipart` or Pillow version with a known, fixable
 vulnerability, and the `tensorflow-cpu==2.15.0` pin stays.
@@ -988,6 +988,63 @@ Owns: `requirements.txt`, the `pyproject.toml` dependency ranges, `SECURITY.md`,
 `backend/app/` and its test.
 Out of scope: TensorFlow, Keras or NumPy upgrades; CI scanners (TASK-021); dev, eval and `[hf]` dependencies;
 frontend dependencies; API contract changes.
+Outcome:
+- Dependencies. `requirements.txt` pins and `pyproject.toml` ranges move together:
+  - FastAPI 0.111.0 → 0.133.0, Starlette 0.37.2 → 1.3.1 and `python-multipart` 0.0.9 → 0.0.31 (`4e6a957`).
+    - FastAPI 0.133.0 is the first release that admits Starlette 1.x. From 0.135.2 it would force Pydantic ≥ 2.9.
+    - Starlette is now pinned explicitly, because FastAPI's own range (`>=0.40.0`) still admits vulnerable releases.
+  - Pillow 10.3.0 → 12.3.0 (`c349eb0`). The range moves from `<11.0` to `>=12.3,<13.0`, because every fix is in 12.x.
+  - `anyio` 4.4.0 → 4.14.2 (`8496066`), added with the owner's approval during review. anyio 4.4.0's idle worker
+    threads kept a refused upload's spooled temporary file open. 4.14.2 fixes that, and fixes its two advisories.
+  - `routes.py` uses Starlette's RFC 9110 status names (`6ed93d9`). The codes are the same, and the old names warn on
+    every use.
+- Buffering gap reassessed. The upgrade alone doesn't change it: on both the old and new pins, a 50 MB upload was read
+  in full and spooled to disk before the 413. `BodySizeLimitMiddleware` (`6bc4347`) now caps a body at
+  `max_upload_bytes` + 64 KiB:
+  - with `Content-Length`, it's refused after 0 bytes;
+  - chunked, it's refused at 10.6 MB;
+  - under the cap the route's exact limit still decides: 10 MiB passes, 10 MiB + 1 byte gets the route's 413.
+  - What's left (bodies up to the cap, bandwidth, the unconfigurable HF proxy) is a row in `SECURITY.md` § Known gaps.
+- Tests (`a65546d`): five in `backend/app/tests/test_body_size_limit.py`, driven over raw ASGI so the bytes read can
+  be counted. The existing contract tests are unchanged.
+  - With the cap disabled, the declared and undeclared oversize tests fail.
+  - On anyio 4.4.0, the temp-file test fails.
+- Docs: ADR-025 (`bffae6b`), `SECURITY.md` § Dependency audit and the body-cap rows (`c8643af`), the README (`fd7b157`),
+  and the test plan, skills and repo map (`e8c3eda`).
+- Verification:
+  - `pip-audit -r requirements.txt` (2.10.1): 89 findings in 7 packages before, 26 in 3 after (`keras`, `protobuf`,
+    `click`), none in FastAPI, Starlette, `python-multipart`, Pillow or `anyio`. Each remaining finding is listed in
+    `SECURITY.md` with its reason.
+  - `pip check` is clean in the dev venv, and in a fresh `pip install -r requirements.txt` venv that mirrors the image
+    layer. That venv also confirms `jinja2`, `fastapi-cli`, `orjson`, `ujson`, `email-validator` and `httpx` are no
+    longer installed.
+  - Locally: backend tests 23 passed; full suite 243 passed; ruff clean (105 files); mypy 0 errors (85 files); parity
+    audit 4/4; notebook freeze OK; pre-commit passed on every changed file.
+  - The generated OpenAPI changed in one place only: the upload field is `contentMediaType: application/octet-stream`
+    instead of `format: binary`.
+  - Real model on local uvicorn: 200, 400, 413 (declared, chunked and browser-like), 415 and 422 as before. CORS and
+    `x-request-id` are on every response, `/docs` and `/openapi.json` return 200, and the log is clean.
+  - `/code-review`: 7 findings.
+    - A refused 413 resetting the connection is refuted: uvicorn discards the unread body and keeps the connection.
+    - The temp file left open was confirmed and fixed by the anyio upgrade.
+    - Two were covered in the tests: CORS on the 413, and the same 413 text from both layers.
+    - Three were declined:
+      - a per-route rather than global cap: `/v1/captions` is the only route that reads a body;
+      - moving Pillow into `[hf]`: `[hf]` dependencies are out of scope here;
+      - skipping the header scan for GET: it costs nothing measurable.
+  - `/security-review`: no findings.
+  - CI run `37806775992` on `e8c3eda`: all 6 jobs green, 243 passed on Python 3.10 and 3.11, 0 annotations. It
+    installed the pinned versions.
+  - Deploy run `37808007611`: the Space rebuilt on the new pins (deployment commit `52f48d6`), reached `RUNNING`, and
+    reported "Healthy: model_version=v2.0.0". The public `/openapi.json` shows the new FastAPI, and `/v1/captions`
+    still lists 200, 400, 413, 415, 422 and 503.
+- Not done, by scope:
+  - `keras` and `protobuf`, held back by the TF 2.15 pin;
+  - `click`;
+  - moving Pillow into the `[hf]` extra;
+  - Starlette's `httpx2` notice for `TestClient` (dev dependency);
+  - CI scanning (TASK-021);
+  - a real caption request against production (TASK-023).
 
 ### TASK-021 — Dependency and secret scanning in CI            [status: todo]
 Area: deployment
