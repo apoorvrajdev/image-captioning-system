@@ -65,7 +65,7 @@ dependencies = [
     "tensorflow-cpu==2.15.0",
     "numpy>=1.26,<2.0",          # NumPy 2.0 broke TF 2.15 binary compat
     "pandas>=2.1,<3.0",
-    "pillow>=10.0,<11.0",
+    "pillow>=12.3,<13.0",        # [hf] baseline image loading; not on the serving path
     "pyyaml>=6.0,<7.0",
     "pydantic>=2.7,<3.0",
     "pydantic-settings>=2.3,<3.0",
