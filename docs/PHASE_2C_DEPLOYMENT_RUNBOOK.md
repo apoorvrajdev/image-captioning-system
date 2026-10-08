@@ -193,12 +193,12 @@ Two workflows under [`.github/workflows/`](../.github/workflows/):
   successful `CI` run on `main`. It deploys the exact commit CI tested and skips
   commits `main` has moved past. It adds the Space config header to the deploy
   copy, force-pushes it to the Space with the `HF_TOKEN` repository secret, and
-  passes only once the HF API reports `RUNNING` and `/healthz` reports
-  `model_loaded: true`. `workflow_dispatch` (on `main`) redeploys the tip of
+  passes only once the HF API reports `RUNNING`, `/healthz` reports
+  `model_loaded: true`, and one real caption request succeeds (§ 8, ADR-028). `workflow_dispatch` (on `main`) redeploys the tip of
   `main`, but only if that exact commit has a successful CI run. Details: [`CI.md`](CI.md).
   - **It rebuilds the Space only when the image can change** (ADR-027). A commit that
     changes no image input (`Dockerfile` `COPY` sources, `Dockerfile`, `.dockerignore`,
-    `.gitattributes`, the workflow, `scripts/deploy_scope.py`) since the last successful
+    `.gitattributes`, the workflow, `scripts/deploy_scope.py`, `scripts/smoke_caption.py`) since the last successful
     deploy ends green with a "Space deploy skipped" notice. `README.md` counts as an image
     input. The last successful deploy is the newest `huggingface-space` deployment under
     the repository's Environments, written only after the health gate passes.
@@ -217,7 +217,23 @@ secret). Scope: **Write**. Used only for `git push` to the Space remote.
 
 ## 8. End-to-end smoke test
 
-After any redeploy, verify in this order:
+Every deploy already runs the backend half automatically (`scripts/smoke_caption.py`,
+ADR-028). After the health gate it captions a generated PNG through the live
+`POST /v1/captions` with the Vercel `Origin`. It checks HTTP 200, a non-empty caption,
+the `model_version` that `/healthz` reports, the echoed `x-request-id` and the
+`Access-Control-Allow-Origin` header, and a failure fails the deploy. To run the same
+check by hand:
+
+```bash
+python -m scripts.smoke_caption --url https://apoorvrajdev-image-captioning-api.hf.space \
+  --origin https://image-captioning-system.vercel.app
+```
+
+The HF Spaces proxy answers CORS itself and reflects any `Origin`, so the header shows
+the SPA can read responses, not that the app's allow-list is enforced (`SECURITY.md`
+§ Known gaps).
+
+After a manual change (Space variables, weights), verify in this order:
 
 ```bash
 # 1. Backend liveness + readiness

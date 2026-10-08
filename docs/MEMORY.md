@@ -18,7 +18,9 @@ _Last updated: 2026-10-08_
   [`TASKS.md`](TASKS.md). TASK-019 (CI platform currency) is done (2026-10-08, ADR-024): every job runs on
   `ubuntu-24.04` with Node 24 action majors, ahead of the 2026-10-19 `ubuntu-latest` move. TASK-020 (serving dependency
   security) is done (2026-10-08, ADR-025). TASK-022 (deploy only when the production image changes) is done
-  (2026-10-08, ADR-027). TASK-021 (dependency and secret scanning in CI) hasn't landed on `main` yet.
+  (2026-10-08, ADR-027). TASK-023 (real-model post-deploy smoke test) is done (2026-10-08, ADR-028): every deploy now
+  captions one generated image on the live Space before it passes. TASK-021 (dependency and secret scanning in CI)
+  hasn't landed on `main` yet.
 - **Phase 3 summary:** multimodal baselines (3A–3D), decomposed into TASK-009 – TASK-018 plus TASK-007 in
   [`TASKS.md`](TASKS.md). The evaluation protocol (TASK-009) is recorded in `EVAL_METHODOLOGY.md` § 8 and ADR-019.
   The slice loader (TASK-010), captioner adapters (TASK-011), comparison runner (TASK-012) and cross-run summary
@@ -61,7 +63,8 @@ SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 `https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
 is enabled and runs after every CI-green commit on `main`. It rebuilds the Space only when an image input changed since the
 last successful deploy, recorded as a `huggingface-space` GitHub deployment, and otherwise ends with a "Space deploy
-skipped" notice (ADR-017, ADR-027). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
+skipped" notice (ADR-017, ADR-027). A deploy passes only after the health gate and one real caption request
+(`scripts/smoke_caption.py`, ADR-028). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
 `apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
 (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
 (beam CIDEr 0.826; 5-ref BLEU-4 25.91). The Phase 3 baseline comparison is `results/phase3-comparison/`. It is not a
@@ -69,6 +72,17 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-08 real-model post-deploy smoke test (TASK-023, done):
+  - After the health gate, `scripts/smoke_caption.py` sends one `POST /v1/captions` with a 64×64 PNG built in code.
+    It needs HTTP 200, a `CaptionResponse` shape, a non-empty caption (the text isn't asserted), the `/healthz` model
+    version, the `x-request-id` echoed and the Vercel origin allowed. Waking-Space errors are retried for 5 minutes.
+    A failure fails the deploy, so no baseline is recorded.
+  - Run against production before pushing: 9-word caption from `v2.0.0`, 980 ms inference.
+  - Findings, in `SECURITY.md` § Known gaps:
+    - the HF proxy reflects any CORS `Origin`, so a disallowed origin can't be refused at the edge;
+    - `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app, because `load_config` passes the YAML as
+      constructor arguments, which outrank env vars. Not fixed here.
+  - ADR-028.
 - 2026-10-08 deploy only when the production image changes (TASK-022, done):
   - `scripts/deploy_scope.py` decides each deploy from the image inputs: the Dockerfile `COPY` sources, plus
     `Dockerfile`, `.dockerignore`, `.gitattributes`, the deploy workflow and the script. It compares them with the

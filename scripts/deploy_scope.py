@@ -57,11 +57,12 @@ IMAGE_INPUTS: tuple[str, ...] = (
     # The Space builds from a git checkout of the deploy commit; this file decides how
     # that checkout materialises files (LFS filters, line endings).
     ".gitattributes",
-    # The deploy procedure: the workflow writes the Space's README config header, and
-    # this script decides and records each deploy. A change to either is proven by the
-    # run that introduces it.
+    # The deploy procedure: the workflow writes the Space's README config header, this
+    # script decides and records each deploy, and the smoke test gates it. A change to
+    # any of them is proven by the run that introduces it.
     ".github/workflows/deploy-backend.yml",
     "scripts/deploy_scope.py",
+    "scripts/smoke_caption.py",
 )
 
 _SHA = re.compile(r"[0-9a-f]{40}")

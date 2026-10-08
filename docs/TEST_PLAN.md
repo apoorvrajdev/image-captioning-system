@@ -88,8 +88,17 @@ error, and on any off-origin request outside those two endpoints.
     With Windows fonts the slack is 5.6–10.9 %.
 - Console: zero errors.
 
-**Deployment (post-deploy smoke, owner-run).** Follow `PHASE_2C_DEPLOYMENT_RUNBOOK.md` § 8: Space
-`/healthz` reports `model_loaded: true`, and one caption round-trip works from the Vercel origin (CORS).
+**Deployment (post-deploy smoke, TASK-023, ADR-028).** Every deploy captions a generated PNG on the live Space after
+the health gate (`scripts/smoke_caption.py`). It checks:
+- HTTP 200 and the `CaptionResponse` shape;
+- a non-empty caption, with no exact text;
+- the `/healthz` model version;
+- the echoed `x-request-id`;
+- the Vercel origin allowed.
+
+`test_smoke_caption.py` covers those checks, the retry rules, the image decoding through the serving decoder, and the
+whole check against `create_app()` with a stand-in predictor. The frontend half of
+`PHASE_2C_DEPLOYMENT_RUNBOOK.md` § 8 stays owner-run.
 
 ## Regression protection
 

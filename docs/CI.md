@@ -67,13 +67,22 @@ The job:
    for the stage) until a rebuild of the new commit reaches `RUNNING`. Fails on
    `CONFIG_ERROR`, `BUILD_ERROR`, `RUNTIME_ERROR` and other error stages
 7. Polls `https://<space-domain>/healthz` until it reports `model_loaded: true`
-8. Records the deploy (`python3 -m scripts.deploy_scope record`): a GitHub deployment
+8. Smoke-tests one real caption on that domain (`python3 -m scripts.smoke_caption`,
+   [ADR-028](DECISIONS.md)). It sends a 64×64 PNG built in code to `POST /v1/captions`,
+   with the Vercel `Origin` and its own `x-request-id`. It passes only on HTTP 200 with a
+   `CaptionResponse`-shaped body: a non-empty caption (the text isn't asserted), the
+   `model_version` that `/healthz` reports, the request id echoed in the header and the
+   body, and the Vercel origin in `Access-Control-Allow-Origin`. A waking or restarting
+   Space (connection errors, a cut-off body, 502/503/504, a model not loaded yet) is
+   retried for up to 5 minutes. Any other response fails the deploy, with its status
+   and `detail` logged. No token is used, and the caption isn't logged
+9. Records the deploy (`python3 -m scripts.deploy_scope record`): a GitHub deployment
    of the tested commit in the `huggingface-space` environment, with the Space's
    commit in its payload and a `success` status. This is the next run's baseline.
    A run that fails or is cancelled before this step records nothing
 
 Timeouts: 10 min for a rebuild to start, 30 min to reach `RUNNING`, 10 min for
-`/healthz`, 50 min for the whole job.
+`/healthz`, 10 min for the smoke test, 50 min for the whole job.
 
 ### When the Space is rebuilt
 
@@ -81,7 +90,7 @@ A run rebuilds the Space only if an **image input** differs between the last
 successfully deployed commit and the commit being deployed. The image inputs are the
 Dockerfile's `COPY` sources (`requirements.txt`, `pyproject.toml`, `README.md`, `src/`,
 `backend/`, `configs/`, `models/`), plus `Dockerfile`, `.dockerignore`, `.gitattributes`,
-this workflow and `scripts/deploy_scope.py`. Anything else (`docs/`, `tests/`,
+this workflow, `scripts/deploy_scope.py` and `scripts/smoke_caption.py`. Anything else (`docs/`, `tests/`,
 `frontend/`, `results/`, `notebooks/`, `ci.yml`, other scripts) doesn't rebuild it.
 `test_deploy_scope.py` fails if a Dockerfile `COPY` source is missing from the list.
 

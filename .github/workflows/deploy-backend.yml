@@ -187,6 +187,7 @@ jobs:
       # left over from the previous commit and is not trusted until
       # BUILD_START_TIMEOUT has passed.
       - name: Wait for the Space to build and report healthy
+        id: health
         if: steps.scope.outputs.deploy == 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -198,6 +199,7 @@ jobs:
           python3 - <<'PY'
           import json
           import os
+          import re
           import sys
           import time
           import urllib.error
@@ -269,6 +271,9 @@ jobs:
           # 3. Healthy means the predictor is loaded, not just an HTTP 200.
           if not domain:
               fail("runtime API returned no Space domain")
+          # The host pattern scripts/smoke_caption.py accepts (HOST_PATTERN).
+          if not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]*[a-z0-9])?(?:\.[a-z0-9](?:[a-z0-9-]*[a-z0-9])?)+", domain):
+              fail(f"runtime API returned an unexpected Space domain {domain!r}")
           url = f"https://{domain}/healthz"
           start = time.monotonic()
           while True:
@@ -281,7 +286,23 @@ jobs:
                   fail(f"{url} did not report model_loaded: true within {HEALTH_TIMEOUT}s "
                        f"(last response: {body})")
               time.sleep(POLL)
+
+          # The smoke test captions on the same host this gate just checked.
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as out:
+              out.write(f"space_url=https://{domain}\n")
           PY
+
+      # One real caption from the live Space (TASK-023, ADR-028). /healthz shows
+      # the model loaded; this shows the deployed container can caption with it,
+      # with the response contract, request-id echo and the SPA's CORS origin
+      # checked. A failure fails the deploy, so the baseline below isn't recorded.
+      - name: Smoke-test a real caption on the live Space
+        if: steps.scope.outputs.deploy == 'true'
+        timeout-minutes: 10
+        env:
+          SPACE_URL: ${{ steps.health.outputs.space_url }}
+          FRONTEND_ORIGIN: https://image-captioning-system.vercel.app
+        run: python3 -m scripts.smoke_caption --url "$SPACE_URL" --origin "$FRONTEND_ORIGIN"
 
       # The baseline the next run compares against (ADR-027). This runs only after
       # every step above succeeded, so only a Space that is RUNNING and healthy on

@@ -19,6 +19,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 ## Expected behaviour
 - A red CI never deploys. Deploy uses only the `HF_TOKEN` secret and fails loudly if it's unset.
 - A green CI rebuilds the Space only if an image input changed since the last successful deploy, as recorded in the `huggingface-space` deployment, and only while the Space is still on that deploy's commit (`scripts/deploy_scope.py`, ADR-027). A new `COPY` source in the `Dockerfile` must be added to `IMAGE_INPUTS`; `test_deploy_scope.py` fails until it is.
+- A deploy passes only after one real caption from the live Space (`scripts/smoke_caption.py`, ADR-028). It checks the response's shape, the model version, the request-id echo and the Vercel origin, never the caption text, and it never sends a token.
 - Container runs as UID 1000, `HEALTHCHECK` on `/healthz`, no weights baked into the Space git tree.
 - Local DoD commands ≡ CI jobs (see CLAUDE.md Commands). A new gate is added to both.
 
@@ -36,6 +37,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 .venv/Scripts/python.exe -c "import yaml;[yaml.safe_load(open(f, encoding='utf-8')) for f in ['.github/workflows/ci.yml','.github/workflows/deploy-backend.yml','.github/workflows/no-ai-attribution.yml']];print('ok')"
 grep -rn "ubuntu-latest" .github/workflows   # must print nothing
 .venv/Scripts/pytest.exe tests/unit/test_deploy_scope.py -q   # deploy scope rule, record and workflow wiring
+.venv/Scripts/pytest.exe tests/unit/test_smoke_caption.py -q  # post-deploy caption check, against the real app stack
 .venv/Scripts/pytest.exe tests backend/app/tests -q
 docker build -t captioning-backend:local .   # only if Docker is available; otherwise report "not run"
 ```

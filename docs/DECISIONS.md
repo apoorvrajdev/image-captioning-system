@@ -291,3 +291,46 @@ Format: **Decision · Why · Evidence**.
   - The first run after this change finds no record, so it deploys and writes the first baseline.
   - If writing the record fails after a healthy deploy, that step fails the run, and the next run, finding no trusted baseline, redeploys.
 - **Evidence:** `.github/workflows/deploy-backend.yml`, `scripts/deploy_scope.py`, `tests/unit/test_deploy_scope.py`, `Dockerfile`, `.dockerignore`, `pyproject.toml` (`readme`), `docs/CI.md` § `deploy-backend.yml`, `docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md` § 7; the rule run over real ranges and the deploy runs recorded in TASK-022 in `TASKS.md`; ADR-017, ADR-018.
+
+### ADR-028 — A deploy passes only after one real caption from the live Space (extends ADR-017 and ADR-027)
+- **Decision:**
+  - After the health gate, `deploy-backend.yml` runs `python3 -m scripts.smoke_caption` against the Space domain that gate verified. The domain is passed as the `health` step's `space_url` output, checked against a hostname pattern first.
+  - It sends one `POST /v1/captions`, the same multipart `image` upload the SPA sends, with:
+    - a 64×64 RGB gradient PNG (about 8 KB) built in code;
+    - `Origin: https://image-captioning-system.vercel.app`;
+    - its own `x-request-id`.
+  - It passes only on HTTP 200 with a `CaptionResponse`-shaped JSON body:
+    - a non-empty `caption`;
+    - the `model_version` that `/healthz` reports;
+    - a non-empty `decode_strategy` and a positive `latency_ms`;
+    - the sent request id, in the body and in the `x-request-id` header;
+    - `Access-Control-Allow-Origin` equal to the Vercel origin.
+  - Retries and logging:
+    - These count as a Space still waking and are retried every 10 s, for up to 5 minutes:
+      - connection, TLS and timeout errors;
+      - a body cut off mid-read;
+      - HTTP 502/503/504;
+      - a `/healthz` reporting the model not loaded yet.
+    - No attempt starts after that deadline or runs past it, and the step has a 10-minute timeout.
+    - Any other status fails at once, logged with the status and the error's `detail`.
+    - A repeated `Access-Control-Allow-Origin` or `x-request-id` header fails, because browsers reject two origin values.
+    - Log lines are escaped as GitHub's workflow commands require, so a server-supplied message can't inject a command.
+    - Nothing of the image or the caption is logged, and no token is used.
+  - A failure fails the deploy, so the deploy record isn't written (ADR-027) and the next green commit deploys again.
+  - The smoke script is an image input, like the rest of the deploy procedure, so a change to it is proven by a deploy.
+- **Why:**
+  - `/healthz` reports `model_loaded: true` as soon as the predictor service exists. It doesn't decode an image or run InceptionV3 and the transformer. A broken TensorFlow graph, a preprocessing error, a multipart or middleware regression, or a response-contract change could pass that gate while every real upload fails.
+  - The caption text isn't asserted. It depends on the weights and isn't a stable contract. A non-empty caption with the reported model version proves the real model ran, and asserting the text would turn a deliberate weights promotion (ADR-018) into a failed deploy.
+  - A generated image keeps binaries out of the repository and can't drift with a frontend asset. Two tests tie it to the real stack:
+    - one decodes it through the serving decoder, `bytes_to_tensor`;
+    - another runs the whole check against `create_app()` with a stand-in predictor, so the request and the checks match the real middleware.
+  - Request id: the HF proxy injects its own `x-request-id` when a client sends none, so the check sends its own and requires it echoed.
+  - CORS: only the allowed case is checked.
+    - The HF Spaces proxy answers CORS itself and reflects any `Origin`, preflights included. A disallowed origin is therefore allowed at the edge whatever the app does, and TASK-023's negative criterion can't be asserted against production.
+    - Separately, `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app: `load_config` passes the YAML as constructor arguments, which outrank environment variables. Today the SPA works only through the proxy.
+    - The positive check catches the SPA losing access, for example if the proxy stopped reflecting. Both findings are in `SECURITY.md` § Known gaps.
+- **Consequences:**
+  - Each deploy sends one public caption request, about 1–2 s of inference on cpu-basic. Skipped runs (ADR-027) send none.
+  - A Space that is healthy but can't caption now fails its deploy instead of passing it.
+  - Not covered: caption quality, latency budgets, uptime monitoring between deploys, and enforcing the CORS allow-list.
+- **Evidence:** `.github/workflows/deploy-backend.yml`, `scripts/smoke_caption.py`, `tests/unit/test_smoke_caption.py`, `backend/app/api/routes.py`, `backend/app/core/logging.py`, `backend/app/main.py`, `src/captioning/config/loader.py`; the live probes and the pre-push smoke run recorded in TASK-023 in `TASKS.md`; ADR-017, ADR-018, ADR-027.

@@ -41,6 +41,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 | No security headers (CSP, HSTS, X-Content-Type-Options) | low for a JSON API; relevant for the SPA host | configure on Vercel (`vercel.json` headers) |
 | No full-history secret scan in CI (the pre-commit job's gitleaks hook is staged-only) | a commit made without hooks isn't scanned | add a `gitleaks detect` CI step |
 | No continuous dependency or container vulnerability scanning. The 2026-10-08 audit was a one-off, and three packages still have findings (§ Dependency audit) | new CVEs go unnoticed | `pip-audit` + `npm audit` in CI (TASK-021) |
+| Production CORS isn't enforced by the app. The HF Spaces proxy answers CORS itself and reflects any `Origin`, preflights included. The Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app either: `load_config` passes `base.yaml` as constructor arguments, which outrank environment variables, so the app allows only the localhost origins. Found in TASK-023 (ADR-028). | low while the API is public and sends no credentials (`allow_credentials=False`), but the SPA works only through the proxy's reflection | make environment variables outrank the YAML in `load_config` (this changes every `CAPTIONING__*` override), then verify the app's allow-list locally; the proxy's reflection can't be configured |
 | No authentication | by design (public demo) | revisit only if paid or expensive models are served |
 
 ## Dependency audit

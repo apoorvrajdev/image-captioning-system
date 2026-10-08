@@ -876,7 +876,7 @@ day. Work order: TASK-019 → TASK-020 → TASK-021 → TASK-022 → TASK-023.
 - [x] **4B** — Serving dependency security → TASK-020 (done 2026-10-08)
 - [ ] **4C** — Dependency and secret scanning in CI → TASK-021
 - [x] **4D** — Deploy only when the production image changes → TASK-022 (done 2026-10-08)
-- [ ] **4E** — Real-model post-deploy smoke test → TASK-023
+- [x] **4E** — Real-model post-deploy smoke test → TASK-023 (done 2026-10-08)
 
 Facts the tasks rely on (checked 2026-10-07):
 - Runners: all seven jobs run on `ubuntu-latest`: five in `ci.yml`, one in `deploy-backend.yml` and one in
@@ -1153,7 +1153,7 @@ Outcome:
   - rebuilding for a new base image without a manual run;
   - the post-deploy caption smoke test (TASK-023).
 
-### TASK-023 — Real-model post-deploy smoke test            [status: todo]
+### TASK-023 — Real-model post-deploy smoke test            [status: done] (2026-10-08)
 Area: deployment · inference-api
 Goal: a deploy passes only once the live Space has captioned a real image with the real model and allows the Vercel
 origin through CORS.
@@ -1178,3 +1178,85 @@ Depends on: TASK-022.
 Owns: the smoke step in `.github/workflows/deploy-backend.yml`, any committed test image, `docs/CI.md`, the runbook.
 Out of scope: asserting caption text or quality; load or latency testing; scheduled uptime monitoring; frontend
 changes; API contract changes.
+Outcome:
+- `scripts/smoke_caption.py` runs as a deploy step after the health gate and before the deploy record. It runs on the
+  domain the gate verified: the `health` step's `space_url` output, checked against a hostname pattern.
+  - It sends one `POST /v1/captions` with a 64×64 RGB gradient PNG built in code (about 8 KB, no committed binary), the
+    Vercel `Origin` and its own `x-request-id`.
+  - It passes on HTTP 200 with a `CaptionResponse`-shaped body:
+    - a non-empty caption, with no exact text asserted;
+    - the `model_version` that `/healthz` reports;
+    - a non-empty `decode_strategy` and a positive `latency_ms`;
+    - the request id echoed in the header and the body;
+    - the Vercel origin in `Access-Control-Allow-Origin`.
+  - Retried for up to 5 minutes: connection, TLS and timeout errors, a body cut off mid-read, 502/503/504, and a
+    `/healthz` reporting the model not loaded yet. No attempt runs past that deadline.
+  - Anything else fails at once, with the status and the error's `detail`. A failure fails the deploy, so no baseline
+    is recorded (ADR-027).
+  - No token is used, and nothing of the image or caption is logged. The script joins the image inputs, as part of
+    the deploy procedure. ADR-028.
+- Acceptance clarifications:
+  - **CORS, disallowed origin: not assertable in production.** The HF Spaces proxy answers CORS itself and reflects
+    any `Origin`:
+    - `https://not-allowed.invalid` got `Access-Control-Allow-Origin: https://not-allowed.invalid`;
+    - its preflight got a 200 echoing the requested method.
+    - The app's own `CORSMiddleware` gives that origin no header and answers its preflight with a 400.
+    - The smoke test therefore checks only the allowed case. The negative case is covered against the real app in
+      `test_smoke_caption.py`.
+  - **Finding, left open:** the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` doesn't reach the app. `load_config`
+    builds `AppConfig(**yaml)`, and pydantic-settings ranks constructor arguments above environment variables, so the
+    served allow-list is `base.yaml`'s localhost origins. The SPA works today only through the proxy's reflection. The
+    fix belongs in `src/captioning/config`, where it changes every `CAPTIONING__*` override, so it isn't part of this
+    task. Recorded in `SECURITY.md` § Known gaps.
+  - **Request id:** with no `x-request-id`, the HF proxy supplies its own (for example `OCFXAO`), so the check sends
+    one and requires it echoed.
+  - **Cold starts:** the step runs right after the health gate, so the Space is awake. The retry window covers a
+    proxy 502/503/504 or a restart in between.
+- Tests: `tests/unit/test_smoke_caption.py`, 42 tests.
+  - The image is a deterministic RGB PNG, and decodes through the serving decoder (`bytes_to_tensor`) to 299×299×3.
+  - The contract: a passing reply, and 17 ways to break it (HTTP 500/422, non-JSON, empty or missing caption, wrong
+    model version, latency, request id, origin). A repeated origin or request-id header fails too.
+  - Retries:
+    - 503, then a reset, then 502, then success;
+    - a cut-off body;
+    - a model still loading after a restart.
+  - Failures:
+    - a Space that never wakes, or a model that never loads, fails at the deadline;
+    - no attempt runs past the deadline;
+    - a 500 fails without retrying.
+  - A server message can't inject a workflow command into the log.
+  - The whole check run against `create_app()` (the real CORS, request-id and body-cap middleware) with a stand-in
+    predictor: it passes and receives the PNG byte for byte, and fails when the app doesn't allow the origin.
+  - CLI input validation, and the workflow's step order and wiring. `test_deploy_scope.py` lists the script as an image
+    input.
+- Verification:
+  - Locally:
+    - 110 smoke and deploy-scope tests; 141 with the Makefile and backend route tests;
+    - ruff and mypy clean, the workflows parse, pre-commit passed;
+    - the eleven regressions the tests must catch each fail them: accepting an empty caption, dropping the CORS check,
+      dropping the request-id check, retrying a 500, `continue-on-error`, the smoke step after the record, no log
+      escaping, keeping only the last of a repeated header, no per-attempt deadline, not retrying a cut-off body, and
+      not waiting for a loading model.
+  - `/code-review`: 10 findings.
+    - Fixed:
+      - log escaping against workflow-command injection;
+      - repeated headers;
+      - the deadline bounding every attempt;
+      - retrying cut-off bodies and TLS errors;
+      - waiting out a model still loading;
+      - one host pattern shared by the workflow and the script;
+      - the summary's CORS wording.
+    - Declined:
+      - a repository variable for the origin: new configuration, and a test keeps the two copies equal;
+      - reusing the health step's model version: the script stays usable by hand;
+      - moving the decoder test out of this file.
+  - Live, before pushing, the script against the production Space, twice:
+    - first run, before the review fixes: 1170 ms inference;
+    - final code: "Captioned a 8031-byte PNG in 3.2s: HTTP 200, 9-word caption from model v2.0.0 (greedy, 980 ms
+      inference), x-request-id echoed, Access-Control-Allow-Origin matched https://image-captioning-system.vercel.app."
+- Not done, by scope:
+  - asserting caption text or quality;
+  - latency budgets;
+  - uptime monitoring between deploys;
+  - fixing the CORS env-override precedence;
+  - the README's 4E line, left for the owner.

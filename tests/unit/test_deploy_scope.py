@@ -110,6 +110,7 @@ def deployed(repo: Repo) -> str:
         "models/v1.0.0/vocab.json",
         ".github/workflows/deploy-backend.yml",
         "scripts/deploy_scope.py",
+        "scripts/smoke_caption.py",
     ],
 )
 def test_image_inputs_are_recognised(path: str) -> None:
