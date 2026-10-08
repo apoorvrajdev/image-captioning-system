@@ -3,7 +3,8 @@ name: Deploy backend to HuggingFace Space
 # The Space is a deployment target, not a source repository (ADR-017). Each
 # deploy force-pushes a generated commit (the CI-tested GitHub commit plus the
 # Space's README config header) and only succeeds once the Space reports
-# RUNNING and /healthz reports model_loaded: true.
+# RUNNING and /healthz reports model_loaded: true. A commit that changes no
+# image input since the last successful deploy skips the rebuild (ADR-027).
 
 on:
   workflow_run:
@@ -18,7 +19,8 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read   # manual runs look up the CI result for the exact commit
+  actions: read       # manual runs look up the CI result for the exact commit
+  deployments: write  # the deploy record: read as the baseline, written after the health gate
 
 jobs:
   push-to-space:
@@ -91,6 +93,9 @@ jobs:
         with:
           ref: ${{ env.DEPLOY_SHA }}
           fetch-depth: 0
+          # Nothing here pushes to GitHub, so the token (which can write deploy
+          # records) stays out of .git/config and reaches only the steps given it.
+          persist-credentials: false
 
       # With force-push, an older CI run finishing after a newer one would roll
       # the Space back. Only the current tip of main is deployed; a superseded
@@ -106,8 +111,26 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Configure git identity
+      # Rebuild only if an image input changed since the last deploy that passed
+      # the health gate, read from the huggingface-space deployment record and
+      # never from the parent commit (ADR-027). A skip also needs the Space to
+      # still be on the commit that deploy pushed. No record, an API error or an
+      # unknown commit deploys. Manual runs always deploy. Every step below runs
+      # only when this one outputs deploy=true.
+      - name: Decide whether the image changed since the last successful deploy
+        id: scope
         if: steps.guard.outputs.skip != 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            python3 -m scripts.deploy_scope decide --head "$DEPLOY_SHA" --space "$HF_USERNAME/$HF_SPACE" --force
+          else
+            python3 -m scripts.deploy_scope decide --head "$DEPLOY_SHA" --space "$HF_USERNAME/$HF_SPACE"
+          fi
+
+      - name: Configure git identity
+        if: steps.scope.outputs.deploy == 'true'
         run: |
           git config user.name "apoorvrajdev"
           git config user.email "apoorvrajmgr@gmail.com"
@@ -117,7 +140,7 @@ jobs:
       # renders it as a table), so it is added to the deployment copy only.
       # The header is the one removed in befac80, unchanged.
       - name: Build the Space deployment commit
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.scope.outputs.deploy == 'true'
         run: |
           cat > "$RUNNER_TEMP/space-header.md" <<'HEADER'
           ---
@@ -147,7 +170,7 @@ jobs:
       # GitHub and holds nothing that is not already in GitHub's history. Space
       # variables and secrets live in Space settings, not git, and are untouched.
       - name: Force-push the deployment commit to the Space
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.scope.outputs.deploy == 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
@@ -164,7 +187,7 @@ jobs:
       # left over from the previous commit and is not trusted until
       # BUILD_START_TIMEOUT has passed.
       - name: Wait for the Space to build and report healthy
-        if: steps.guard.outputs.skip != 'true'
+        if: steps.scope.outputs.deploy == 'true'
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           POLL_SECONDS: "15"
@@ -259,3 +282,17 @@ jobs:
                        f"(last response: {body})")
               time.sleep(POLL)
           PY
+
+      # The baseline the next run compares against (ADR-027). This runs only after
+      # every step above succeeded, so only a Space that is RUNNING and healthy on
+      # this commit is recorded. A failed, cancelled or skipped run records nothing
+      # and its changes stay in the next run's range.
+      - name: Record the deployed commit as the new baseline
+        if: steps.scope.outputs.deploy == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          python3 -m scripts.deploy_scope record
+          --sha "$DEPLOY_SHA"
+          --space-commit "$DEPLOY_COMMIT"
+          --space "$HF_USERNAME/$HF_SPACE"
