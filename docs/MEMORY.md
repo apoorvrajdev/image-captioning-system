@@ -3,7 +3,7 @@
 > Living document: **current state only**. Permanent decisions → [`DECISIONS.md`](DECISIONS.md).
 > Backlog → [`TASKS.md`](TASKS.md). Update at the end of every task.
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-10_
 
 ## Current phase
 
@@ -39,6 +39,8 @@ _Last updated: 2026-10-09_
     E2E covers that view and the caption flow.
 - **After Phase 4:** TASK-024 is done (2026-10-09, ADR-029): `load_config` ranks `CAPTIONING__*` environment
   variables above the YAML, so the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` reaches the app.
+  TASK-025 is done (2026-10-10, ADR-030): the Space receives a single-commit snapshot of the tested commit's build
+  context, so the README demo video in GitHub history no longer blocks deploys.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
@@ -47,9 +49,10 @@ _Last updated: 2026-10-09_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 384 passed on 2026-10-09, after TASK-024 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
-| ruff lint + format check | clean (111 files, 2026-10-09) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 88 files (2026-10-09) |
+| `pytest tests backend/app/tests` | 420 passed on 2026-10-10, after TASK-025 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
+| ruff lint + format check | clean (113 files, 2026-10-10) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 89 files (2026-10-10) |
+| `deploy-backend.yml` (run `38075201554`, automatic, `cdd2e57`, TASK-025) | **success**: first snapshot deploy. Space commit `9d8dac5`, one commit, 83 files, no `docs/`; `RUNNING`, healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `6984937652` |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
@@ -68,7 +71,8 @@ SPA on Vercel. The API's HF Space (Docker, cpu-basic) is **live** at
 `https://apoorvrajdev-image-captioning-api.hf.space` (`/healthz`, `/docs`, `/openapi.json` all HTTP 200). `deploy-backend.yml`
 is enabled and runs after every CI-green commit on `main`. It rebuilds the Space only when an image input changed since the
 last successful deploy, recorded as a `huggingface-space` GitHub deployment, and otherwise ends with a "Space deploy
-skipped" notice (ADR-017, ADR-027). A deploy passes only after the health gate and one real caption request
+skipped" notice (ADR-017, ADR-027). It pushes a single-commit snapshot of the tested commit's build context, never
+GitHub history (`scripts/space_snapshot.py`, ADR-030). A deploy passes only after the health gate and one real caption request
 (`scripts/smoke_caption.py`, ADR-028). Both paths have run successfully: manual (run `37140993110`) and automatic (run `37144272026`), each passing the live health gate. The Space serves HF Hub
 `apoorvrajdev/captioning-inceptionv3-transformer` at tag `v2.0.0` (commit `59d93b4`) and reports `model_version: v2.0.0`
 (TASK-004). Headline results: `results/stabilized-greedy/`, `results/stabilized-beam-w4-lp07-rp12/`
@@ -77,6 +81,14 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 
 ## Recent changes
 
+- 2026-10-10 single-commit Space snapshot (TASK-025, done):
+  - Deploys from `9a73edd` to `a0d8c89` all failed at the push: Hugging Face rejected the GitHub history for the demo
+    video and poster, which `f2c8963` added as ordinary git blobs. The Space stayed healthy on the `ff272fc` deploy.
+  - `scripts/space_snapshot.py` now builds one root commit of the tested commit's `BUILD_CONTEXT`, with the Space
+    header, outside the checkout, and the workflow pushes exactly that commit, the token through `GIT_ASKPASS`. The
+    demo media stays in GitHub; the README and its inline video were not touched.
+  - Every TASK-022 and TASK-023 guard is kept. Deploy run `38075201554` passed the health gate and the caption smoke
+    test and moved the baseline from `ff272fc` to `cdd2e57`. ADR-030.
 - 2026-10-09 env overrides outrank the YAML (TASK-024, done):
   - `load_config` used to build `AppConfig(**yaml)`, and pydantic-settings ranks constructor arguments above the
     environment. So every YAML-set field ignored its `CAPTIONING__*` override, the Space's CORS list included.

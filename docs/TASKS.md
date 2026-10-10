@@ -1367,7 +1367,7 @@ Outcome:
     app's header won't trip the smoke check's repeated-header rule.
   - Check after the deploy: the Vercel origin gets `vary: Origin`, and `https://not-allowed.invalid` still doesn't.
 
-### TASK-025 — Deploy a single-commit snapshot of the build context to the Space            [status: in-progress]
+### TASK-025 — Deploy a single-commit snapshot of the build context to the Space            [status: done] (2026-10-10)
 Area: deployment
 Goal: backend deploys work again, without removing the demo video from GitHub: the Space receives one commit holding
 the tested commit's build context, and no GitHub history.
@@ -1410,3 +1410,26 @@ Outcome so far (local, 2026-10-10):
   - all 82 non-README files were the tested commit's blobs and modes, and the README was the header plus the
     original.
 - The two new workflow-wiring tests fail on the old workflow.
+Outcome (live, 2026-10-10):
+- Committed as `bbb8093`..`cdd2e57`. `b28ac7a` holds the workflow change and the deploy tests together: the planned
+  separate test commit failed a line-ending hook, and its files were swept into the next commit. Not rewritten,
+  since the change was already committed.
+- Locally: 420 tests passed; ruff and mypy clean; workflows parse; pre-commit passed. `README.md` and `docs/demo/`
+  are unchanged since `a0d8c89`.
+- CI run `38075114718` and `no-ai-attribution` green on `cdd2e57`.
+- Deploy run `38075201554`:
+  - the decision deployed, with 4 image inputs changed since `ff272fc`;
+  - snapshot `9d8dac5` of `cdd2e57`: 83 build-context files, 166 other tracked files left out, no parents;
+  - Hugging Face accepted the forced update `78c36a6...9d8dac5`;
+  - a rebuild was observed (`RUNNING_BUILDING` → `RUNNING_APP_STARTING` → `RUNNING`), then
+    "Healthy: model_version=v2.0.0";
+  - smoke test: HTTP 200, a 9-word caption from `v2.0.0`, 792 ms inference, request id echoed, Vercel origin
+    matched;
+  - recorded `cdd2e57` with Space commit `9d8dac5` as deployment `6984937652`, only after both gates passed.
+- Checked independently afterwards:
+  - the HF API shows the Space's `main` as one commit, `9d8dac5`, titled with `cdd2e57`: 83 files, top-level
+    exactly the build context, no `docs/` and no image or video file;
+  - `/healthz` reported `model_loaded: true`, `v2.0.0`;
+  - a real `POST /v1/captions` with the README demo photo returned HTTP 200, "a man riding a wave on top of a
+    surfboard", `v2.0.0`, greedy, 899.57 ms.
+- The baseline stayed at `ff272fc` through the four failed pushes and moved only with this passing deploy.
