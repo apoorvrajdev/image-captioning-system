@@ -1366,3 +1366,47 @@ Outcome:
   - The same probe showed the proxy keeps a single `Access-Control-Allow-Origin` when the app also sends one, so the
     app's header won't trip the smoke check's repeated-header rule.
   - Check after the deploy: the Vercel origin gets `vary: Origin`, and `https://not-allowed.invalid` still doesn't.
+
+### TASK-025 — Deploy a single-commit snapshot of the build context to the Space            [status: in-progress]
+Area: deployment
+Goal: backend deploys work again, without removing the demo video from GitHub: the Space receives one commit holding
+the tested commit's build context, and no GitHub history.
+Problem:
+- Every deploy since `9a73edd` failed at the push to the Space (runs `38059566436`, `38060790767`, `38060965587`,
+  `38061078528`): "Your push was rejected because it contains binary files", naming
+  `docs/demo/image-captioning-demo.mp4` and `.jpg`, which `f2c8963` added as ordinary git blobs.
+- The workflow pushed the full GitHub history (ADR-017), so deleting the files in a later commit wouldn't help. The
+  Space stayed on the `ff272fc` deploy, healthy, and the baseline didn't move.
+Scope:
+- Build the Space commit from the tested commit's build context only, as a root commit, in an isolated repository.
+- Push that commit; keep every TASK-022 and TASK-023 guard.
+- Tests, ADR, and the CI, runbook, test-plan and skill docs.
+Acceptance criteria:
+- GIVEN a deploy THEN the Space receives one commit with no parents, holding exactly the tested commit's
+  `BUILD_CONTEXT` (Dockerfile `COPY` sources, `Dockerfile`, `.dockerignore`, `.gitattributes`), the README with the
+  Space header, and none of `docs/` (the demo media included), `results/`, `notebooks/`, `frontend/`, `tests/` or
+  untracked files.
+- GIVEN a missing build input, or a binary, LFS, secret- or cache-like file in the build context THEN the build fails
+  before the push.
+- The snapshot names the exact tested commit (`Source-Commit:`), and the checkout isn't modified to build it.
+- Unchanged: CI-verified exact-SHA deploys, the superseded-commit guard, concurrency, permissions, docs-only skips,
+  the health gate, the real caption smoke test, and the baseline written last, only after both pass.
+- The token never sits in a URL, git config or log.
+- `README.md`, the demo video, the poster and their credits are unchanged.
+Verification: `test_space_snapshot.py`, `test_deploy_scope.py`, `test_smoke_caption.py`; full pytest, ruff, mypy,
+workflow YAML parse, pre-commit; then a live deploy that passes the health gate and the caption smoke test and
+records a new baseline, and a docs-only commit after it that skips.
+Out of scope: the README and the demo assets; rewriting GitHub history; Xet/LFS for the repository; the Space's
+hardware, variables and weights.
+Outcome so far (local, 2026-10-10):
+- `scripts/space_snapshot.py` builds the snapshot; `BUILD_CONTEXT` and `DEPLOY_PROCEDURE` split `IMAGE_INPUTS`
+  (`scripts/deploy_scope.py`); the workflow builds the snapshot under `RUNNER_TEMP`, then force-pushes exactly
+  `DEPLOY_COMMIT` through `GIT_ASKPASS`. ADR-030.
+- Rehearsal against a local stand-in for the Space, seeded with the history up to `ff272fc`:
+  - the snapshot of `a0d8c89` was one root commit, 83 build-context files (344 KB), with 164 other tracked files left
+    out;
+  - the push replaced the 205-commit history with that one commit;
+  - neither demo blob reached the stand-in;
+  - all 82 non-README files were the tested commit's blobs and modes, and the README was the header plus the
+    original.
+- The two new workflow-wiring tests fail on the old workflow.
