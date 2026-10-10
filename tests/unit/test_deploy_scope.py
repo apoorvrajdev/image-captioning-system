@@ -110,11 +110,20 @@ def deployed(repo: Repo) -> str:
         "models/v1.0.0/vocab.json",
         ".github/workflows/deploy-backend.yml",
         "scripts/deploy_scope.py",
+        "scripts/space_snapshot.py",
         "scripts/smoke_caption.py",
     ],
 )
 def test_image_inputs_are_recognised(path: str) -> None:
     assert scope.is_image_input(path)
+
+
+def test_image_inputs_are_the_build_context_plus_the_deploy_procedure() -> None:
+    assert scope.IMAGE_INPUTS == scope.BUILD_CONTEXT + scope.DEPLOY_PROCEDURE
+    # The deploy procedure triggers a deploy but is never pushed to the Space (ADR-030).
+    for path in scope.DEPLOY_PROCEDURE:
+        assert scope.is_image_input(path)
+        assert not scope.is_build_context(path)
 
 
 @pytest.mark.parametrize(
@@ -151,14 +160,18 @@ def _dockerfile_copy_sources() -> list[str]:
     return sources
 
 
-def test_every_dockerfile_copy_source_is_an_image_input() -> None:
+def test_every_dockerfile_copy_source_is_in_the_build_context() -> None:
+    """The snapshot pushed to the Space holds only BUILD_CONTEXT, so a COPY source
+    missing from it would be missing from the Space's build (ADR-030)."""
     sources = _dockerfile_copy_sources()
     assert sources, "no COPY lines found in the Dockerfile"
     for source in sources:
         assert "*" not in source and "?" not in source, f"glob COPY source {source!r}"
         is_dir = (REPO_ROOT / source).is_dir()
         entry = source.rstrip("/") + "/" if is_dir else source
-        assert entry in scope.IMAGE_INPUTS, f"Dockerfile copies {source!r}; add {entry!r}"
+        assert entry in scope.BUILD_CONTEXT, f"Dockerfile copies {source!r}; add {entry!r}"
+    for build_file in ("Dockerfile", ".dockerignore", "README.md", "pyproject.toml"):
+        assert build_file in scope.BUILD_CONTEXT
 
 
 def test_every_image_input_exists() -> None:
@@ -556,12 +569,37 @@ def test_every_step_after_the_decision_needs_it_and_stops_on_failure() -> None:
 
 def test_baseline_is_recorded_last_after_the_health_gate() -> None:
     steps = _steps()
-    push = _index(steps, run="git push --force space")
+    snapshot = _index(steps, run="python3 -m scripts.space_snapshot")
+    push = _index(steps, run="push --force")
     health = _index(steps, run="model_loaded")
     record = _index(steps, run="scripts.deploy_scope record")
-    assert push < health < record == len(steps) - 1
+    assert snapshot < push < health < record == len(steps) - 1
     for argument in ('--sha "$DEPLOY_SHA"', '--space-commit "$DEPLOY_COMMIT"', "--space "):
         assert argument in steps[record]["run"]
+    # The health gate waits for the Space to be on the snapshot that was pushed.
+    assert 'EXPECTED = os.environ["DEPLOY_COMMIT"]' in steps[health]["run"]
+
+
+def test_the_space_receives_the_snapshot_of_the_tested_commit_only() -> None:
+    steps = _steps()
+    build = steps[_index(steps, run="python3 -m scripts.space_snapshot")]
+    assert '--sha "$DEPLOY_SHA"' in build["run"]
+    assert '--dest "$RUNNER_TEMP/space-snapshot"' in build["run"]
+    assert "secrets." not in json.dumps(build)
+    push = steps[_index(steps, run="push --force")]["run"]
+    # Exactly the verified snapshot commit, from the snapshot's repository, never HEAD.
+    assert 'git -C "$SNAPSHOT_DIR" push --force' in push
+    assert '"${DEPLOY_COMMIT}:refs/heads/main"' in push
+    assert "HEAD:main" not in push
+    # An empty DEPLOY_COMMIT would make the push delete the Space's main.
+    assert "grep -Eqx '[0-9a-f]{40}'" in push
+    assert push.index("grep -Eqx") < push.index("push --force")
+    # The token never sits in a URL, a git config or the checkout.
+    assert "GIT_ASKPASS=" in push and "HF_TOKEN}@" not in push
+    for step in steps:
+        run = step.get("run", "")
+        for command in ("git remote add", "git commit", "git config", "git add "):
+            assert command not in run, f"{step['name']} runs {command!r} in the checkout"
 
 
 def test_manual_runs_stay_ci_verified_and_force_a_deploy() -> None:
