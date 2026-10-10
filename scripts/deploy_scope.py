@@ -4,8 +4,10 @@ Usage (from ``.github/workflows/deploy-backend.yml``):
     python3 -m scripts.deploy_scope decide --head <sha> --space <owner/name> [--force]
     python3 -m scripts.deploy_scope record --sha <sha> --space-commit <sha> --space <owner/name>
 
-The Space image is built from a fixed set of repository paths, ``IMAGE_INPUTS``: the
+The Space image is built from a fixed set of repository paths, ``BUILD_CONTEXT``: the
 Dockerfile's COPY sources, plus the files that shape the build and the deployed README.
+``IMAGE_INPUTS`` adds the deploy procedure (``DEPLOY_PROCEDURE``), which is never pushed
+to the Space but whose changes must still be proven by a deploy.
 ``decide`` compares those paths between the commit being deployed and the last commit
 that deployed successfully, and deploys only if one of them differs. ``record`` writes
 that baseline as a GitHub deployment in the ``huggingface-space`` environment with a
@@ -42,7 +44,10 @@ ENVIRONMENT = "huggingface-space"
 RECORDER = "github-actions[bot]"
 
 # A trailing slash marks a directory prefix; anything else is an exact path.
-IMAGE_INPUTS: tuple[str, ...] = (
+#
+# What the Space builds from. ``scripts/space_snapshot.py`` deploys exactly these paths of
+# the tested commit, so a path missing here is missing from the Space (ADR-030).
+BUILD_CONTEXT: tuple[str, ...] = (
     # The Dockerfile's COPY sources: the files the image is built from.
     "requirements.txt",
     "pyproject.toml",
@@ -57,13 +62,20 @@ IMAGE_INPUTS: tuple[str, ...] = (
     # The Space builds from a git checkout of the deploy commit; this file decides how
     # that checkout materialises files (LFS filters, line endings).
     ".gitattributes",
-    # The deploy procedure: the workflow writes the Space's README config header, this
-    # script decides and records each deploy, and the smoke test gates it. A change to
-    # any of them is proven by the run that introduces it.
+)
+
+# The deploy procedure: the workflow runs the deploy, the snapshot script builds what is
+# pushed (and writes the Space's README config header), this script decides and records
+# each deploy, and the smoke test gates it. None of them is pushed to the Space, but a
+# change to any of them is proven by the run that introduces it.
+DEPLOY_PROCEDURE: tuple[str, ...] = (
     ".github/workflows/deploy-backend.yml",
     "scripts/deploy_scope.py",
+    "scripts/space_snapshot.py",
     "scripts/smoke_caption.py",
 )
+
+IMAGE_INPUTS: tuple[str, ...] = BUILD_CONTEXT + DEPLOY_PROCEDURE
 
 _SHA = re.compile(r"[0-9a-f]{40}")
 _SPACE = re.compile(r"[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*")
@@ -101,11 +113,20 @@ class Decision:
     image_changes: tuple[str, ...] = ()
 
 
+def _matches(path: str, entries: tuple[str, ...]) -> bool:
+    return any(
+        path.startswith(entry) if entry.endswith("/") else path == entry for entry in entries
+    )
+
+
 def is_image_input(path: str) -> bool:
     """True if a repository path is, or is inside, one of ``IMAGE_INPUTS``."""
-    return any(
-        path.startswith(entry) if entry.endswith("/") else path == entry for entry in IMAGE_INPUTS
-    )
+    return _matches(path, IMAGE_INPUTS)
+
+
+def is_build_context(path: str) -> bool:
+    """True if a repository path is, or is inside, one of ``BUILD_CONTEXT``."""
+    return _matches(path, BUILD_CONTEXT)
 
 
 def _git(repo: Path, *args: str) -> subprocess.CompletedProcess[bytes]:
