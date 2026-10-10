@@ -139,3 +139,9 @@ frontend/.vite/
 # committed — not part of the runtime or the published portfolio.
 /AI_MODEL_SELECTION_GUIDE.txt
 /reference notebook/
+
+# ---- Demo-video workspace ----------------------------------------------------
+# Plan, composition, renders and share copy for the README demo video. Large
+# and regenerable; the published video and poster live in docs/demo/.
+brag-output/
+brag-output-*/
