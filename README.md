@@ -26,6 +26,14 @@
   A deliberately scoped multimodal-AI showcase that takes a published research notebook and turns it into the kind of codebase a serving team would actually maintain — typed configuration, a structured FastAPI inference service, a polished React SPA, a parity-audit gate against the original notebook, and an honest roadmap that names what is shipped and what is not.
 </p>
 
+## 🎬 Product Demo
+
+A short technical demo of Image Captioning System's live image captioning, model inference pipeline and research-to-production checks.
+
+[![Image Captioning System demo: a photo uploaded to the SPA is captioned by the deployed v2.0.0 model](docs/demo/image-captioning-demo.jpg)](docs/demo/image-captioning-demo.mp4)
+
+**▶ [Watch the 23-second demo](docs/demo/image-captioning-demo.mp4)** · [Try the live app](https://image-captioning-system.vercel.app) · [How the demo was made](docs/demo/README.md)
+
 ---
 
 ## Status
