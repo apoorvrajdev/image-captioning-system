@@ -28,12 +28,12 @@
 
 ## 🎬 Product Demo
 
-A short technical demo of Image Captioning System's live image captioning, model inference pipeline and research-to-production checks.
+A short technical demo of the Image Captioning System's live image captioning, model inference pipeline and research-to-production checks.
 
 
 https://github.com/user-attachments/assets/e978499a-9b45-469d-9caf-e1488be688fe
 
-**▶ [Watch the 23-second demo](docs/demo/image-captioning-demo.mp4)** · [Try the live app](https://image-captioning-system.vercel.app) · [How the demo was made](docs/demo/README.md)
+**▶ [Watch the 23-second demo]** · [Try the live app](https://image-captioning-system.vercel.app) · [How the demo was made](docs/demo/README.md)
 
 ---
 
