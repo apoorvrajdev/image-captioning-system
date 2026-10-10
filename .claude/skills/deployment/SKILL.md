@@ -12,13 +12,14 @@ description: Acceptance criteria and definition of done for CI/CD, the Docker im
 
 ## Topology (current)
 GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · pre-commit · security: pip-audit gate + full-history gitleaks · frontend lint+build+Playwright E2E+`npm audit --omit=dev`)
-→ on green `deploy-backend.yml` pushes to HF Space `apoorvrajdev/image-captioning-api` (Docker SDK, cpu-basic, port 7860, 1 worker)
+→ on green `deploy-backend.yml` force-pushes a single-commit snapshot of the tested commit's build context to HF Space `apoorvrajdev/image-captioning-api` (Docker SDK, cpu-basic, port 7860, 1 worker; ADR-030)
 → lifespan pulls weights from HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` at a pinned tag.
 Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS comes from the `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` Space variable.
 
 ## Expected behaviour
 - A red CI never deploys. Deploy uses only the `HF_TOKEN` secret and fails loudly if it's unset.
 - A green CI rebuilds the Space only if an image input changed since the last successful deploy, as recorded in the `huggingface-space` deployment, and only while the Space is still on that deploy's commit (`scripts/deploy_scope.py`, ADR-027). A new `COPY` source in the `Dockerfile` must be added to `IMAGE_INPUTS`; `test_deploy_scope.py` fails until it is.
+- The Space receives one root commit with no GitHub history: the tested commit's `BUILD_CONTEXT` (`scripts/deploy_scope.py`), built by `scripts/space_snapshot.py` outside the checkout, with the Space README header (ADR-030). Hugging Face rejects pushes carrying binaries outside Xet/LFS, so nothing binary may enter the build context; the snapshot refuses one, and any missing build input, before pushing.
 - A deploy passes only after one real caption from the live Space (`scripts/smoke_caption.py`, ADR-028). It checks the response's shape, the model version, the request-id echo and the Vercel origin, never the caption text, and it never sends a token.
 - Container runs as UID 1000, `HEALTHCHECK` on `/healthz`, no weights baked into the Space git tree.
 - Local DoD commands ≡ CI jobs (see CLAUDE.md Commands). A new gate is added to both.
@@ -39,6 +40,7 @@ Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS come
 grep -rn "ubuntu-latest" .github/workflows   # must print nothing
 .venv/Scripts/pytest.exe tests/unit/test_check_pip_audit.py -q   # pip-audit gate + committed baseline
 .venv/Scripts/pytest.exe tests/unit/test_deploy_scope.py -q   # deploy scope rule, record and workflow wiring
+.venv/Scripts/pytest.exe tests/unit/test_space_snapshot.py -q # the single-commit Space snapshot, from real git
 .venv/Scripts/pytest.exe tests/unit/test_smoke_caption.py -q  # post-deploy caption check, against the real app stack
 .venv/Scripts/pytest.exe tests backend/app/tests -q
 docker build -t captioning-backend:local .   # only if Docker is available; otherwise report "not run"

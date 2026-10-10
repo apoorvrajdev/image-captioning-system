@@ -53,7 +53,8 @@ The job:
    and `actions: read`). It refuses unless a run matches the exact SHA, branch `main`,
    and `completed`/`success`. A success for another commit or an API error refuses too
 1. Checks out the exact commit CI tested (`github.event.workflow_run.head_sha`,
-   or `github.sha` for manual runs) with full history. The token isn't kept in
+   or `github.sha` for manual runs) with full history, which the scope decision
+   diffs. None of that history reaches the Space. The token isn't kept in
    `.git/config` (`persist-credentials: false`), because nothing pushes to GitHub
 2. Skips the deploy if `main` has already moved past that commit (the newer
    commit's own CI run deploys it), so a slow older run can't roll the Space back
@@ -61,10 +62,19 @@ The job:
    [ADR-027](DECISIONS.md)); see [When the Space is rebuilt](#when-the-space-is-rebuilt).
    A skip ends the run green with a "Space deploy skipped" notice and a job summary
    giving the reason. Every later step runs only when this step outputs `deploy=true`
-4. Builds a deployment commit on top of it that prepends the Space's YAML
-   config header (`sdk: docker`, `app_port: 7860`, …) to `README.md`. GitHub's
-   README has no header, because GitHub renders it as a table
-5. Force-pushes that commit to the Space with the `HF_TOKEN` secret
+4. Builds the Space snapshot (`python3 -m scripts.space_snapshot`, [ADR-030](DECISIONS.md)):
+   one root commit, with no parents, holding only the tested commit's build context
+   (the Dockerfile's `COPY` sources, `Dockerfile`, `.dockerignore`, `.gitattributes`),
+   with the Space's YAML config header (`sdk: docker`, `app_port: 7860`, …) prepended to
+   `README.md`. GitHub's README has no header, because GitHub renders it as a table.
+   Its message names the tested commit (`Source-Commit:`). It's built in its own
+   repository under `RUNNER_TEMP`, leaving the checkout untouched, and the step fails,
+   before anything is pushed, on a missing build input or a binary, LFS, secret- or
+   cache-like file. No GitHub history goes to the Space: Hugging Face rejects pushes
+   carrying binary files outside Xet/LFS, and the history holds the README demo video
+5. Force-pushes that snapshot commit to the Space's `main` with the `HF_TOKEN` secret,
+   passed to git through `GIT_ASKPASS` (never in a URL or git config). An empty or
+   malformed snapshot commit refuses the push
 6. Polls the HF API (`/api/spaces/<id>` for the repo head, `/api/spaces/<id>/runtime`
    for the stage) until a rebuild of the new commit reaches `RUNNING`. Fails on
    `CONFIG_ERROR`, `BUILD_ERROR`, `RUNTIME_ERROR` and other error stages
@@ -91,10 +101,12 @@ Timeouts: 10 min for a rebuild to start, 30 min to reach `RUNNING`, 10 min for
 A run rebuilds the Space only if an **image input** differs between the last
 successfully deployed commit and the commit being deployed. The image inputs are the
 Dockerfile's `COPY` sources (`requirements.txt`, `pyproject.toml`, `README.md`, `src/`,
-`backend/`, `configs/`, `models/`), plus `Dockerfile`, `.dockerignore`, `.gitattributes`,
-this workflow, `scripts/deploy_scope.py` and `scripts/smoke_caption.py`. Anything else (`docs/`, `tests/`,
-`frontend/`, `results/`, `notebooks/`, `ci.yml`, other scripts) doesn't rebuild it.
-`test_deploy_scope.py` fails if a Dockerfile `COPY` source is missing from the list.
+`backend/`, `configs/`, `models/`), plus `Dockerfile`, `.dockerignore` and `.gitattributes`
+(the build context, which is what the snapshot deploys), and the deploy procedure: this
+workflow, `scripts/deploy_scope.py`, `scripts/space_snapshot.py` and `scripts/smoke_caption.py`.
+Anything else (`docs/`, `tests/`, `frontend/`, `results/`, `notebooks/`, `ci.yml`, other
+scripts) doesn't rebuild it. `test_deploy_scope.py` fails if a Dockerfile `COPY` source is
+missing from the build context.
 
 - **Baseline.** The newest `huggingface-space` deployment that this workflow recorded,
   shown under the repository's Environments. It's never the parent commit, so an image

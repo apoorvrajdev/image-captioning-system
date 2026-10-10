@@ -191,8 +191,9 @@ Two workflows under [`.github/workflows/`](../.github/workflows/):
   - `frontend`: `npm ci && npm run lint && npm run build`
 - **`deploy-backend.yml`** — chained via `workflow_run`, runs only after a
   successful `CI` run on `main`. It deploys the exact commit CI tested and skips
-  commits `main` has moved past. It adds the Space config header to the deploy
-  copy, force-pushes it to the Space with the `HF_TOKEN` repository secret, and
+  commits `main` has moved past. It builds a single-commit snapshot of that
+  commit's build context, with the Space config header and no GitHub history
+  (ADR-030), force-pushes it to the Space with the `HF_TOKEN` repository secret, and
   passes only once the HF API reports `RUNNING`, `/healthz` reports
   `model_loaded: true`, and one real caption request succeeds (§ 8, ADR-028). `workflow_dispatch` (on `main`) redeploys the tip of
   `main`, but only if that exact commit has a successful CI run. Details: [`CI.md`](CI.md).

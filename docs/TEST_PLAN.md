@@ -53,8 +53,15 @@ reviewed packages (`test_check_pip_audit.py`). CI runs the scans themselves (`do
   commit, and a file moved out of an image directory;
 - the Space being off the recorded commit, no record, or an unreadable one all deploy.
 
-Every Dockerfile `COPY` source must be an image input. The deploy workflow keeps its guard → decision → push → health
-→ record order, with no step after the decision running on failure (`test_deploy_scope.py`).
+Every Dockerfile `COPY` source must be in the build context. The deploy workflow keeps its guard → decision → snapshot
+→ push → health → record order, with no step after the decision running on failure, and pushes only the validated
+snapshot commit, with the token passed through `GIT_ASKPASS` (`test_deploy_scope.py`).
+
+**Space snapshot (TASK-025, ADR-030).** Built by the real git plumbing from throwaway repositories: the snapshot holds
+exactly the build context, byte for byte with modes, and none of the demo media, docs, results, notebooks, frontend,
+tests or untracked local files. It's one commit with no parents, names the exact tested commit, gets the Space header,
+and leaves the checkout untouched. A missing build input, or a binary, LFS, secret- or cache-like file refuses the
+build, and no secret is printed. One test snapshots this repository's own HEAD (`test_space_snapshot.py`).
 
 **Evaluation.** Metric implementations match hand-checkable tiny corpora, and run artefacts follow the
 `write_run_artifacts` contract (`test_evaluation_metrics.py`, `test_evaluation.py`). The SPA's Phase 3 dashboard data
