@@ -1433,3 +1433,65 @@ Outcome (live, 2026-10-10):
   - a real `POST /v1/captions` with the README demo photo returned HTTP 200, "a man riding a wave on top of a
     surfboard", `v2.0.0`, greedy, 899.57 ms.
 - The baseline stayed at `ff272fc` through the four failed pushes and moved only with this passing deploy.
+
+### TASK-026 — Reject over-limit image dimensions before decoding            [status: done] (2026-10-12)
+Area: inference-api
+Goal: an upload whose header claims more pixels than serving can safely decode is refused before TensorFlow allocates
+the image.
+Problem:
+- `bytes_to_tensor` passed any upload under the 10 MiB cap to `tf.io.decode_image`. The decoder allocates the whole
+  image from the header's dimensions, and Keras's `Resizing` then makes a float32 copy, so a small file could claim a
+  very large image.
+- Source: a candidate from the paused security audit `run-1`, whose triage checked the code path. It wasn't
+  validated as a finding. No memory exhaustion was reproduced, and peak memory and the Space's memory limit are
+  unmeasured.
+Acceptance criteria:
+- GIVEN a JPEG, PNG or BMP within 16,384 px per side and 40,000,000 px in total THEN the same tensor as before:
+  shape, dtype and values.
+- GIVEN a header over either limit THEN 413 with a short message naming the limits, before `tf.io.decode_image` runs.
+- GIVEN a zero, truncated, malformed or unsupported header THEN a client error, never a 500.
+- Unchanged: the 400/413/415/503 checks before it, the status set, `CaptionResponse`, the preprocessing path, the
+  notebook and the parity audit.
+Out of scope: concurrency limits on inference; the WebP gap below; the frontend.
+Outcome:
+- `check_image_dimensions` (`backend/app/utils/image.py`) opens the bytes with Pillow restricted to its JPEG, PNG
+  and BMP parsers. They read the header and decode no pixels. It checks each side and the product. `bytes_to_tensor`
+  calls it before it imports TensorFlow. `ImageTooLargeError` maps to 413 in the route. It subclasses
+  `ImageDecodeError`, so a handler that misses it still answers 422, not 500.
+- Limits: 40 MP admits 12–36 MP camera and phone photos. Decoding needs about 15 bytes per pixel (3 for the uint8
+  image, 12 for the float32 copy in `Resizing`), so about 600 MB at the limit. That figure comes from the dtypes and
+  wasn't measured. 16,384 px per side admits panoramas and bounds per-row decoder buffers.
+- Why Pillow: TF 2.15 reads a header without decoding only for JPEG (`tf.io.extract_jpeg_shape`). Pillow is already
+  pinned in the image.
+- Local probes with tiny inputs:
+  - GIF: TF sizes the output by the largest frame. A 1×1 screen with a 1500×8 second frame decoded to
+    `(8, 1500, 3)`, and Pillow's header read reported 1×1. GIF isn't on the allow-list, so GIF bytes sent under an
+    allowed content type now get a 422 instead of being decoded.
+  - WebP: opening one in Pillow builds libwebp's animation decoder, which allocates the canvas, so WebP is never
+    parsed. TF 2.15's `decode_image` rejects WebP ("Unknown image file format"), so WebP got a 422 before and still
+    does.
+  - BMP: TF requires the file size to equal header plus rows, so a BMP was already bounded by the byte cap. Pillow
+    reads a BMP width as unsigned, so a negative width claims about 4.3 billion pixels and gets a 413.
+- A 422 from the header check reads "Could not decode image bytes: expected a JPEG, PNG or BMP image.", not
+  TensorFlow's error text.
+- The check fails closed: bytes whose header Pillow can't read never reach TF. A PNG with a bad checksum on a text
+  chunk before the image data now gets a 422, though TF decoded it (probed).
+- The header read allocates little: Pillow caps PNG text-chunk decompression at 1 MiB a chunk and 64 MiB in total.
+- Tests, 44 new:
+  - `test_image_guard.py`, 33, with header-only bytes: small JPEG/PNG/BMP pass; exactly at the limits passes; one
+    over on a side or on the product gets a 413, as does Pillow's own bomb error; explicit limits; 12 malformed,
+    truncated or zero-size headers; the guard's own non-positive check; GIF, WebP and TIFF get a 422; the guard runs
+    before TensorFlow is imported.
+  - `test_captions.py`, 4: real JPEG and PNG get a 200, a 10000×5000 header gets a 413 with the exact message, and a
+    header-less body gets a 422.
+  - `tests/unit/test_upload_image_decode.py`, 7: a recording `tf.io.decode_image` never sees an oversized image, and
+    six format/mode cases (RGB, grayscale, RGBA) equal decode-then-`preprocess_image_tensor` exactly, at
+    `[299, 299, 3]` float32.
+  - With the guard moved after the decode and the route's 413 branch removed, the three ordering and status tests
+    fail.
+- Verification, locally: pytest 464 passed; ruff and mypy clean; parity audit 4/4; notebook hash unchanged.
+- No ADR: like TASK-006, this is a boundary check behind the existing contract.
+Follow-ups, not started:
+- WebP is allow-listed by the backend and the SPA, but TF 2.15 can't decode it.
+- The limit bounds one request. Concurrent decodes share anyio's default limiter of 40 threads (the audit's separate
+  inference-availability candidate).
