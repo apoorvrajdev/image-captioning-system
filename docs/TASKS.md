@@ -1634,3 +1634,56 @@ Not verified:
 - Downloaded files aren't hashed at boot. The commit id fixes which files are served; their bytes rest on the Hub and
   TLS (`SECURITY.md` § Known gaps).
 - No load test. The smoke test is one request.
+
+### TASK-029 — Verify downloaded model files against SHA-256 digests pinned per commit            [status: in-progress]
+Area: inference-api · deployment
+Goal: the backend never loads model bytes that differ from the bytes pinned for the served commit.
+Problem: TASK-028 fixed which commit is downloaded, but nothing checked the bytes that arrived. A corrupted or altered
+Hub cache, or a Hub that served other bytes for the commit, would have loaded (`SECURITY.md` § Known gaps).
+Acceptance criteria:
+- Every file serving reads (the weights file and `vocab.json`) has a SHA-256 pinned per repo and commit. Each digest
+  comes from the commit, never from the file it checks. Both published commits, `v1.0.0` and `v2.0.0`, are covered.
+- GIVEN a commit without digests, a file without one, or a malformed digest THEN startup fails before any download.
+- GIVEN a downloaded file whose SHA-256 differs THEN startup fails, naming each differing file, and neither the model
+  nor the tokenizer reads anything. No fallback.
+- Hashing streams the file. The minimal download list and the commit pin are unchanged.
+- Unchanged: the model and weights, the API contract, tokenizer behaviour, the TASK-026 guard, TASK-027 admission,
+  the deploy gates, parity.
+Out of scope: signing artefacts; hashing local-path mode; publishing Hub revisions; changing Space variables.
+Outcome so far (local, 2026-10-12):
+- Digests, from the Hub API for the pinned commits (read-only):
+  - `model.h5` is an LFS file at both commits. Its digest is the `oid sha256` in the LFS pointer in the commit's
+    tree: `v1.0.0` `bfe020d9…`, `v2.0.0` `74963a3f…`. The pointer's git blob id matched the tree entry. `v2.0.0`'s
+    equals the value in `EVAL_METHODOLOGY.md` § 8.8.
+  - `vocab.json` is a plain git file, with only a SHA-1 blob id on the Hub. The cached bytes matched that blob id
+    (`f8ce580…`, `1a437e1…`), and their SHA-256 is pinned: `v1.0.0` `45ec1704…`, `v2.0.0` `4315c5a7…`. `v1.0.0`'s also
+    equals the repo's `models/v1.0.0/vocab.json`.
+  - Both tags still resolve to the commits in `PINNED_HUB_REVISIONS`.
+- `backend/app/services/weights_loader.py`:
+  - `PINNED_ARTIFACT_SHA256` maps (repo, commit) to {file: SHA-256}, with each digest's provenance in a comment.
+  - `pinned_sha256` runs before the download and refuses a missing commit, a missing file digest or a malformed
+    digest.
+  - After the download, `verify_sha256` hashes each file in 1 MiB chunks (`sha256_file`) and raises
+    `ArtifactIntegrityError` naming every mismatch. `resolve_weights` returns paths only after that, and logs
+    `weights_verified` with the digests.
+- Tests, 26 new, all offline and TensorFlow-free:
+  - `test_weights_loader.py`, 22: chunked hashing; a one-byte change in each file; two changed files; a file holding
+    another file's pinned bytes; four commits without digests; a pinned tag whose digests are gone; seven incomplete
+    or malformed entries; an unpinned weights filename; both tags' digests are well formed and distinct; each tag is
+    checked against its own commit's digests; `v1.0.0`'s vocabulary digest equals the repo's committed copy. The existing tests pin their test commit's digests and keep their
+    assertions. The `v2.0.0` test now also expects the real digests to reject its fake bytes.
+  - `test_startup_integrity.py`, 4, through the real lifespan and the real default downloader path, with
+    `snapshot_download` and `CaptionPredictor` stubbed: verified files load; a tampered weights file, or a tampered
+    vocabulary that would still pass validation, stops startup before the predictor reads anything; an unpinned
+    commit stops it before any download.
+  - Each of eight deliberate regressions failed between 3 and 27 tests, among them removing the check, moving the
+    lookup after the download and stopping at the first mismatch.
+- Against the real artefacts, offline from the local Hub cache:
+  - The production path verified both files at `v1.0.0` (0.47 s) and `v2.0.0` (0.19 s).
+  - In a copy of the `v1.0.0` snapshot, one flipped byte in `vocab.json`, then in `model.h5`, was refused, naming
+    only that file.
+  - The real app on `v2.0.0` logged `weights_verified`, loaded the model and returned a caption, HTTP 200.
+- Verification, locally: backend 106 passed (TensorFlow not imported); full suite 535 passed; ruff and mypy clean;
+  parity audit 4/4; notebook hash unchanged.
+- ADR-033. Runbook § 3: a new revision needs its digests pinned, and integrity failures have their own steps.
+Not verified yet: CI, the deploy, and the post-deploy smoke test on the Space.

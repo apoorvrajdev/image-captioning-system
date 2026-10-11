@@ -114,8 +114,21 @@ To promote a new checkpoint after this, set **both** Space variables to the new 
   alternative is setting `BACKEND_WEIGHTS_HUB_REVISION` to the full commit id, with `BACKEND_MODEL_VERSION` still the
   tag. Any other value, such as a branch or an unpinned tag, stops the Space at startup. The commit must contain the
   weights file and `vocab.json`; nothing else is downloaded.
+- **Pin its file digests in the same change (ADR-033):** the backend checks both files against the SHA-256 recorded
+  for the commit in `PINNED_ARTIFACT_SHA256`, and a commit without an entry stops startup, even as a full commit id.
+  - For an LFS file such as `model.h5`, take `lfs.sha256` from
+    `HfApi().get_paths_info(repo, paths=[...], revision=<commit>, expand=True)`. It equals the `oid sha256` in the
+    file's pointer at that commit.
+  - For a plain git file such as `vocab.json`, the Hub gives only the SHA-1 `blob_id`. Download the file at the
+    commit, check that `sha1(b"blob <size>\0" + bytes)` equals that `blob_id`, then record the bytes' SHA-256.
+  - Never take a digest from a file you haven't checked against the commit.
 - **When they take effect:** settings are read once per process, so the new values apply when the Space restarts.
-  Switching between pinned tags (or commit ids) needs no code change or deploy.
+  Switching between revisions already in both tables needs no code change or deploy.
+- **If startup fails with `ArtifactIntegrityError`:** the error names each file whose SHA-256 differs. Nothing was
+  loaded and nothing falls back. The Hub client reuses a cached blob rather than downloading it again, so clear the
+  cache: delete the snapshot entry and the blob it links to, or factory-rebuild the Space, then restart. If a fresh
+  download still differs, the Hub no longer serves the pinned bytes. Roll back to the other pinned tag and
+  investigate; don't change the digest to match.
 - **Then verify:** `/healthz` must report `model_loaded: true` and a `model_version` equal to the new tag.
 
 ---
@@ -131,7 +144,7 @@ To promote a new checkpoint after this, set **both** Space variables to the new 
    | Name | Value |
    |---|---|
    | `BACKEND_WEIGHTS_HUB_REPO` | `apoorvrajdev/captioning-inceptionv3-transformer` |
-   | `BACKEND_WEIGHTS_HUB_REVISION` | `v2.0.0`, which the backend downloads as commit `59d93b4…`. A pinned tag or a full commit id (§3) |
+   | `BACKEND_WEIGHTS_HUB_REVISION` | `v2.0.0`, which the backend downloads as commit `59d93b4…`. A pinned tag or a full commit id, whose files have pinned digests (§3) |
    | `BACKEND_MODEL_VERSION` | `v2.0.0`. Must always be the tag `BACKEND_WEIGHTS_HUB_REVISION` names or resolves to (§3) |
    | `BACKEND_WEIGHTS_HUB_FILENAME` | `model.h5` |
    | `BACKEND_WARMUP` | `true` |

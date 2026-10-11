@@ -77,7 +77,8 @@ class BackendSettings(BaseSettings):
         description=(
             "Full 40-character Hub commit id, or a tag pinned in "
             "app.services.weights_loader.PINNED_HUB_REVISIONS. Any other value, "
-            "including this 'main' default, is refused when weights_hub_repo is set."
+            "including this 'main' default, is refused when weights_hub_repo is set, "
+            "and so is a commit without SHA-256 digests in PINNED_ARTIFACT_SHA256."
         ),
     )
     weights_hub_filename: str = Field(

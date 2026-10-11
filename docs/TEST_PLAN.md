@@ -50,7 +50,17 @@ slot until its worker thread ends, and `/healthz` answers while inference holds 
 (`test_inference_admission.py`, with gated worker threads rather than sleeps). Weights resolve from local paths,
 or from the Hub by commit id only: a pinned tag resolves to its commit, branches and unpinned tags are refused
 before any download, only the weights file and `vocab.json` are requested, and a commit missing either fails by name
-(`test_weights_loader.py`, offline).
+(`test_weights_loader.py`, offline). Both files must match the SHA-256 pinned for their commit (TASK-029):
+- a one-byte change in either file is refused, naming only that file, and two changed files are both named;
+- a file replaced by another file's pinned bytes is refused;
+- a commit with no digests, a missing digest and a malformed digest are refused before any download;
+- `v1.0.0` and `v2.0.0` are each checked against their own commit's digests;
+- `v1.0.0`'s vocabulary digest equals the repo's committed `models/v1.0.0/vocab.json`;
+- hashing reads in chunks.
+
+Through the real lifespan, with the downloader and predictor stubbed, a tampered weights file or vocabulary stops
+startup before the predictor reads anything. That holds even for a vocabulary that would pass validation
+(`test_startup_integrity.py`).
 
 **Supply chain (TASK-021, ADR-026).** The pip-audit gate passes baselined findings, and fails on a new finding, a
 version change, an alias standing in for an id, a stale entry, an unaudited dependency or malformed input. The committed baseline covers only the

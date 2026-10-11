@@ -440,3 +440,19 @@ Format: **Decision · Why · Evidence**.
   - Boot no longer downloads `vocab.pkl`, `README.md` or `.gitattributes`.
   - Downloaded bytes aren't hashed at boot. The commit id fixes which files are served; their bytes rest on the Hub and TLS.
 - **Evidence:** `backend/app/services/weights_loader.py`, `src/captioning/preprocessing/tokenizer.py`, `backend/app/tests/test_weights_loader.py`, `tests/unit/test_tokenizer_vocabulary.py`, `tests/unit/test_tokenizer.py`; Hub API on 2026-10-12 (tags, commits, git blob ids and LFS SHA-256s); TASK-028 in `TASKS.md`; ADR-007, ADR-018.
+
+### ADR-033 — Downloaded model files must match a SHA-256 pinned per commit before anything reads them (extends ADR-032)
+- **Decision:**
+  - `PINNED_ARTIFACT_SHA256` (`backend/app/services/weights_loader.py`) records, per Hub repo and commit, the SHA-256 of every file serving reads: the weights file and `vocab.json`. It covers both published commits, `v1.0.0` (`d917a47…`) and `v2.0.0` (`59d93b4…`).
+  - `resolve_weights` looks up the digests before downloading. A commit without an entry, a file without a digest, or a digest that isn't 64 lower-case hex characters stops startup before any download. A full commit id now needs an entry too.
+  - After the download, each file is hashed in 1 MiB chunks. Any mismatch raises `ArtifactIntegrityError`, which names every differing file with both digests. Paths are returned only after both files match, and the lifespan builds the predictor only from those paths.
+  - There is no fallback: no other revision, no pickle, no second download path. Local-path mode isn't hashed.
+- **Why:**
+  - ADR-032 fixed which commit is served, not what bytes arrive. A corrupted or altered cache, or a Hub that served other bytes for the commit, would have loaded without any error.
+  - Digests come from the commit, not from the downloaded file. `model.h5` is an LFS file: its digest is the `oid sha256` in the LFS pointer in the commit's tree, and `v2.0.0`'s matches the value recorded in `EVAL_METHODOLOGY.md` on 2026-10-06. `vocab.json` is a plain git file, for which the Hub publishes only a SHA-1 blob id. Its digest was taken from bytes that first matched that blob id. `v1.0.0`'s also equals the repo's own `models/v1.0.0/vocab.json`, committed on 2026-05-09 (`08f1adc`).
+  - The lookup runs before the download, so an unverifiable revision fails fast and never touches the network.
+- **Consequences:**
+  - A new revision needs its digests pinned and deployed before a Space variable names it, whether by tag or by commit id (runbook § 3).
+  - Hashing about 230 MB adds well under a second to boot (0.2–0.5 s locally).
+  - A digest proves only a match to the pinned value. Its provenance rests on the owner's Hub account and on code review. The `vocab.json` link rests on SHA-1. Files are re-read by path after hashing (`SECURITY.md` § Known gaps).
+- **Evidence:** `backend/app/services/weights_loader.py`, `backend/app/tests/test_weights_loader.py`, `backend/app/tests/test_startup_integrity.py`; Hub API on 2026-10-12 (LFS pointers, blob ids, tag → commit); TASK-029 in `TASKS.md`; ADR-032.
