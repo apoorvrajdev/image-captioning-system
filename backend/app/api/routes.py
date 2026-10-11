@@ -13,13 +13,18 @@ from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
 from app.core.config import BackendSettings, get_backend_settings
 from app.core.logging import current_request_id
 from app.schemas.caption import CaptionResponse, ErrorResponse, HealthResponse
-from app.services.predictor_service import PredictorService
+from app.services.predictor_service import PredictorBusyError, PredictorService
 from app.utils.image import ALLOWED_CONTENT_TYPES, ImageDecodeError, ImageTooLargeError
 from captioning.utils import get_logger
 
 log = get_logger(__name__)
 
 router = APIRouter()
+
+# The overload 503. One caption took 0.8-0.9 s of inference in the deploy smoke
+# tests, so a slot usually frees within a couple of seconds.
+BUSY_DETAIL = "The server is busy with other captions. Retry in a few seconds."
+BUSY_RETRY_AFTER_SECONDS = 2
 
 
 def get_predictor_service(request: Request) -> PredictorService:
@@ -73,7 +78,10 @@ async def healthz(
         },
         415: {"model": ErrorResponse, "description": "Unsupported image content type."},
         422: {"model": ErrorResponse, "description": "Image bytes could not be decoded."},
-        503: {"model": ErrorResponse, "description": "Predictor not ready."},
+        503: {
+            "model": ErrorResponse,
+            "description": "Predictor not ready, or every inference slot is busy (with `Retry-After`).",
+        },
     },
 )
 async def caption_image(
@@ -109,6 +117,12 @@ async def caption_image(
 
     try:
         caption, latency_ms = await service.caption_image_bytes(payload)
+    except PredictorBusyError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=BUSY_DETAIL,
+            headers={"Retry-After": str(BUSY_RETRY_AFTER_SECONDS)},
+        ) from exc
     except ImageTooLargeError as exc:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
