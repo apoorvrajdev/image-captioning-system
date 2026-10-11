@@ -42,7 +42,10 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). An image whose header
 is over the pixel limits gets a 413 before TensorFlow decodes it, and other bytes, GIF included, get a 422
 (`test_image_guard.py`, using header-only bytes). An image within the limits produces the same tensor as before the
-check (`tests/unit/test_upload_image_decode.py`). Weights resolve from
+check (`tests/unit/test_upload_image_decode.py`). At most two requests decode or predict at once: the next gets
+an immediate 503 with `Retry-After`, slots come back after success and after errors, a cancelled request holds its
+slot until its worker thread ends, and `/healthz` answers while inference holds every worker thread
+(`test_inference_admission.py`, with gated worker threads rather than sleeps). Weights resolve from
 Hub or local paths offline (`test_weights_loader.py`).
 
 **Supply chain (TASK-021, ADR-026).** The pip-audit gate passes baselined findings, and fails on a new finding, a
