@@ -1491,6 +1491,11 @@ Outcome:
     fail.
 - Verification, locally: pytest 464 passed; ruff and mypy clean; parity audit 4/4; notebook hash unchanged.
 - No ADR: like TASK-006, this is a boundary check behind the existing contract.
+Outcome (live, 2026-10-12):
+- Committed as `698e993`, `f354990`, `8a771f0` and `8c0c668`.
+- CI run `38172579021`: all seven jobs passed. `no-ai-attribution` passed.
+- Deploy run `38172676347` succeeded: healthy on `v2.0.0`, real caption smoke test HTTP 200, recorded as deployment
+  `7001412142`.
 Follow-ups, not started:
 - WebP is allow-listed by the backend and the SPA, but TF 2.15 can't decode it.
 - The limit bounds one request. Concurrent decodes share anyio's default limiter of 40 threads (the audit's separate
