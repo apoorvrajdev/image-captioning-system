@@ -23,8 +23,9 @@ tensorflow-cpu==2.15.0
 # NumPy <2.0 because TF 2.15 was built against the 1.x ABI.
 numpy==1.26.4
 pandas==2.2.2
-# Not on the serving path (uploads decode via tf.io.decode_image); the [hf]
-# baseline adapter reads images with it.
+# Serving reads upload headers with it (JPEG, PNG and BMP only) to enforce the
+# pixel limits; pixels still decode via tf.io.decode_image. The [hf] baseline
+# adapter reads images with it.
 pillow==12.3.0
 pyyaml==6.0.1
 

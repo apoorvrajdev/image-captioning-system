@@ -14,7 +14,7 @@ from app.core.config import BackendSettings, get_backend_settings
 from app.core.logging import current_request_id
 from app.schemas.caption import CaptionResponse, ErrorResponse, HealthResponse
 from app.services.predictor_service import PredictorService
-from app.utils.image import ALLOWED_CONTENT_TYPES, ImageDecodeError
+from app.utils.image import ALLOWED_CONTENT_TYPES, ImageDecodeError, ImageTooLargeError
 from captioning.utils import get_logger
 
 log = get_logger(__name__)
@@ -67,7 +67,10 @@ async def healthz(
     summary="Generate a caption for an uploaded image",
     responses={
         400: {"model": ErrorResponse, "description": "Empty upload."},
-        413: {"model": ErrorResponse, "description": "Image exceeds size limit."},
+        413: {
+            "model": ErrorResponse,
+            "description": "Image exceeds the upload size or pixel-dimension limit.",
+        },
         415: {"model": ErrorResponse, "description": "Unsupported image content type."},
         422: {"model": ErrorResponse, "description": "Image bytes could not be decoded."},
         503: {"model": ErrorResponse, "description": "Predictor not ready."},
@@ -106,6 +109,11 @@ async def caption_image(
 
     try:
         caption, latency_ms = await service.caption_image_bytes(payload)
+    except ImageTooLargeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            detail=str(exc),
+        ) from exc
     except ImageDecodeError as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
