@@ -46,8 +46,10 @@ _Last updated: 2026-10-12_
   TASK-027 is done and deployed (2026-10-12): at most two captions decode or predict at once, the next gets a fast
   503 with `Retry-After: 2`, and `/healthz` no longer waits for a worker thread. Behaviour under real load is
   unmeasured.
-- **Current task:** TASK-028 (Hub weights by commit id, vocabulary from validated JSON, ADR-032) is implemented and
-  verified locally; its CI and deploy are pending. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
+  TASK-028 is done and deployed (2026-10-12, ADR-032): the backend downloads Hub weights by commit id (`v2.0.0`
+  resolves to `59d93b4` through `PINNED_HUB_REVISIONS`), fetches only `model.h5` and `vocab.json`, and loads the
+  vocabulary from validated JSON instead of unpickling `vocab.pkl`.
+- **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
 
@@ -58,6 +60,7 @@ _Last updated: 2026-10-12_
 | `pytest tests backend/app/tests` | 509 passed on 2026-10-12, after TASK-028 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
 | ruff lint + format check | clean (118 files, 2026-10-12) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 92 files (2026-10-12) |
+| `deploy-backend.yml` (run `38182649703`, automatic, `ce809e1`, TASK-028) | **success**: Space commit `7aa2f75`, healthy `v2.0.0`, real caption HTTP 200 (879 ms inference); recorded as deployment `7003071374`. CI run `38182565648` (all 7 jobs, 509 passed on 3.10 and 3.11) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38175703769`, automatic, `94da607`, TASK-027) | **success**: Space commit `1cd227e`, healthy `v2.0.0`, real caption HTTP 200 (838 ms inference); recorded as deployment `7001912793`. CI run `38175620699` (all 7 jobs) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38172676347`, automatic, `8c0c668`, TASK-026) | **success**: healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `7001412142`. CI run `38172579021` (all 7 jobs) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38075201554`, automatic, `cdd2e57`, TASK-025) | **success**: first snapshot deploy. Space commit `9d8dac5`, one commit, 83 files, no `docs/`; `RUNNING`, healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `6984937652` |

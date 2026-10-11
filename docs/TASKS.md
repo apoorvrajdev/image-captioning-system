@@ -1558,7 +1558,7 @@ Not verified:
   for 2 vCPUs. Runbook § 9's status-badge flicker happens with one inference in flight, when 39 worker threads are
   free, so it isn't thread starvation, and this change may not remove it.
 
-### TASK-028 — Load Hub weights by commit id and the vocabulary from validated JSON            [status: in-progress]
+### TASK-028 — Load Hub weights by commit id and the vocabulary from validated JSON            [status: done] (2026-10-12)
 Area: inference-api · ml-core
 Goal: production loads exactly the evaluated model and vocabulary, fetched by an immutable commit id, without
 unpickling a downloaded file.
@@ -1619,7 +1619,18 @@ Outcome so far (local, 2026-10-12):
 - Verification, locally: backend 80 passed (TensorFlow not imported); full suite 509 passed; ruff and mypy clean;
   parity audit 4/4; notebook hash unchanged.
 - ADR-032.
+Outcome (live, 2026-10-12):
+- Committed as `ce809e1`, pushed with the TASK-027 close-out `51e351f` (`94da607..ce809e1`).
+- CI run `38182565648`: all seven jobs passed, 509 tests on Python 3.10 and 3.11, parity audit 4/4.
+  `no-ai-attribution` passed.
+- Deploy run `38182649703` succeeded: Space commit `7aa2f75`, healthy on `v2.0.0`, real caption smoke test HTTP 200
+  (9-word caption, 879 ms inference), recorded as deployment `7003071374`. Afterwards the HF runtime API showed
+  `RUNNING` on `7aa2f75`, and the public `/healthz` returned 200 with `model_loaded: true`.
+- Model revision: the Space still sets `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0`. Under this code a boot succeeds only
+  with a full commit id or a pinned tag, and `v2.0.0` resolves to commit `59d93b4`.
 Not verified:
-- CI, the Space booting with the two-file download, and the deploy's smoke test. They run only after the push.
+- The Space's startup log lines (`weights_source_hub` with `commit=59d93b4…` and `files=['model.h5', 'vocab.json']`).
+  Run logs need the owner's Hugging Face login, so they weren't read here; the owner checks the Logs tab.
 - Downloaded files aren't hashed at boot. The commit id fixes which files are served; their bytes rest on the Hub and
   TLS (`SECURITY.md` § Known gaps).
+- No load test. The smoke test is one request.
