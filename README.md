@@ -16,7 +16,7 @@
 <p align="center">
   <img alt="Ruff"             src="https://img.shields.io/badge/lint-ruff-261230?style=flat-square&logo=ruff&logoColor=white">
   <img alt="mypy"             src="https://img.shields.io/badge/typed-mypy-1F5082?style=flat-square">
-  <img alt="Tests"            src="https://img.shields.io/badge/tests-238%20pytest%20%2B%2014%20E2E%20passing-brightgreen?style=flat-square">
+  <img alt="Tests"            src="https://img.shields.io/badge/tests-420%20pytest%20%2B%2014%20E2E%20passing-brightgreen?style=flat-square">
   <img alt="Pre-commit"       src="https://img.shields.io/badge/pre--commit-enabled-FAB040?style=flat-square&logo=pre-commit&logoColor=white">
   <img alt="IEEE Published"   src="https://img.shields.io/badge/IEEE-published-00629B?style=flat-square&logo=ieee&logoColor=white">
   <img alt="License: MIT"     src="https://img.shields.io/badge/license-MIT-blue?style=flat-square">
@@ -39,7 +39,7 @@ https://github.com/user-attachments/assets/e978499a-9b45-469d-9caf-e1488be688fe
 
 ## Status
 
-> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a slim non-root Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11 plus the notebook parity audit, notebook SHA-256 freeze, pre-commit hooks, frontend lint + build) plus a chained `deploy-backend.yml` that deploys only CI-verified commits to the Space and passes only once `/healthz` reports the model loaded, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Phase 3 (multimodal baselines) has since been completed — see the Phase 3 status below and the [Roadmap](#-roadmap).
+> ✅ **Deployed.** Phase 2C (public deployment) is complete. The research → modular conversion (Phase 1) and the full inference stack (Phase 2A backend + 2B frontend) ship as a live, publicly reachable system: a React 19 / Vite 8 SPA at [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) posts multipart uploads to `POST /v1/captions` against a Dockerised FastAPI service running on a HuggingFace Space at [`apoorvrajdev-image-captioning-api.hf.space`](https://apoorvrajdev-image-captioning-api.hf.space), which pulls its versioned weights from [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on the Hub at lifespan startup via `snapshot_download`. The lifespan-managed `CaptionPredictor` is reused across every request with a warm graph and no per-call TF rebuilds. The IEEE notebook is preserved verbatim and protected by a SHA-256 freeze check, and a four-stage parity audit ([`scripts/notebook_module_audit.py`](scripts/notebook_module_audit.py)) re-implements caption preprocessing, tokenizer vocabulary + encoding, image preprocessing, and the decoder forward pass inline and asserts the modular path is byte-identical (or `tf.allclose`-identical) to the notebook. Phase 1b (training stabilization) shipped beam search, the full corpus metric suite (BLEU-1..4 / CIDEr / METEOR / ROUGE-L), a benchmark runner that emits one machine-readable artefact set per evaluation, and a stabilized training config that gates label smoothing / cosine LR / warmup / dropout-free validation behind ablatable flags. Phase 2C shipped a hardened backend test suite (12 route tests at launch, 14 today, covering the full 200 / 400 / 413 / 415 / 422 / 503 contract via a duck-typed fake predictor, full slice runs in 0.3 s), a slim non-root Dockerfile, Hub-versioned weight loading with an injectable downloader for offline testing, explicit production CORS wired through Space variables, a GitHub Actions CI pipeline (ruff + mypy, pytest matrix on 3.10/3.11 plus the notebook parity audit, notebook SHA-256 freeze, pre-commit hooks, frontend lint + build) plus a chained `deploy-backend.yml` that deploys only CI-verified commits to the Space and passes only once `/healthz` reports the model loaded, and a full deployment runbook at [`docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md`](docs/PHASE_2C_DEPLOYMENT_RUNBOOK.md). Phase 3 (multimodal baselines) has since been completed — see the Phase 3 status below and the [Roadmap](#-roadmap).
 
 > 📊 **Trained checkpoint shipped.** The stabilized training config ([`configs/train/stabilized.yaml`](configs/train/stabilized.yaml)) was trained on COCO 2017 (95,918 train captions, 24,082 val captions, 10 epochs, Kaggle T4 ×2, cosine LR with 500-step warmup, label smoothing 0.1). Results on a 500-image held-out slice (COCO `train2017` images from the model's own image-level validation split, 732 stored references):
 >
@@ -207,8 +207,8 @@ The notebook is preserved verbatim as the canonical research artefact. Improveme
 | Training set | ~120k captions sampled from COCO 2017 | `data.sample_size` in [`configs/base.yaml`](configs/base.yaml) |
 | Image resolution | 299 × 299 (InceptionV3) | [`preprocessing/image.py`](src/captioning/preprocessing/image.py) |
 | Max caption length | 40 tokens | `model.max_length` in [`configs/base.yaml`](configs/base.yaml) |
-| Backend test suite | 18 tests · 0.2 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
-| Full suite | **238 tests passing** | `pytest` (unit + backend + parity) |
+| Backend test suite | 23 tests · 0.3 s · no TF loaded | [`backend/app/tests/`](backend/app/tests/) |
+| Full suite | **420 tests passing** | `pytest` (unit + backend + parity) |
 
 > Corpus BLEU-1..4, CIDEr, METEOR, and ROUGE-L for the stabilized checkpoint are published in [Model quality](#-model-quality--stabilized-training-results) below, produced by the harnesses under [`evaluation/`](src/captioning/evaluation/).
 
@@ -456,7 +456,7 @@ image-captioning-system/
 │       ├── schemas/                             # Pydantic request/response models
 │       ├── services/predictor_service.py        # bytes → caption + latency (anyio thread offload)
 │       ├── utils/image.py                       # Content-type allow-list + ImageDecodeError
-│       └── tests/                               # 18 tests (14 route + 4 weights-loader), no TF loaded — from Phase 2C WS-D
+│       └── tests/                               # 23 tests (14 route + 5 body-size cap + 4 weights-loader), no TF loaded — from Phase 2C WS-D
 │
 ├── frontend/                                    # Phase 2B — React 19 + Vite 8 + Tailwind v4 SPA
 │   ├── vite.config.js · eslint.config.js · package.json · .env.example
@@ -488,7 +488,7 @@ image-captioning-system/
 │   └── notebook_module_audit.py                 # 4-stage parity gate vs. notebook
 │
 ├── results/                                     # Committed evaluation artefact sets (append-only): stabilized-*, phase3-*, phase3-latency-*, phase3-comparison
-├── tests/unit/                                  # 220 unit tests (parity, tokenizer, eval, splits, …)
+├── tests/unit/                                  # 397 unit tests (parity, tokenizer, eval, splits, …)
 ├── docs/                                        # phase notes · runbooks · EVAL_METHODOLOGY · CI
 │                                                # + living docs: MEMORY · TASKS · DECISIONS · TEST_PLAN · SECURITY
 ├── pyproject.toml · requirements*.txt · Makefile
@@ -549,8 +549,8 @@ The SPA is live at **http://localhost:5173** (Vite picks the next free port if 5
 ### Tests
 
 ```bash
-pytest -q                          # All 238 tests (unit + backend + parity)
-pytest backend/app/tests/ -v       # Backend route tests only (0.3 s, no TF loaded)
+pytest -q                          # All 420 tests (unit + backend + parity)
+pytest backend/app/tests/ -v       # Backend tests only (23, 0.3 s, no TF loaded)
 make freeze-paper-notebook         # Asserts the IEEE notebook SHA-256 has not changed
 ```
 
@@ -680,7 +680,7 @@ Schema in [`src/captioning/config/schema.py`](src/captioning/config/schema.py); 
 ## 🧪 Testing & code quality
 
 ```bash
-make test            # pytest — 238/238 (unit + backend route tests + parity)
+make test            # pytest — 420/420 (unit + backend tests + parity)
 make lint            # Ruff lint (CI also runs ruff format --check)
 make typecheck       # mypy on src/captioning + backend/app + scripts
 make pre-commit      # All hooks across all files
@@ -691,7 +691,7 @@ make freeze-paper-notebook   # Asserts notebook SHA-256 unchanged
 |---|---|---|
 | Lint + format | [Ruff](https://docs.astral.sh/ruff/) (replaces black + isort + flake8) | ✅ clean |
 | Type-check | [mypy](https://mypy.readthedocs.io/) with `pandas-stubs`, `types-PyYAML`, `types-requests` | ✅ 0 errors |
-| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 258 passing |
+| Tests | pytest + pytest-cov + pytest-asyncio | ✅ 420 passing |
 | Notebook hygiene | [`nbstripout`](https://github.com/kynan/nbstripout) (pre-commit) | ✅ outputs stripped on commit |
 | Secret scanning | [`gitleaks`](https://github.com/gitleaks/gitleaks) 8.18.4: pre-commit on staged changes, plus a full-history scan in CI | ✅ blocking in CI |
 | Dependency audit | [`pip-audit`](https://github.com/pypa/pip-audit) on the serving requirements against a reviewed baseline, and `npm audit --omit=dev` on the shipped frontend dependencies ([ADR-026](docs/DECISIONS.md)) | ✅ blocking in CI |
@@ -784,7 +784,7 @@ The SPA's browser E2E suite ([`frontend/e2e/`](frontend/e2e/); TASK-007, [ADR-02
 - [x] **WS-A4** — Lifespan integration with HuggingFace Hub: extended `BackendSettings` with `weights_hub_repo` / `weights_hub_revision` / `weights_hub_filename` / `weights_cache_dir`; new `app.services.weights_loader.resolve_weights` calls `huggingface_hub.snapshot_download` when configured, falls back to local paths otherwise (4 new unit tests, downloader injected for offline testing)
 - [x] **WS-B** — Uploaded dev-scaffold weights + tokenizer to [`apoorvrajdev/captioning-inceptionv3-transformer`](https://huggingface.co/apoorvrajdev/captioning-inceptionv3-transformer) on HuggingFace Hub, tagged `v1.0.0`, verified via `snapshot_download` (SHA-256 hashes match local artefacts byte-for-byte)
 - [x] **WS-C** — First manual deploy to [`apoorvrajdev/image-captioning-api`](https://huggingface.co/spaces/apoorvrajdev/image-captioning-api) on HuggingFace Spaces (Docker SDK, cpu-basic, port 7860, single worker) — Space variables wire `BACKEND_WEIGHTS_HUB_REPO` / `_REVISION` / `_FILENAME` + `BACKEND_WARMUP=true`; lifespan pulls weights from the Hub on cold start; `/healthz` returns `model_loaded: true` and `/v1/captions` verified end-to-end via Swagger UI
-- [x] **WS-D** — **Backend test suite** ([`backend/app/tests/`](backend/app/tests/)): 12 route tests covering the full `/healthz` + `/v1/captions` contract (200 / 400 / 413 / 415 / 422 / 503) with a duck-typed `FakePredictorService` — no TF loaded, full slice runs in 0.3 s
+- [x] **WS-D** — **Backend test suite** ([`backend/app/tests/`](backend/app/tests/)): 12 route tests at launch (14 today) covering the full `/healthz` + `/v1/captions` contract (200 / 400 / 413 / 415 / 422 / 503) with a duck-typed `FakePredictorService` — no TF loaded, full slice runs in 0.3 s
 - [x] **WS-E** — Frontend deploy to Vercel: `frontend/` imported as a Vite project, `VITE_API_BASE` env var baked at build time, production alias [`image-captioning-system.vercel.app`](https://image-captioning-system.vercel.app) auto-redeployed on every push to `main` via Vercel's GitHub integration
 - [x] **WS-F** — Production CORS: deployed Vercel origin added to `serve.cors_allowed_origins` via the Space's `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` variable (JSON array, pydantic-settings parsed), so the policy is explicit in app config rather than relying on the HF reverse-proxy default
 - [x] **WS-G** — GitHub Actions CI/CD:
