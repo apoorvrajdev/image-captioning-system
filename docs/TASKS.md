@@ -1501,7 +1501,7 @@ Follow-ups, not started:
 - The limit bounds one request. Concurrent decodes share anyio's default limiter of 40 threads (the audit's separate
   inference-availability candidate).
 
-### TASK-027 — Bound concurrent inference and keep `/healthz` off the worker pool            [status: in-progress]
+### TASK-027 — Bound concurrent inference and keep `/healthz` off the worker pool            [status: done] (2026-10-12)
 Area: inference-api
 Goal: overload gets a fast, predictable 503 instead of unbounded waiting, and `/healthz` can't be starved by
 inference.
@@ -1548,6 +1548,11 @@ Outcome so far (local, 2026-10-12):
 - Verification, locally: backend 68 passed (TensorFlow not imported); full suite 472 passed; ruff and mypy clean.
 - No ADR: this extends ADR-005 (one predictor, inference via `to_thread`) with a limit in code, and changes no
   architecture.
+Outcome (live, 2026-10-12):
+- Committed as `2860920`, `6b3a7d7`, `f4d22ac`, `43d7f2d` and `94da607`.
+- CI run `38175620699`: all seven jobs passed. `no-ai-attribution` passed.
+- Deploy run `38175703769` succeeded: Space commit `1cd227e`, healthy on `v2.0.0`, real caption smoke test HTTP 200
+  (838 ms inference), recorded as deployment `7001912793`. The smoke test is one request, not a load test.
 Not verified:
 - Behaviour under real load on the Space: memory, CPU, and whether `/healthz` stays fast while two inferences compete
   for 2 vCPUs. Runbook § 9's status-badge flicker happens with one inference in flight, when 39 worker threads are
