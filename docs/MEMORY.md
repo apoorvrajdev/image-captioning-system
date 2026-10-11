@@ -43,7 +43,8 @@ _Last updated: 2026-10-12_
   context, so the README demo video in GitHub history no longer blocks deploys.
   TASK-026 is done and deployed (2026-10-12): uploads over 16,384 px per side or 40 MP get a 413 from a header check
   before TensorFlow decodes them, and GIF bytes now get a 422 (`SECURITY.md` § Controls in place).
-- **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
+- **Current task:** TASK-027 (bounded inference admission, `/healthz` off the worker pool) is implemented and verified
+  locally; its CI and deploy are pending. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
 
@@ -51,9 +52,9 @@ _Last updated: 2026-10-12_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 464 passed on 2026-10-12, after TASK-026 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
-| ruff lint + format check | clean (116 files, 2026-10-12) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 91 files (2026-10-12) |
+| `pytest tests backend/app/tests` | 472 passed on 2026-10-12, after TASK-027 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
+| ruff lint + format check | clean (117 files, 2026-10-12) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 92 files (2026-10-12) |
 | `deploy-backend.yml` (run `38172676347`, automatic, `8c0c668`, TASK-026) | **success**: healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `7001412142`. CI run `38172579021` (all 7 jobs) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38075201554`, automatic, `cdd2e57`, TASK-025) | **success**: first snapshot deploy. Space commit `9d8dac5`, one commit, 83 files, no `docs/`; `RUNNING`, healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `6984937652` |
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |

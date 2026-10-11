@@ -1500,3 +1500,55 @@ Follow-ups, not started:
 - WebP is allow-listed by the backend and the SPA, but TF 2.15 can't decode it.
 - The limit bounds one request. Concurrent decodes share anyio's default limiter of 40 threads (the audit's separate
   inference-availability candidate).
+
+### TASK-027 — Bound concurrent inference and keep `/healthz` off the worker pool            [status: in-progress]
+Area: inference-api
+Goal: overload gets a fast, predictable 503 instead of unbounded waiting, and `/healthz` can't be starved by
+inference.
+Problem (found by code inspection, from the paused audit's inference-availability candidate; no overload was
+reproduced):
+- Decode and predict ran through `anyio.to_thread.run_sync` on anyio's default limiter (40 threads), with no
+  admission limit, so excess caption requests queued without bound.
+- `/healthz` (`Depends(get_backend_settings)`) and `/v1/captions` (`get_predictor_service`) had sync dependencies,
+  which FastAPI runs on that same limiter. With 40 inference threads busy, a health check waited for one to finish.
+Acceptance criteria:
+- GIVEN a free slot THEN the caption is served as before. GIVEN every slot busy THEN 503 at once, with a stable
+  message and `Retry-After`, and nothing decoded.
+- Slots come back after success, a predict error, a decode error and cancellation, and never exceed the limit.
+- `/healthz` answers 200 while inference holds every worker thread, and still reports `loading` before the model
+  loads.
+- Unchanged: 400/413/415/422 and the not-ready 503, request ids, the TASK-026 guard, the lifespan and the deploy
+  gates.
+Out of scope: rate limiting; a request queue; a process pool; stopping TensorFlow work mid-inference.
+Outcome so far (local, 2026-10-12):
+- `PredictorService` admits at most `MAX_CONCURRENT_INFERENCES = 2` requests into decode and predict. The check and
+  the increment run on the event loop with no `await` between them, so they can't race, and `finally` releases the
+  slot. Over the limit, `PredictorBusyError` → 503 "The server is busy with other captions. Retry in a few
+  seconds." with `Retry-After: 2`, after the route's own upload checks.
+- Why 2: the Space is HF's cpu-basic tier (2 vCPU), and TensorFlow already spreads one inference across both cores,
+  so more parallel inferences would compete for CPU rather than add throughput. Two also bounds the decode working
+  set to about 1.2 GB by the TASK-026 estimate. `Retry-After: 2` follows the 0.8–0.9 s inference times the deploy
+  smoke tests reported. Neither number is benchmarked.
+- Cancellation: `run_sync` keeps `abandon_on_cancel=False`, so a cancelled caller waits for its worker thread and
+  frees its slot only when that thread ends. Running TensorFlow work isn't stopped. In the test the cancellation never
+  surfaced, because no checkpoint followed the thread, so the request finished normally.
+- `/healthz` reads its settings from `app.state` and `get_predictor_service` is `async`, so neither needs a worker
+  thread.
+- Tests, 8 new in `backend/app/tests/test_inference_admission.py`, TF-free. A gated stand-in predictor blocks real
+  worker threads; decoding runs the real TASK-026 guard:
+  - admission, refusal at capacity with nothing decoded, release after success (two full rounds), after a predict
+    error and after a decode error, and the limit's validation;
+  - cancellation: while the thread runs, the cancelled request hasn't ended, its slot is held and another request is
+    refused; afterwards the slot is free;
+  - HTTP: with anyio's thread limiter cut to 2 so inference holds every worker thread, `/healthz` → 200, the next
+    caption → 503 with `Retry-After` and a request id, a `text/plain` upload → 415, then both held requests
+    → 200.
+  - Each regression fails a test: `/healthz` with a sync dependency, a sync `get_predictor_service`,
+    `abandon_on_cancel=True`, no admission check, and release only on success. 25 repeated runs passed.
+- Verification, locally: backend 68 passed (TensorFlow not imported); full suite 472 passed; ruff and mypy clean.
+- No ADR: this extends ADR-005 (one predictor, inference via `to_thread`) with a limit in code, and changes no
+  architecture.
+Not verified:
+- Behaviour under real load on the Space: memory, CPU, and whether `/healthz` stays fast while two inferences compete
+  for 2 vCPUs. Runbook § 9's status-badge flicker happens with one inference in flight, when 39 worker threads are
+  free, so it isn't thread starvation, and this change may not remove it.
