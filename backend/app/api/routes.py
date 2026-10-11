@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 
-from app.core.config import BackendSettings, get_backend_settings
+from app.core.config import BackendSettings
 from app.core.logging import current_request_id
 from app.schemas.caption import CaptionResponse, ErrorResponse, HealthResponse
 from app.services.predictor_service import PredictorBusyError, PredictorService
@@ -27,12 +27,13 @@ BUSY_DETAIL = "The server is busy with other captions. Retry in a few seconds."
 BUSY_RETRY_AFTER_SECONDS = 2
 
 
-def get_predictor_service(request: Request) -> PredictorService:
+async def get_predictor_service(request: Request) -> PredictorService:
     """Resolve the singleton ``PredictorService`` from app state.
 
     Returns 503 instead of crashing if the lifespan hasn't finished loading
     weights yet (which can happen if ``/v1/captions`` is hit during a
-    rolling restart).
+    rolling restart). Async, so FastAPI resolves it on the event loop rather
+    than in a worker thread that busy inference might be holding.
     """
     service: PredictorService | None = getattr(request.app.state, "predictor_service", None)
     if service is None:
@@ -49,11 +50,13 @@ def get_predictor_service(request: Request) -> PredictorService:
     tags=["health"],
     summary="Liveness + readiness probe",
 )
-async def healthz(
-    request: Request,
-    settings: BackendSettings = Depends(get_backend_settings),
-) -> HealthResponse:
-    """Return readiness state. Always 200 — readiness is conveyed by ``model_loaded``."""
+async def healthz(request: Request) -> HealthResponse:
+    """Return readiness state. Always 200 — readiness is conveyed by ``model_loaded``.
+
+    Runs entirely on the event loop, with no sync dependency, so it never
+    waits for a worker thread that inference might be holding.
+    """
+    settings: BackendSettings = request.app.state.backend_settings
     service: PredictorService | None = getattr(request.app.state, "predictor_service", None)
     return HealthResponse(
         status="ok" if service is not None else "loading",
