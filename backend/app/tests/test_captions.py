@@ -4,9 +4,9 @@ Covers the route's status-code contract end-to-end:
 
 * 200 — happy path, typed ``CaptionResponse`` body
 * 400 — empty file upload
-* 413 — payload above ``max_upload_bytes``
+* 413 — payload above ``max_upload_bytes``, or image dimensions above the limits
 * 415 — disallowed content type
-* 422 — bytes that the predictor cannot decode (synthetic)
+* 422 — bytes that the predictor cannot decode (synthetic, or no readable image header)
 * 503 — predictor not yet loaded
 """
 
@@ -17,6 +17,7 @@ from fastapi.testclient import TestClient
 from starlette.datastructures import UploadFile
 
 from app.tests.conftest import FakePredictorService
+from app.tests.image_bytes import encode, png_header
 
 
 def _image_field(payload: bytes, content_type: str = "image/jpeg", name: str = "a.jpg"):
@@ -114,6 +115,44 @@ def test_captions_returns_422_on_decode_failure(build_client) -> None:
         response = test_client.post("/v1/captions", files=_image_field(b"\xff\xd8junk"))
     assert response.status_code == 422
     assert "synthetic decode failure" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(("fmt", "content_type"), [("JPEG", "image/jpeg"), ("PNG", "image/png")])
+def test_captions_accepts_a_real_image_within_the_dimension_limits(
+    build_client, fmt: str, content_type: str
+) -> None:
+    service = FakePredictorService(check_dimensions=True, max_upload_bytes=64 * 1024)
+    payload = encode(fmt)
+    with build_client(service) as test_client:
+        response = test_client.post("/v1/captions", files=_image_field(payload, content_type))
+    assert response.status_code == 200
+    assert service.calls == [payload]
+
+
+def test_captions_returns_413_when_image_dimensions_exceed_the_limits(build_client) -> None:
+    # A 10000x5000 header in under 100 bytes: far below the byte limit.
+    service = FakePredictorService(check_dimensions=True)
+    payload = png_header(10_000, 5_000)
+    assert len(payload) < service.max_upload_bytes
+    with build_client(service) as test_client:
+        response = test_client.post(
+            "/v1/captions", files=_image_field(payload, "image/png", "big.png")
+        )
+    assert response.status_code == 413
+    assert response.json()["detail"] == (
+        "Image dimensions exceed the limit of 16384 pixels per side "
+        "and 40,000,000 pixels in total."
+    )
+
+
+def test_captions_returns_422_for_bytes_without_an_image_header(build_client) -> None:
+    service = FakePredictorService(check_dimensions=True)
+    with build_client(service) as test_client:
+        response = test_client.post("/v1/captions", files=_image_field(b"\xff\xd8junk"))
+    assert response.status_code == 422
+    assert response.json()["detail"] == (
+        "Could not decode image bytes: expected a JPEG, PNG or BMP image."
+    )
 
 
 def test_captions_returns_503_when_predictor_not_loaded(

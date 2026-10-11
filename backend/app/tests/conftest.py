@@ -25,7 +25,7 @@ from fastapi.testclient import TestClient
 from app.api.routes import router
 from app.core.config import BackendSettings
 from app.core.logging import RequestContextMiddleware, configure_app_logging
-from app.utils.image import ImageDecodeError
+from app.utils.image import ImageDecodeError, check_image_dimensions
 
 configure_app_logging()
 
@@ -42,6 +42,7 @@ class FakePredictorService:
         model_version: str = "test-v0",
         max_upload_bytes: int = 1024,
         raise_decode_error: bool = False,
+        check_dimensions: bool = False,
     ) -> None:
         self.model_version = model_version
         self.decode_strategy = decode_strategy
@@ -49,12 +50,16 @@ class FakePredictorService:
         self._caption = caption
         self._latency_ms = latency_ms
         self._raise = raise_decode_error
+        self._check_dimensions = check_dimensions
         self.calls: list[bytes] = []
 
     async def caption_image_bytes(self, image_bytes: bytes) -> tuple[str, float]:
         self.calls.append(image_bytes)
         if self._raise:
             raise ImageDecodeError("synthetic decode failure")
+        if self._check_dimensions:
+            # The real header guard that ``bytes_to_tensor`` runs first, without TF.
+            check_image_dimensions(image_bytes)
         return self._caption, self._latency_ms
 
 
