@@ -5,6 +5,7 @@ These are TF-dependent and slow to import; pytest auto-skips if TF is missing.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
@@ -47,6 +48,40 @@ def test_save_load_round_trip_matches_original(
     ids_a = tok.encode([tiny_caption_corpus[0]]).numpy().tolist()
     ids_b = loaded.encode([tiny_caption_corpus[0]]).numpy().tolist()
     assert ids_a == ids_b
+
+
+def test_json_and_pickle_loads_map_every_token_to_the_same_id(
+    tiny_caption_corpus: list[str], tmp_path: Path
+) -> None:
+    """``load`` now reads ``vocab.json``; it must build what the old pickle path built."""
+    tok = CaptionTokenizer(vocab_size=200, max_length=20)
+    tok.fit(tiny_caption_corpus)
+    both = tmp_path / "both"
+    tok.save(both)
+    pickle_only = tmp_path / "pickle_only"
+    pickle_only.mkdir()
+    shutil.copy(both / VOCAB_PICKLE_FILENAME, pickle_only / VOCAB_PICKLE_FILENAME)
+
+    from_json = CaptionTokenizer.load(both, vocab_size=200, max_length=20)
+    from_pickle = CaptionTokenizer.load(pickle_only, vocab_size=200, max_length=20)
+
+    vocab = tok.vocabulary
+    assert from_json.vocabulary == from_pickle.vocabulary == vocab
+    for loaded in (from_json, from_pickle):
+        assert [loaded.word_to_id(word) for word in vocab] == list(range(len(vocab)))
+        assert [loaded.decode_id(idx) for idx in range(len(vocab))] == vocab
+    ids_json = from_json.encode(tiny_caption_corpus).numpy().tolist()
+    ids_pickle = from_pickle.encode(tiny_caption_corpus).numpy().tolist()
+    assert ids_json == ids_pickle == tok.encode(tiny_caption_corpus).numpy().tolist()
+
+
+def test_load_validates_before_building_layers(tmp_artifacts_dir: Path) -> None:
+    """Without the check, TextVectorization would accept this list and shift every id by two."""
+    tmp_artifacts_dir.mkdir()
+    (tmp_artifacts_dir / VOCAB_JSON_FILENAME).write_text('["a", "dog"]', encoding="utf-8")
+
+    with pytest.raises(ValueError, match="padding and OOV tokens"):
+        CaptionTokenizer.load(tmp_artifacts_dir, vocab_size=200, max_length=20)
 
 
 def test_unfitted_tokenizer_raises(tmp_artifacts_dir: Path) -> None:

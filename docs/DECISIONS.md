@@ -422,3 +422,21 @@ Format: **Decision · Why · Evidence**.
   - Pushes send the whole build context each time (83 text files, well under 1 MB), since the snapshot shares no commit with the Space.
   - A new Dockerfile `COPY` source must be added to `BUILD_CONTEXT`; `test_deploy_scope.py` fails until it is.
 - **Evidence:** `scripts/space_snapshot.py`, `scripts/deploy_scope.py`, `.github/workflows/deploy-backend.yml`, `tests/unit/test_space_snapshot.py`, `tests/unit/test_deploy_scope.py`; failed deploy runs `38059566436` (`9a73edd`) and `38061078528` (`a0d8c89`), both "Your push was rejected because it contains binary files" naming the two demo files; TASK-025 in `TASKS.md`; ADR-017, ADR-027, ADR-028.
+
+### ADR-032 — Hub weights download by commit id, and the vocabulary loads from validated JSON (refines ADR-007, amends ADR-018)
+- **Decision:**
+  - `resolve_weights` never sends a branch or tag to the Hub. `BACKEND_WEIGHTS_HUB_REVISION` must be a full 40-character commit id, or a tag that `PINNED_HUB_REVISIONS` (`backend/app/services/weights_loader.py`) maps to the commit it named when it was evaluated and deployed: `v1.0.0` → `d917a47…`, `v2.0.0` → `59d93b4…`. Anything else stops startup before any download.
+  - Only the weights file and `vocab.json` are downloaded. A commit missing either stops startup, naming the file.
+  - `CaptionTokenizer.load` reads `vocab.json` first, through `read_vocabulary`, which requires a list of strings with `""` and `[UNK]` at ids 0 and 1, no repeats and at most `vocabulary_size` entries. A pickle is read only where there's no JSON file, by an unpickler that refuses every global except `numpy.dtype` and `numpy.core.multiarray.scalar`. `save` still writes both files.
+  - ADR-018 still holds: both Space variables move together. When the revision is a commit id, `BACKEND_MODEL_VERSION` is the tag that names it.
+- **Why:**
+  - ADR-007 made published tags immutable by policy only. The Hub lets a tag or branch be moved, and the Space reads its variables at every restart, so the served model could change with no change in git or on the Space. A commit id can't be moved.
+  - Pinning the published tags in code keeps the Space's current `v2.0.0` working, so nothing has to change on the Space before this deploys, and what each tag means is reviewed in git.
+  - Serving needs two files. Every boot downloaded `vocab.pkl` and unpickled it, and unpickling runs whatever the file names: Hub `v2.0.0`'s pickle names NumPy globals. The `vocab.json` beside it holds the same list in the same order (checked at both published commits, and through the real model's captions), and parsing JSON can't run code.
+  - The validation catches what TextVectorization doesn't: a list without the two reserved tokens loads, but every id shifts by two and captions decode to the wrong words.
+- **Consequences:**
+  - A new tag needs its line in `PINNED_HUB_REVISIONS`, deployed before the Space variables name it, or the variable set to the commit id (runbook § 3).
+  - Every served revision must contain `vocab.json`. `CaptionTokenizer.save` writes it, and both published revisions have it.
+  - Boot no longer downloads `vocab.pkl`, `README.md` or `.gitattributes`.
+  - Downloaded bytes aren't hashed at boot. The commit id fixes which files are served; their bytes rest on the Hub and TLS.
+- **Evidence:** `backend/app/services/weights_loader.py`, `src/captioning/preprocessing/tokenizer.py`, `backend/app/tests/test_weights_loader.py`, `tests/unit/test_tokenizer_vocabulary.py`, `tests/unit/test_tokenizer.py`; Hub API on 2026-10-12 (tags, commits, git blob ids and LFS SHA-256s); TASK-028 in `TASKS.md`; ADR-007, ADR-018.

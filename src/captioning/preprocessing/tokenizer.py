@@ -10,9 +10,12 @@ Why a wrapper instead of using the Keras layer directly?
 2. **Persistence.** The notebook saves the *vocabulary list* with pickle, but
    loading requires re-instantiating a layer and calling ``set_vocabulary``.
    That ceremony belongs inside the wrapper, not at every call site.
-3. **A JSON sidecar.** Pickle is fast but opaque and risky to load from
-   untrusted sources. We additionally write a ``vocab.json`` file (one token
+3. **A JSON sidecar.** Pickle is fast but opaque, and loading one can run
+   code. We additionally write a ``vocab.json`` file (a JSON array, one token
    per line, UTF-8) so humans and other tools can inspect the vocabulary.
+   ``load`` reads and validates that file first. It reads a pickle only when
+   there is no JSON file, and refuses any pickle that names a global other
+   than the two NumPy uses to rebuild string scalars.
 
 The wrapper preserves the notebook's behaviour exactly: ``standardize=None``,
 ``output_sequence_length`` defaults to ``max_length``, and ``encode`` accepts
@@ -26,9 +29,108 @@ import json
 import pickle
 from collections.abc import Iterable
 from pathlib import Path
+from typing import Any
 
 VOCAB_PICKLE_FILENAME = "vocab.pkl"
 VOCAB_JSON_FILENAME = "vocab.json"
+
+# TextVectorization's padding and OOV tokens. ``get_vocabulary()`` returns them
+# at ids 0 and 1, so every saved vocabulary starts with them.
+_RESERVED_TOKENS = ("", "[UNK]")
+
+# The only globals a vocabulary pickle may name. The notebook pickles
+# ``get_vocabulary()``, whose entries can be ``numpy.str_``, and unpickling
+# those needs NumPy's dtype and scalar reconstructor. Neither calls arbitrary
+# code: they only build a dtype and a scalar from the pickled values.
+_ALLOWED_PICKLE_GLOBALS = frozenset({("numpy", "dtype"), ("numpy.core.multiarray", "scalar")})
+
+
+class _VocabularyUnpickler(pickle.Unpickler):
+    """Unpickler that refuses every global outside ``_ALLOWED_PICKLE_GLOBALS``."""
+
+    def find_class(self, module: str, name: str) -> Any:
+        if (module, name) not in _ALLOWED_PICKLE_GLOBALS:
+            raise pickle.UnpicklingError(f"refused global {module}.{name}")
+        return super().find_class(module, name)
+
+
+def read_vocabulary(directory: str | Path, vocab_size: int) -> list[str]:
+    """Read and validate a saved vocabulary list, without importing TensorFlow.
+
+    ``vocab.json`` wins when both files exist. ``vocab.pkl`` is read only when
+    there is no JSON file, through ``_VocabularyUnpickler``.
+
+    Args:
+        directory: Directory containing ``vocab.json`` or ``vocab.pkl``.
+        vocab_size: Maximum vocabulary size the model was built with.
+
+    Returns:
+        The tokens in id order, as plain ``str``.
+
+    Raises:
+        FileNotFoundError: Neither file exists.
+        ValueError: The file can't be parsed, or its list isn't a vocabulary
+            this tokenizer could have saved.
+    """
+    directory = Path(directory)
+    js = directory / VOCAB_JSON_FILENAME
+    pkl = directory / VOCAB_PICKLE_FILENAME
+    if js.is_file():
+        source = js
+        try:
+            with js.open(encoding="utf-8") as f:
+                vocab = json.load(f)
+        except ValueError as exc:  # JSONDecodeError, UnicodeDecodeError
+            raise ValueError(f"Could not parse tokenizer vocabulary {js}: {exc}") from exc
+    elif pkl.is_file():
+        source = pkl
+        try:
+            with pkl.open("rb") as f:
+                vocab = _VocabularyUnpickler(f).load()
+        except Exception as exc:  # malformed pickles raise many exception types
+            raise ValueError(f"Could not read tokenizer vocabulary {pkl}: {exc}") from exc
+    else:
+        raise FileNotFoundError(
+            f"No tokenizer vocabulary found in {directory!s}. "
+            f"Expected '{VOCAB_JSON_FILENAME}' (preferred) or "
+            f"'{VOCAB_PICKLE_FILENAME}'. Train the model with "
+            "`python -m scripts.train --config configs/base.yaml` to "
+            "produce the artefacts, or point BACKEND_TOKENIZER_DIR at a "
+            "directory that contains them."
+        )
+    return _validate_vocabulary(vocab, source, vocab_size)
+
+
+def _validate_vocabulary(vocab: object, source: Path, vocab_size: int) -> list[str]:
+    """Return ``vocab`` as plain strings, or raise ``ValueError`` naming ``source``."""
+    if not isinstance(vocab, list):
+        raise ValueError(
+            f"Tokenizer vocabulary {source} must be a list of strings, "
+            f"got {type(vocab).__name__}."
+        )
+    for index, token in enumerate(vocab):
+        if not isinstance(token, str):
+            raise ValueError(
+                f"Tokenizer vocabulary {source} has a non-string entry at id {index}: "
+                f"{type(token).__name__}."
+            )
+    tokens = [str(token) for token in vocab]  # numpy.str_ -> str
+    if tuple(tokens[:2]) != _RESERVED_TOKENS:
+        raise ValueError(
+            f"Tokenizer vocabulary {source} must start with the padding and OOV tokens "
+            f"{list(_RESERVED_TOKENS)!r}, got {tokens[:2]!r}."
+        )
+    seen: set[str] = set()
+    for token in tokens:
+        if token in seen:
+            raise ValueError(f"Tokenizer vocabulary {source} repeats the token {token!r}.")
+        seen.add(token)
+    if len(tokens) > vocab_size:
+        raise ValueError(
+            f"Tokenizer vocabulary {source} has {len(tokens)} entries, "
+            f"more than vocab_size={vocab_size}."
+        )
+    return tokens
 
 
 class CaptionTokenizer:
@@ -153,33 +255,21 @@ class CaptionTokenizer:
         """Load a previously saved vocabulary into a new tokenizer.
 
         Args:
-            directory: Directory containing ``vocab.pkl`` (or ``vocab.json``).
+            directory: Directory containing ``vocab.json`` (preferred) or
+                ``vocab.pkl``.
             vocab_size: Maximum vocabulary size — must match the saved vocab.
             max_length: Pad/truncate length — must match training-time value.
 
         Returns:
             A fitted ``CaptionTokenizer`` ready to ``encode`` and ``decode_id``.
-        """
-        import tensorflow as tf
 
-        directory = Path(directory)
-        pkl = directory / VOCAB_PICKLE_FILENAME
-        js = directory / VOCAB_JSON_FILENAME
-        if pkl.is_file():
-            with pkl.open("rb") as f:
-                vocab = pickle.load(f)
-        elif js.is_file():
-            with js.open(encoding="utf-8") as f:
-                vocab = json.load(f)
-        else:
-            raise FileNotFoundError(
-                f"No tokenizer vocabulary found in {directory!s}. "
-                f"Expected '{VOCAB_PICKLE_FILENAME}' (preferred) or "
-                f"'{VOCAB_JSON_FILENAME}'. Train the model with "
-                "`python -m scripts.train --config configs/base.yaml` to "
-                "produce the artefacts, or point BACKEND_TOKENIZER_DIR at a "
-                "directory that contains them."
-            )
+        Raises:
+            FileNotFoundError: Neither vocabulary file exists.
+            ValueError: The vocabulary is malformed (see ``read_vocabulary``).
+        """
+        vocab = read_vocabulary(directory, vocab_size)
+
+        import tensorflow as tf
 
         tok = cls(vocab_size=vocab_size, max_length=max_length)
         layer = tf.keras.layers.TextVectorization(

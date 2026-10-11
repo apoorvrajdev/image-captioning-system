@@ -108,8 +108,14 @@ To promote a new checkpoint after this, set **both** Space variables to the new 
 - **Why both:** they are independent settings in `BackendSettings` (`backend/app/core/config.py`). The code never
   derives `model_version` from the revision, so bumping only the revision serves new weights under the old label.
   That is exactly the mismatch TASK-004 found.
+- **Pin the tag first (ADR-032):** the backend downloads by commit id, never by tag. A tag works only once
+  `PINNED_HUB_REVISIONS` in `backend/app/services/weights_loader.py` maps it to its commit, so add that line (commit
+  id from `HfApi().model_info(repo, revision=tag).sha`) and let it deploy before changing the variables. The
+  alternative is setting `BACKEND_WEIGHTS_HUB_REVISION` to the full commit id, with `BACKEND_MODEL_VERSION` still the
+  tag. Any other value, such as a branch or an unpinned tag, stops the Space at startup. The commit must contain the
+  weights file and `vocab.json`; nothing else is downloaded.
 - **When they take effect:** settings are read once per process, so the new values apply when the Space restarts.
-  No code change or deploy is required.
+  Switching between pinned tags (or commit ids) needs no code change or deploy.
 - **Then verify:** `/healthz` must report `model_loaded: true` and a `model_version` equal to the new tag.
 
 ---
@@ -125,8 +131,8 @@ To promote a new checkpoint after this, set **both** Space variables to the new 
    | Name | Value |
    |---|---|
    | `BACKEND_WEIGHTS_HUB_REPO` | `apoorvrajdev/captioning-inceptionv3-transformer` |
-   | `BACKEND_WEIGHTS_HUB_REVISION` | `v2.0.0` |
-   | `BACKEND_MODEL_VERSION` | `v2.0.0`. Must always equal `BACKEND_WEIGHTS_HUB_REVISION` (§3) |
+   | `BACKEND_WEIGHTS_HUB_REVISION` | `v2.0.0`, which the backend downloads as commit `59d93b4…`. A pinned tag or a full commit id (§3) |
+   | `BACKEND_MODEL_VERSION` | `v2.0.0`. Must always be the tag `BACKEND_WEIGHTS_HUB_REVISION` names or resolves to (§3) |
    | `BACKEND_WEIGHTS_HUB_FILENAME` | `model.h5` |
    | `BACKEND_WARMUP` | `true` |
    | `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` | `["https://image-captioning-system.vercel.app","http://localhost:5173","http://localhost:5174","http://127.0.0.1:5173","http://127.0.0.1:5174"]` |
@@ -279,7 +285,7 @@ open https://image-captioning-system.vercel.app  # macOS
   Space: it has no config header, so the Space would go to `CONFIG_ERROR`.
 - **Bad weights on the Hub**: set the Space's
   `BACKEND_WEIGHTS_HUB_REVISION` **and** `BACKEND_MODEL_VERSION` back to the
-  same previous tag (§3) and save. Space restarts in ~30 s with the previous
+  same previous tag (§3; `v1.0.0` and `v2.0.0` are pinned) and save. Space restarts in ~30 s with the previous
   weights. Verify that `/healthz` reports that tag.
 - **Bad frontend on Vercel**: dashboard → Deployments → previous green
   deployment → "Promote to Production" (one click, no rebuild).

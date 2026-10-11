@@ -1557,3 +1557,69 @@ Not verified:
 - Behaviour under real load on the Space: memory, CPU, and whether `/healthz` stays fast while two inferences compete
   for 2 vCPUs. Runbook § 9's status-badge flicker happens with one inference in flight, when 39 worker threads are
   free, so it isn't thread starvation, and this change may not remove it.
+
+### TASK-028 — Load Hub weights by commit id and the vocabulary from validated JSON            [status: in-progress]
+Area: inference-api · ml-core
+Goal: production loads exactly the evaluated model and vocabulary, fetched by an immutable commit id, without
+unpickling a downloaded file.
+Problem (found by code inspection; the pickle lead came from the paused audit's triage):
+- `resolve_weights` passed `BACKEND_WEIGHTS_HUB_REVISION` straight to `snapshot_download`. On the Space that is
+  `v2.0.0`, a tag; the code default is `main`, a branch. Either can be moved to another commit, which would change the
+  served model at the next restart with no change in git or the Space.
+- `snapshot_download` had no file filter, so every boot fetched the whole repo, `vocab.pkl` and `README.md` included.
+- `CaptionTokenizer.load` preferred `vocab.pkl` and `pickle.load`ed it. Hub `v2.0.0`'s pickle (995,160 bytes) holds
+  `numpy.str_` entries, so it names `numpy.dtype` and `numpy.core.multiarray.scalar`. A `vocab.json` sat beside it.
+Acceptance criteria:
+- GIVEN the Space's `v2.0.0` THEN the download uses commit `59d93b4…`, never the tag. GIVEN a full 40-character
+  commit id THEN it's used as given. GIVEN a branch, an unpinned tag, or a short or upper-case id THEN startup fails
+  before any download, with a message naming the fix.
+- Only the weights file and `vocab.json` are requested. Either missing at the commit → startup fails, naming it.
+- `vocab.json` is read first and validated. `vocab.pkl` is read only where there's no JSON file, through an
+  unpickler that refuses every global but NumPy's two.
+- For `v2.0.0`: the same vocabulary, token ids and captions as before.
+- Unchanged: the model and weights, the Hub repo and tags, the Space variables, the API contract, the TASK-026 guard,
+  TASK-027 admission, the deploy gates, parity.
+Out of scope: hashing downloaded files at boot; publishing Hub revisions; changing Space variables.
+Outcome so far (local, 2026-10-12):
+- Hub facts (read-only API):
+  - Tags `v1.0.0` and `v2.0.0` are annotated tag objects for commits `d917a47…` and `59d93b4…`. `main` is also at
+    `59d93b4`.
+  - At both commits, `vocab.json` matched its git blob id and `vocab.pkl` its LFS SHA-256. The two files hold the
+    same list in the same order: 14,927 tokens at `v2.0.0` and 52 at `v1.0.0`. The repo's `models/v1.0.0/vocab.json`
+    equals the latter.
+- `resolve_hub_commit` (`backend/app/services/weights_loader.py`):
+  - a full lower-case commit id passes as given;
+  - `PINNED_HUB_REVISIONS` maps the production repo's two published tags to those commits;
+  - anything else raises `ValueError`.
+  - The Space keeps `BACKEND_WEIGHTS_HUB_REVISION=v2.0.0`, so no variable has to change before this deploys.
+- `resolve_weights` downloads `allow_patterns=[weights_hub_filename, "vocab.json"]` at the commit. It raises
+  `FileNotFoundError` naming any file the commit lacks. `vocab.pkl` is no longer fetched.
+- `read_vocabulary` (`src/captioning/preprocessing/tokenizer.py`, TensorFlow-free):
+  - reads JSON first, and pickle-only legacy directories through `_VocabularyUnpickler`;
+  - requires a list of strings with `""` and `[UNK]` at ids 0 and 1, no repeats, and at most `vocabulary_size`
+    entries. Without that check, TextVectorization accepts a list missing the two tokens and every id shifts by two.
+  - Failures raise `ValueError` naming the file. `CaptionTokenizer.load` calls it before importing TensorFlow, and
+    `save` still writes both files.
+- Checked against the real artifacts, offline from the local Hub cache:
+  - The production path loads `model.h5` (SHA-256 `74963a3f…`) and `vocab.json` from `59d93b4`.
+  - The old loader (`HEAD`, `pickle.load`), the new JSON path and the restricted pickle path build the same 14,927
+    word→id and id→word mappings and the same `encode` output.
+  - Old and new predictors gave the same greedy captions for three local images.
+  - The real `snapshot_download`, with per-file downloads recorded instead of performed, asked only for `model.h5`
+    and `vocab.json` at `59d93b4`.
+- Tests, 37 new:
+  - `test_weights_loader.py`, 12: the pinned tag, seven refused revisions, three missing-file cases, the pin table.
+    The four existing tests now use a commit id, keep their assertions, and also check the two-file request.
+  - `tests/unit/test_tokenizer_vocabulary.py`, 23, TensorFlow-free: JSON wins without reading the pickle, plain and
+    `numpy.str_` pickles, a refused global, six inconsistent lists through both formats, the size limit, unparseable
+    JSON, a truncated pickle, no file.
+  - `test_tokenizer.py`, 2: JSON and pickle loads build identical lookups, and `load` validates before building
+    layers.
+  - Each of seven deliberate regressions failed a test.
+- Verification, locally: backend 80 passed (TensorFlow not imported); full suite 509 passed; ruff and mypy clean;
+  parity audit 4/4; notebook hash unchanged.
+- ADR-032.
+Not verified:
+- CI, the Space booting with the two-file download, and the deploy's smoke test. They run only after the push.
+- Downloaded files aren't hashed at boot. The commit id fixes which files are served; their bytes rest on the Hub and
+  TLS (`SECURITY.md` § Known gaps).

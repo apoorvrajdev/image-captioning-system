@@ -18,8 +18,10 @@ Decoding (`inference/`) → see `inference-api`. Metrics → see `evaluation`.
 - GIVEN a new training or decoding improvement WHEN added THEN it's behind a config flag whose default preserves notebook behaviour (pattern: `TrainConfig` stability flags, `configs/train/stabilized.yaml`).
 - GIVEN any stochastic code path WHEN run twice with the same `train.seed` THEN results are identical (`set_global_seed`).
 - GIVEN a tokenizer save → load round-trip THEN vocab and encodings are identical (pickle + JSON sidecar).
+- GIVEN a directory with `vocab.json` WHEN `CaptionTokenizer.load` runs THEN it reads the validated JSON and never opens `vocab.pkl`; a pickle is read only where there's no JSON, through an unpickler that refuses every global but `numpy.dtype` and `numpy.core.multiarray.scalar` (ADR-032).
 
 ## Edge cases (each needs a test)
+- Vocabulary loading: unparseable JSON, a non-list, a non-string entry, `""`/`[UNK]` not at ids 0–1, a repeated token, more than `vocabulary_size` entries, a truncated pickle, a pickle naming another global, no file (`test_tokenizer_vocabulary.py`, TensorFlow-free); JSON and pickle loads build identical lookups (`test_tokenizer.py`).
 - Config validators: out-of-range split, label smoothing, warmup, beam width, repetition penalty.
 - Image preprocessing: grayscale/RGBA input → 3 channels, 299×299, InceptionV3 normalisation.
 - Caption preprocessing: punctuation, extra whitespace, casing, `[start]`/`[end]` wrapping.

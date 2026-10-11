@@ -13,7 +13,7 @@ description: Acceptance criteria and definition of done for CI/CD, the Docker im
 ## Topology (current)
 GitHub `main` → `ci.yml` (ruff+mypy · pytest 3.10/3.11 + parity audit · notebook freeze · pre-commit · security: pip-audit gate + full-history gitleaks · frontend lint+build+Playwright E2E+`npm audit --omit=dev`)
 → on green `deploy-backend.yml` force-pushes a single-commit snapshot of the tested commit's build context to HF Space `apoorvrajdev/image-captioning-api` (Docker SDK, cpu-basic, port 7860, 1 worker; ADR-030)
-→ lifespan pulls weights from HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` at a pinned tag.
+→ lifespan pulls `model.h5` and `vocab.json` from HF Hub `apoorvrajdev/captioning-inceptionv3-transformer` at the commit a pinned tag names (ADR-032).
 Vercel's Git integration builds `frontend/` with `VITE_API_BASE`. Prod CORS comes from the `CAPTIONING__SERVE__CORS_ALLOWED_ORIGINS` Space variable.
 
 ## Expected behaviour

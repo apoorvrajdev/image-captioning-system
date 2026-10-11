@@ -15,7 +15,7 @@ Override any field via environment variable, prefixed with ``BACKEND_``::
     BACKEND_MODEL_VERSION=v1.0.0
     BACKEND_WARMUP=true
     BACKEND_WEIGHTS_HUB_REPO=your-username/captioning-weights
-    BACKEND_WEIGHTS_HUB_REVISION=v1.0.0
+    BACKEND_WEIGHTS_HUB_REVISION=<full 40-character commit id>
 """
 
 from __future__ import annotations
@@ -41,7 +41,7 @@ class BackendSettings(BaseSettings):
     tokenizer_dir: Path = Field(
         default=Path("models/v1.0.0"),
         description=(
-            "Directory containing vocab.pkl / vocab.json artifacts "
+            "Directory containing vocab.json (or a legacy vocab.pkl) "
             "(used when weights_hub_repo is unset)."
         ),
     )
@@ -64,7 +64,8 @@ class BackendSettings(BaseSettings):
 
     # ---- HuggingFace Hub weights pull (WS-A4) -------------------------------
     # When ``weights_hub_repo`` is set, ``lifespan`` calls
-    # ``huggingface_hub.snapshot_download`` and resolves ``weights_path`` and
+    # ``huggingface_hub.snapshot_download`` for the weights file and vocab.json
+    # at an immutable commit, and resolves ``weights_path`` and
     # ``tokenizer_dir`` to paths inside the downloaded snapshot. This lets the
     # Docker image stay small and lets us rotate weights without rebuilding.
     weights_hub_repo: str | None = Field(
@@ -73,7 +74,11 @@ class BackendSettings(BaseSettings):
     )
     weights_hub_revision: str = Field(
         default="main",
-        description="Git ref/tag/commit to pin (recommended: pin a tag like 'v1.0.0').",
+        description=(
+            "Full 40-character Hub commit id, or a tag pinned in "
+            "app.services.weights_loader.PINNED_HUB_REVISIONS. Any other value, "
+            "including this 'main' default, is refused when weights_hub_repo is set."
+        ),
     )
     weights_hub_filename: str = Field(
         default="model.h5",

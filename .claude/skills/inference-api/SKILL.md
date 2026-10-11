@@ -20,7 +20,7 @@ Wire contract consumers: `frontend/src/services/api.js`, `CaptionResult.jsx`, `S
 - Uploaded bytes pass through `bytes_to_tensor` → `preprocess_image_tensor` (the training function). No other preprocessing path.
 - One `CaptionPredictor` per process, built in the lifespan, `warmup()` when `BACKEND_WARMUP=true`, TF work via `anyio.to_thread.run_sync`.
 - At most `MAX_CONCURRENT_INFERENCES` (2) requests decode or predict at once. The next → 503 `Retry-After: 2` at once, never queued. A slot frees only when its worker thread has finished, even if the caller was cancelled. `/healthz` and `get_predictor_service` stay async, so neither needs a worker thread (TASK-027).
-- `BACKEND_WEIGHTS_HUB_REPO` set → `resolve_weights` uses `snapshot_download` at the pinned revision. Unset → local paths.
+- `BACKEND_WEIGHTS_HUB_REPO` set → `resolve_weights` turns `BACKEND_WEIGHTS_HUB_REVISION` into a commit id (a full 40-character id as given, or a tag in `PINNED_HUB_REVISIONS`; anything else → `ValueError` before any download) and calls `snapshot_download` at that commit for the weights file and `vocab.json` only. Either missing → `FileNotFoundError` naming it. Unset → local paths (ADR-032).
 
 ## Edge cases (each needs a test)
 - Every status code above (existing: `backend/app/tests/test_captions.py`, `test_health.py`).
@@ -28,7 +28,7 @@ Wire contract consumers: `frontend/src/services/api.js`, `CaptionResult.jsx`, `S
 - Admission: a free slot admits; a full house → immediate 503 with nothing decoded; slots come back after success, a predict error and a decode error; a cancelled request holds its slot until its thread ends; `/healthz` → 200 while inference holds every worker thread (`test_inference_admission.py`, gated worker threads, no sleeps).
 - Pixel limits: exactly at the limits passes; one over on either side or the product → 413; zero, truncated, malformed or non-JPEG/PNG/BMP headers → 422; the guard runs before `tf.io.decode_image` (`test_image_guard.py` with header-only bytes, `tests/unit/test_upload_image_decode.py`).
 - Incoming `x-request-id` is echoed. Missing → a generated UUID.
-- Weights loader: local vs hub mode, downloader args incl. revision, cache dir, custom filename (`test_weights_loader.py`, injected downloader, no network). Not yet covered: download failure → startup error.
+- Weights loader: local vs hub mode, downloader args incl. the commit id and `allow_patterns`, cache dir, custom filename, a pinned tag → its commit, refused revisions (branch, unpinned tag, short or upper-case id, another repo's tag), a commit missing a required file (`test_weights_loader.py`, injected downloader, no network). Not yet covered: a network failure during download → startup error.
 - Beam decoder: length penalty, repetition penalty, n-gram blocking, EOS termination, detokenise (`tests/unit/test_beam_decoder.py`). Not yet covered: beam width 1 ≡ greedy.
 
 ## Required tests

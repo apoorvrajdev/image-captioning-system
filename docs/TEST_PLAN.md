@@ -27,7 +27,9 @@ Env overrides work at any depth.
 
 **Preprocessing and tokenizer.** Deterministic text cleanup, 299×299×3 InceptionV3-normalised tensors,
 and a lossless tokenizer save/load round-trip (`test_caption_preprocessing.py`,
-`test_image_preprocessing.py`, `test_tokenizer.py`). Splits are image-level (`test_splits.py`).
+`test_image_preprocessing.py`, `test_tokenizer.py`). Loading reads `vocab.json` before any pickle, builds the same
+ids either way, rejects malformed or inconsistent vocabularies, and refuses a pickle that names any global but
+NumPy's two (`test_tokenizer_vocabulary.py`, TensorFlow-free). Splits are image-level (`test_splits.py`).
 
 **Training recipe.** Label smoothing, warmup + cosine schedule, and flag defaults that keep parity
 (`test_training_stability.py`). Full training is owner-run on Kaggle
@@ -45,8 +47,10 @@ is over the pixel limits gets a 413 before TensorFlow decodes it, and other byte
 check (`tests/unit/test_upload_image_decode.py`). At most two requests decode or predict at once: the next gets
 an immediate 503 with `Retry-After`, slots come back after success and after errors, a cancelled request holds its
 slot until its worker thread ends, and `/healthz` answers while inference holds every worker thread
-(`test_inference_admission.py`, with gated worker threads rather than sleeps). Weights resolve from
-Hub or local paths offline (`test_weights_loader.py`).
+(`test_inference_admission.py`, with gated worker threads rather than sleeps). Weights resolve from local paths,
+or from the Hub by commit id only: a pinned tag resolves to its commit, branches and unpinned tags are refused
+before any download, only the weights file and `vocab.json` are requested, and a commit missing either fails by name
+(`test_weights_loader.py`, offline).
 
 **Supply chain (TASK-021, ADR-026).** The pip-audit gate passes baselined findings, and fails on a new finding, a
 version change, an alias standing in for an id, a stale entry, an unaudited dependency or malformed input. The committed baseline covers only the
