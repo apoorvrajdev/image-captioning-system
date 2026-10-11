@@ -39,7 +39,10 @@ detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
 **API contract.** `/healthz` always 200 with readiness in the body. `/v1/captions` returns
 200/400/413/415/422/503 exactly as documented, and `x-request-id` is echoed or generated
 (`backend/app/tests/test_captions.py`, `test_health.py`). A body over the upload limit plus multipart framing gets
-the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). Weights resolve from
+the same 413 before it's buffered, with or without `Content-Length` (`test_body_size_limit.py`). An image whose header
+is over the pixel limits gets a 413 before TensorFlow decodes it, and other bytes, GIF included, get a 422
+(`test_image_guard.py`, using header-only bytes). An image within the limits produces the same tensor as before the
+check (`tests/unit/test_upload_image_decode.py`). Weights resolve from
 Hub or local paths offline (`test_weights_loader.py`).
 
 **Supply chain (TASK-021, ADR-026).** The pip-audit gate passes baselined findings, and fails on a new finding, a
