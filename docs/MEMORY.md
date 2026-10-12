@@ -49,11 +49,10 @@ _Last updated: 2026-10-12_
   TASK-028 is done and deployed (2026-10-12, ADR-032): the backend downloads Hub weights by commit id (`v2.0.0`
   resolves to `59d93b4` through `PINNED_HUB_REVISIONS`), fetches only `model.h5` and `vocab.json`, and loads the
   vocabulary from validated JSON instead of unpickling `vocab.pkl`.
-  TASK-029 is implemented and verified locally, not yet released (2026-10-12, ADR-033). Both downloaded files must
+  TASK-029 is done and deployed (2026-10-12, ADR-033): both downloaded files must
   match the SHA-256 that `PINNED_ARTIFACT_SHA256` records for their commit before the model or tokenizer reads
   them. A mismatch, or a commit without digests, stops startup. `v1.0.0` and `v2.0.0` are pinned.
-- **Current task:** TASK-029 is in progress: it is committed locally, and CI, the deploy and the smoke test are still
-  to run. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
+- **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
 
@@ -64,6 +63,7 @@ _Last updated: 2026-10-12_
 | `pytest tests backend/app/tests` | 535 passed on 2026-10-12, after TASK-029 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
 | ruff lint + format check | clean (119 files, 2026-10-12) |
 | mypy (pyproject config, `strict = false`) | 0 errors, 93 files (2026-10-12) |
+| `deploy-backend.yml` (run `38186253634`, automatic, `ee274d7`, TASK-029) | **success**: Space commit `0efce5f`, healthy `v2.0.0`, real caption HTTP 200 (956 ms inference); recorded as deployment `7003655557`. CI run `38186184538` (all 7 jobs, 535 passed on 3.10 and 3.11) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38182649703`, automatic, `ce809e1`, TASK-028) | **success**: Space commit `7aa2f75`, healthy `v2.0.0`, real caption HTTP 200 (879 ms inference); recorded as deployment `7003071374`. CI run `38182565648` (all 7 jobs, 509 passed on 3.10 and 3.11) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38175703769`, automatic, `94da607`, TASK-027) | **success**: Space commit `1cd227e`, healthy `v2.0.0`, real caption HTTP 200 (838 ms inference); recorded as deployment `7001912793`. CI run `38175620699` (all 7 jobs) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38172676347`, automatic, `8c0c668`, TASK-026) | **success**: healthy `v2.0.0`, real caption HTTP 200; recorded as deployment `7001412142`. CI run `38172579021` (all 7 jobs) and `no-ai-attribution` green |

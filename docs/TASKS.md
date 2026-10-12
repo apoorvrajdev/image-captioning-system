@@ -1635,7 +1635,7 @@ Not verified:
   TLS (`SECURITY.md` § Known gaps).
 - No load test. The smoke test is one request.
 
-### TASK-029 — Verify downloaded model files against SHA-256 digests pinned per commit            [status: in-progress]
+### TASK-029 — Verify downloaded model files against SHA-256 digests pinned per commit            [status: done] (2026-10-12)
 Area: inference-api · deployment
 Goal: the backend never loads model bytes that differ from the bytes pinned for the served commit.
 Problem: TASK-028 fixed which commit is downloaded, but nothing checked the bytes that arrived. A corrupted or altered
@@ -1686,4 +1686,26 @@ Outcome so far (local, 2026-10-12):
 - Verification, locally: backend 106 passed (TensorFlow not imported); full suite 535 passed; ruff and mypy clean;
   parity audit 4/4; notebook hash unchanged.
 - ADR-033. Runbook § 3: a new revision needs its digests pinned, and integrity failures have their own steps.
-Not verified yet: CI, the deploy, and the post-deploy smoke test on the Space.
+Outcome (live, 2026-10-12):
+- Committed as `ee274d7`, pushed with the TASK-028 close-out `52c1955` (`ce809e1..ee274d7`).
+- CI run `38186184538`: all seven jobs passed, 535 tests and parity audit 4/4 on Python 3.10 and 3.11. pip-audit
+  found 0 new findings, gitleaks found no leaks, `npm audit` found 0 vulnerabilities. `no-ai-attribution`
+  (`38186184519`) passed.
+- Deploy run `38186253634` succeeded:
+  - it deployed because four image inputs had changed since `ce809e1`;
+  - it built Space commit `0efce5f`, which went from building to app starting to `RUNNING`, healthy on `v2.0.0`;
+  - the real caption smoke test returned HTTP 200 (9-word caption, 956 ms inference);
+  - the deploy was recorded as deployment `7003655557`.
+- Checked independently afterwards:
+  - The HF runtime API showed `RUNNING` on `0efce5f`, with no error. The public `/healthz` returned 200 with
+    `model_loaded: true`.
+  - The Space's `weights_loader.py` at `0efce5f` is byte-identical to `ee274d7`'s, with the `v2.0.0` digests.
+  - One fixed 64×64 PNG got the same caption from the live Space as from `v2.0.0` locally ("a man in a suit and tie
+    standing in a room"). `v1.0.0` gives an unrelated caption for it.
+- Model revision: this code boots only when both files match the digests pinned for one of the two pinned commits,
+  and the caption check rules out `v1.0.0`'s files. So the healthy Space verified `model.h5` and `vocab.json` against
+  `59d93b4`'s digests. That is inferred; the log line itself wasn't read.
+Not verified:
+- The Space's startup log line `weights_verified` with both digests. The run-log endpoint returns 401 without the
+  owner's Hugging Face login; the owner checks the Logs tab.
+- No load test. The smoke test is one request.
