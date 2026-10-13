@@ -36,7 +36,10 @@ NumPy's two (`test_tokenizer_vocabulary.py`, TensorFlow-free). Splits are image-
 ([`STABILIZED_TRAINING_RUNBOOK.md`](STABILIZED_TRAINING_RUNBOOK.md)) and isn't part of a code change's DoD.
 
 **Inference.** Beam-search components (length/repetition penalties, n-gram blocking, EOS termination,
-detokenisation) in `test_beam_decoder.py`. Greedy stays the default.
+detokenisation) in `test_beam_decoder.py`. Greedy stays the default. On a scripted bigram decoder, beam width 1 gives
+exactly the greedy caption at length penalties 0, 0.7 and 1. That holds when `[end]` is only the runner-up and when
+neither decoder finishes within the budget. Width 2 finds a better caption than greedy on the same fixture, so the
+fixture does tell the decoders apart (TASK-031).
 
 **API contract.** `/healthz` always 200 with readiness in the body. `/v1/captions` returns
 200/400/413/415/422/503 exactly as documented, and `x-request-id` is echoed or generated
@@ -139,5 +142,5 @@ whole check against `create_app()` with a stand-in predictor. The frontend half 
 
 ## Known gaps (not yet covered)
 
-No frontend unit tests (the SPA is covered by Playwright E2E only, Chromium only), no coverage measured in CI, no load tests, no test for beam width 1 ≡ greedy,
+No frontend unit tests (the SPA is covered by Playwright E2E only, Chromium only), no coverage measured in CI, no load tests,
 and no end-to-end lifespan test with real weights (manual smoke only).

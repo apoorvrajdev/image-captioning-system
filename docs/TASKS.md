@@ -1726,3 +1726,19 @@ Outcome (local):
   and expects the inline error, no preview and no request. With WebP put back in the SPA's list, that test fails.
 - WebP bytes sent under an allowed type still get the TASK-026 422.
 - Verification: backend 107 passed; frontend lint, build and 14 E2E tests passed.
+
+### TASK-031 — Test that beam width 1 gives the greedy caption            [status: done] (2026-10-13)
+Area: inference-api
+Goal: the documented property "`beam_width` 1 reduces to greedy" (`beam.py`) is tested, not assumed.
+Acceptance criteria:
+- With width 1 and no repetition controls, beam search returns exactly the greedy caption at length penalties 0, 0.7
+  and 1, including when `[end]` is the runner-up and when neither decoder finishes within the budget.
+- The fixture can tell the decoders apart: a wider beam beats greedy on it.
+Outcome:
+- `test_beam_decoder.py`, 10 new: a bigram decoder (next token depends on the token being read) and a whitespace
+  tokenizer drive both `generate_caption_greedy` and `generate_caption_beam`. Three scripted cases × three length
+  penalties, plus a garden-path case where width 2 returns "the dog" and greedy "a dog".
+- Two deliberate changes to `beam.py` each failed 3 of the new tests: keeping finished candidates from below the beam
+  cutoff, and not capping the active beams. No production code changed.
+- Not covered: greedy returns `[start]` when `[end]` is predicted first, where beam returns an empty string. None of the
+  500 committed greedy or beam predictions is affected, and greedy mirrors the frozen notebook.

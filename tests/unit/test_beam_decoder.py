@@ -8,6 +8,7 @@ of beam search in isolation:
     * Repetition penalty downweights seen tokens.
     * n-gram blocker forbids exact-repeat n-grams.
     * Detokeniser strips ``[start]`` / ``[end]`` and stops at ``[end]``.
+    * Beam width 1 produces exactly the greedy caption.
 
 A small fake model is used to verify end-to-end search behaviour without
 loading TensorFlow weights.
@@ -28,6 +29,7 @@ from captioning.inference.beam import (
     _length_normalised,
     generate_caption_beam,
 )
+from captioning.inference.greedy import generate_caption_greedy
 
 
 def test_length_penalty_zero_returns_raw_score() -> None:
@@ -174,3 +176,117 @@ def test_beam_search_terminates_on_eos() -> None:
         beam_width=2,
     )
     assert caption == "dog"
+
+
+# ---- Beam width 1 against greedy --------------------------------------------
+
+_VOCAB = ["", "[UNK]", "[start]", "[end]", "a", "the", "dog", "cat", "on", "grass"]
+_IDS = {word: i for i, word in enumerate(_VOCAB)}
+_MAX_LENGTH = 8
+
+
+class _WordTokenizer:
+    """Whitespace tokenizer over ``_VOCAB``, with the calls both decoders make."""
+
+    def encode(self, texts: list[str]) -> np.ndarray:
+        ids = [_IDS[word] for word in texts[0].split()][:_MAX_LENGTH]
+        return np.array([ids + [0] * (_MAX_LENGTH - len(ids))])
+
+    def decode_id(self, idx) -> str:
+        return _VOCAB[int(idx)]
+
+    def word_to_id(self, word: str) -> int:
+        return _IDS[word]
+
+
+class _BigramModel:
+    """Decoder whose next-token distribution depends on the token at each position.
+
+    Both decoders read position ``i`` after feeding ``i + 1`` tokens, so the
+    distribution follows the caption built so far, not just the step index.
+    """
+
+    def __init__(self, table: dict[str, dict[str, float]]) -> None:
+        self.table = np.full((len(_VOCAB), len(_VOCAB)), 1e-4, dtype=np.float32)
+        for prev, following in table.items():
+            for word, prob in following.items():
+                self.table[_IDS[prev], _IDS[word]] = prob
+        self.table /= self.table.sum(axis=1, keepdims=True)
+        self.cnn_model = lambda img: img
+        self.encoder = lambda x, training: x
+
+    def decoder(self, tokens, encoded, training, mask):
+        import tensorflow as tf
+
+        return tf.convert_to_tensor(self.table[np.asarray(tokens)])
+
+
+_CLEAR_PATH = {
+    "[start]": {"a": 0.9},
+    "a": {"dog": 0.8},
+    "dog": {"on": 0.7},
+    "on": {"grass": 0.8},
+    "grass": {"[end]": 0.9},
+}
+# [end] is the runner-up after "dog", and "a dog" outscores "a dog on grass" at
+# every length penalty. A search that kept finished candidates from outside the
+# beam would return the shorter caption; at width 1 it must be discarded. The
+# rows sum to about 1, so normalisation keeps these values.
+_END_AS_RUNNER_UP = {
+    "[start]": {"a": 0.9, "the": 0.0995},
+    "a": {"dog": 0.9, "cat": 0.0995},
+    "dog": {"on": 0.5, "[end]": 0.45, "cat": 0.0495},
+    "on": {"grass": 0.5, "cat": 0.4995},
+    "grass": {"[end]": 0.5, "on": 0.4995},
+}
+# No [end] is ever likely, so both decoders run out of budget.
+_NO_END = {"[start]": {"a": 0.9}, "a": {"dog": 0.9}, "dog": {"dog": 0.9}}
+
+
+@pytest.mark.parametrize("length_penalty", [0.0, 0.7, 1.0])
+@pytest.mark.parametrize(
+    ("table", "expected"),
+    [
+        (_CLEAR_PATH, "a dog on grass"),
+        (_END_AS_RUNNER_UP, "a dog on grass"),
+        (_NO_END, "a" + " dog" * (_MAX_LENGTH - 2)),
+    ],
+    ids=["clear-path", "end-as-runner-up", "no-end"],
+)
+def test_beam_width_one_matches_greedy(
+    table: dict[str, dict[str, float]], expected: str, length_penalty: float
+) -> None:
+    import tensorflow as tf
+
+    model, tokenizer = _BigramModel(table), _WordTokenizer()
+    image = tf.zeros((299, 299, 3), dtype=tf.float32)
+
+    greedy = generate_caption_greedy(model, tokenizer, image, _MAX_LENGTH)
+    beam = generate_caption_beam(
+        model, tokenizer, image, _MAX_LENGTH, beam_width=1, length_penalty=length_penalty
+    )
+
+    assert greedy == expected
+    assert beam == greedy
+
+
+def test_a_wider_beam_can_beat_greedy_on_the_same_model() -> None:
+    """Shows the fixture can tell the decoders apart, so width 1 matching greedy means something."""
+    import tensorflow as tf
+
+    garden_path = {
+        "[start]": {"a": 0.55, "the": 0.45},
+        "a": {"dog": 0.35, "cat": 0.3, "grass": 0.3},
+        "the": {"dog": 0.95},
+        "dog": {"[end]": 0.9},
+    }
+    model, tokenizer = _BigramModel(garden_path), _WordTokenizer()
+    image = tf.zeros((299, 299, 3), dtype=tf.float32)
+
+    assert generate_caption_greedy(model, tokenizer, image, _MAX_LENGTH) == "a dog"
+    assert (
+        generate_caption_beam(
+            model, tokenizer, image, _MAX_LENGTH, beam_width=2, length_penalty=0.0
+        )
+        == "the dog"
+    )

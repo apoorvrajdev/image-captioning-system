@@ -31,7 +31,7 @@ Wire contract consumers: `frontend/src/services/api.js`, `CaptionResult.jsx`, `S
 - Incoming `x-request-id` is echoed. Missing → a generated UUID.
 - Weights loader: local vs hub mode, downloader args incl. the commit id and `allow_patterns`, cache dir, custom filename, a pinned tag → its commit, refused revisions (branch, unpinned tag, short or upper-case id, another repo's tag), a commit missing a required file (`test_weights_loader.py`, injected downloader, no network). Not yet covered: a network failure during download → startup error.
 - Artifact digests: a one-byte change in either file, every mismatch named, a commit/file/digest missing or malformed → refused before download, each pinned tag checked against its own digests (`test_weights_loader.py`); a tampered file stops the real lifespan before the predictor reads anything (`test_startup_integrity.py`, stubbed `snapshot_download` and `CaptionPredictor`).
-- Beam decoder: length penalty, repetition penalty, n-gram blocking, EOS termination, detokenise (`tests/unit/test_beam_decoder.py`). Not yet covered: beam width 1 ≡ greedy.
+- Beam decoder: length penalty, repetition penalty, n-gram blocking, EOS termination, detokenise, beam width 1 ≡ greedy, including `[end]` as runner-up and an exhausted budget (`tests/unit/test_beam_decoder.py`).
 
 ## Required tests
 | Level | File | Must cover |
