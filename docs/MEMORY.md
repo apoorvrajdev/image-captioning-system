@@ -52,6 +52,8 @@ _Last updated: 2026-10-12_
   TASK-029 is done and deployed (2026-10-12, ADR-033): both downloaded files must
   match the SHA-256 that `PINNED_ARTIFACT_SHA256` records for their commit before the model or tokenizer reads
   them. A mismatch, or a commit without digests, stops startup. `v1.0.0` and `v2.0.0` are pinned.
+  TASK-030 is done (2026-10-13). WebP is no longer accepted: the API returns 415 and the SPA shows an inline error,
+  because TF 2.15 can't decode it.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.

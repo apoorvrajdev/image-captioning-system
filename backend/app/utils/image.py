@@ -22,12 +22,13 @@ from typing import Any
 
 from PIL import Image
 
+# WebP isn't listed: TF 2.15's ``decode_image`` can't decode it, and serving
+# must decode through the training path, so a WebP upload could never succeed.
 ALLOWED_CONTENT_TYPES: frozenset[str] = frozenset(
     {
         "image/jpeg",
         "image/jpg",
         "image/png",
-        "image/webp",
         "image/bmp",
     }
 )

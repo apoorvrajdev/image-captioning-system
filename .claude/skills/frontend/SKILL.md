@@ -12,7 +12,7 @@ Backend contract source of truth: `backend/app/schemas/caption.py`.
 
 ## Expected behaviour
 - GIVEN no file WHEN the page loads THEN the upload zone is shown and Generate is disabled.
-- GIVEN a JPEG/PNG/WebP ≤ 10 MB (drag/drop, click, or keyboard) THEN a preview renders. Other types or larger files → inline error, **no network call**.
+- GIVEN a JPEG/PNG ≤ 10 MB (drag/drop, click, or keyboard) THEN a preview renders. Other types (WebP included, which the backend can't decode) or larger files → inline error, **no network call**.
 - GIVEN Generate is clicked THEN a loading state shows until a `CaptionResponse` renders (caption, model version, decode strategy, latency, request ID, copy button) or `ErrorBanner` shows the `ApiError` message.
 - Error classes: `timeout` (60 s caption / 3 s health), `network` (unreachable or CORS), `http` (shows backend `detail`), `unknown`.
 - `StatusBadge` polls `/healthz` every 10 s and on window focus: `checking` → `online` / `offline`, and recovers by itself.

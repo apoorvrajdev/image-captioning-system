@@ -52,8 +52,20 @@ test("a disallowed file shows an inline error and sends no request", async ({
     buffer: Buffer.from("not an image"),
   });
   await expect(page.getByRole("alert")).toContainText(
-    "Unsupported format. Use JPG, PNG, or WEBP.",
+    "Unsupported format. Use JPG or PNG.",
   );
+  await expect(generate).toBeDisabled();
+
+  // The backend can't decode WebP, so the SPA refuses it before any upload.
+  await input.setInputFiles({
+    name: "photo.webp",
+    mimeType: "image/webp",
+    buffer: Buffer.from("RIFF\x1a\x00\x00\x00WEBPVP8 ", "latin1"),
+  });
+  await expect(page.getByRole("alert")).toContainText(
+    "Unsupported format. Use JPG or PNG.",
+  );
+  await expect(page.getByRole("img", { name: "photo.webp" })).toHaveCount(0);
   await expect(generate).toBeDisabled();
 
   await input.setInputFiles({

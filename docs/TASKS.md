@@ -1497,7 +1497,7 @@ Outcome (live, 2026-10-12):
 - Deploy run `38172676347` succeeded: healthy on `v2.0.0`, real caption smoke test HTTP 200, recorded as deployment
   `7001412142`.
 Follow-ups, not started:
-- WebP is allow-listed by the backend and the SPA, but TF 2.15 can't decode it.
+- WebP is allow-listed by the backend and the SPA, but TF 2.15 can't decode it. Resolved by TASK-030.
 - The limit bounds one request. Concurrent decodes share anyio's default limiter of 40 threads (the audit's separate
   inference-availability candidate).
 
@@ -1709,3 +1709,20 @@ Not verified:
 - The Space's startup log line `weights_verified` with both digests. The run-log endpoint returns 401 without the
   owner's Hugging Face login; the owner checks the Logs tab.
 - No load test. The smoke test is one request.
+
+### TASK-030 — Stop accepting WebP, which the model's decoder can't read            [status: done] (2026-10-13)
+Area: inference-api · frontend
+Goal: every format the SPA and API accept can actually be captioned.
+Problem: the TASK-026 follow-up. The backend allow-list and the SPA both accepted WebP, but TF 2.15's `decode_image`
+can't decode it. A WebP upload showed a preview, then always failed with a 422. Decoding it some other way would add a
+second image path, which train/serve parity rules out.
+Acceptance criteria:
+- GIVEN `image/webp` THEN the API returns 415 before reading the body. JPEG, PNG and BMP are unchanged.
+- GIVEN a WebP file in the SPA THEN an inline "Unsupported format. Use JPG or PNG." error, no preview, and no request.
+- README, `SECURITY.md` and the skills stop listing WebP.
+Outcome (local):
+- `ALLOWED_CONTENT_TYPES` drops `image/webp`, and the SPA's `ACCEPTED` list and hint text drop WebP.
+- `test_captions.py` checks that WebP gets a 415 without reaching the predictor. The E2E rejection test uploads a WebP
+  and expects the inline error, no preview and no request. With WebP put back in the SPA's list, that test fails.
+- WebP bytes sent under an allowed type still get the TASK-026 422.
+- Verification: backend 107 passed; frontend lint, build and 14 E2E tests passed.

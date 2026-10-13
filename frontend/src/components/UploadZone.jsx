@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 
-const ACCEPTED = ["image/jpeg", "image/png", "image/webp"];
+// WebP isn't accepted: the backend refuses it, because its decoder can't read it.
+const ACCEPTED = ["image/jpeg", "image/png"];
 const MAX_BYTES = 10 * 1024 * 1024;
 
 export default function UploadZone({ onFileSelected, disabled = false }) {
@@ -10,7 +11,7 @@ export default function UploadZone({ onFileSelected, disabled = false }) {
   const validate = (file) => {
     if (!file) return "No file selected.";
     if (!ACCEPTED.includes(file.type)) {
-      return "Unsupported format. Use JPG, PNG, or WEBP.";
+      return "Unsupported format. Use JPG or PNG.";
     }
     if (file.size > MAX_BYTES) {
       return "File exceeds 10 MB limit.";
@@ -97,7 +98,7 @@ export default function UploadZone({ onFileSelected, disabled = false }) {
         {dragActive ? "Drop to upload" : "Drag & drop an image"}
       </p>
       <p className="text-white/40 text-sm mt-1">
-        or click to browse — JPG, PNG, WEBP · max 10 MB
+        or click to browse — JPG, PNG · max 10 MB
       </p>
     </div>
   );

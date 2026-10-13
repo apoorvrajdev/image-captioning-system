@@ -13,8 +13,8 @@ Wire contract consumers: `frontend/src/services/api.js`, `CaptionResult.jsx`, `S
 ## Expected behaviour (contract)
 - GIVEN the predictor is loaded WHEN `GET /healthz` THEN 200 `{status:"ok", model_loaded:true, model_version, api_version, timestamp}`.
 - GIVEN the lifespan hasn't finished WHEN `GET /healthz` THEN still 200 with `status:"loading", model_loaded:false`; WHEN `POST /v1/captions` THEN 503.
-- GIVEN a valid JPEG/PNG/WebP/BMP upload ≤ `serve.max_upload_bytes` THEN 200 `CaptionResponse{caption, model_version, decode_strategy, latency_ms, request_id}` and an `x-request-id` response header.
-- Content type not in `ALLOWED_CONTENT_TYPES` → 415. Empty body → 400. Over the limit → 413. Undecodable bytes → 422 (`ImageDecodeError`). Errors use `{"detail": ...}`.
+- GIVEN a valid JPEG/PNG/BMP upload ≤ `serve.max_upload_bytes` THEN 200 `CaptionResponse{caption, model_version, decode_strategy, latency_ms, request_id}` and an `x-request-id` response header.
+- Content type not in `ALLOWED_CONTENT_TYPES` → 415, WebP included: TF 2.15 can't decode it (TASK-030). Empty body → 400. Over the limit → 413. Undecodable bytes → 422 (`ImageDecodeError`). Errors use `{"detail": ...}`.
 - A request body over `serve.max_upload_bytes` + 64 KiB of multipart framing → the same 413 from `BodySizeLimitMiddleware` (`core/body_limit.py`), before the parser buffers it: no byte read when `Content-Length` declares it, and reading stops at the cap when it doesn't. Under the cap the middleware is transparent and the route's exact limit decides (ADR-025).
 - Before any decode, `check_image_dimensions` reads the header (Pillow, JPEG/PNG/BMP parsers only, no pixel decode). Over `MAX_IMAGE_SIDE` (16,384 px) or `MAX_IMAGE_PIXELS` (40 MP) → 413. Bytes without a readable JPEG/PNG/BMP header, GIF included → 422 (TASK-026).
 - Uploaded bytes pass through `bytes_to_tensor` → `preprocess_image_tensor` (the training function). No other preprocessing path.

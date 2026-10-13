@@ -61,6 +61,21 @@ def test_captions_rejects_unsupported_content_type(client: TestClient) -> None:
     assert "Unsupported content type" in response.json()["detail"]
 
 
+def test_captions_rejects_webp_before_reading_it(
+    client: TestClient, fake_service: FakePredictorService
+) -> None:
+    """TF 2.15 can't decode WebP, so it's refused up front instead of failing as a 422."""
+    response = client.post(
+        "/v1/captions",
+        files=_image_field(
+            b"RIFF\x1a\x00\x00\x00WEBPVP8 ", content_type="image/webp", name="a.webp"
+        ),
+    )
+    assert response.status_code == 415
+    assert "Unsupported content type" in response.json()["detail"]
+    assert fake_service.calls == []
+
+
 def test_captions_rejects_empty_upload(client: TestClient) -> None:
     response = client.post("/v1/captions", files=_image_field(b""))
     assert response.status_code == 400

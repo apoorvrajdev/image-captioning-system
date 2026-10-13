@@ -17,7 +17,7 @@ known gaps. It doesn't claim hardening that isn't implemented.
 
 | Control | Where |
 |---|---|
-| Upload allow-list (JPEG/PNG/WebP/BMP) → 415 | `backend/app/utils/image.py`, `api/routes.py` |
+| Upload allow-list (JPEG/PNG/BMP) → 415. WebP is refused because TF 2.15 can't decode it (TASK-030) | `backend/app/utils/image.py`, `api/routes.py` |
 | Empty → 400, oversize (`serve.max_upload_bytes`, 10 MB) → 413, undecodable → 422 | `api/routes.py` |
 | Bounded upload read: the route reads at most `max_upload_bytes + 1` bytes, so an oversize upload is never loaded into memory in full (TASK-006) | `api/routes.py`, `backend/app/tests/test_captions.py` |
 | Request-body cap: a body over `max_upload_bytes` + 64 KiB of multipart framing gets the same 413 before the multipart parser buffers it. With `Content-Length`, no byte is read. Without it, reading stops at the cap (TASK-020) | `core/body_limit.py`, `main.py`, `backend/app/tests/test_body_size_limit.py` |
