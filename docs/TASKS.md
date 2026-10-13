@@ -1742,3 +1742,15 @@ Outcome:
   cutoff, and not capping the active beams. No production code changed.
 - Not covered: greedy returns `[start]` when `[end]` is predicted first, where beam returns an empty string. None of the
   500 committed greedy or beam predictions is affected, and greedy mirrors the frozen notebook.
+
+### TASK-032 — Stop `BackendSettings` warning about pydantic's `model_` namespace            [status: done] (2026-10-13)
+Area: inference-api
+Goal: importing the backend's settings prints no warning, so real warnings stand out.
+Problem: `BackendSettings.model_version` collides with pydantic's protected `model_` namespace. That printed a
+`UserWarning` on every app start and every test run. It was listed under known issues in `MEMORY.md`.
+Outcome:
+- `BackendSettings` sets `protected_namespaces=("settings_",)`, the fix pydantic suggests, so `settings_` stays
+  protected. Every other model in the repo already opts out. Field names and `BACKEND_*` variables are unchanged.
+- `test_backend_settings.py`, 2 new: importing the settings in a fresh interpreter with `-W error::UserWarning`
+  succeeds (it fails without the fix), and `BACKEND_MODEL_VERSION` still sets `model_version`.
+- Verification: full suite 548 passed, with 1 warning instead of 2; ruff and mypy clean.

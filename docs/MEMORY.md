@@ -54,6 +54,7 @@ _Last updated: 2026-10-12_
   them. A mismatch, or a commit without digests, stops startup. `v1.0.0` and `v2.0.0` are pinned.
   TASK-030 is done (2026-10-13). WebP is no longer accepted: the API returns 415 and the SPA shows an inline error,
   because TF 2.15 can't decode it.
+  TASK-032 is done (2026-10-13): `BackendSettings` no longer warns about pydantic's `model_` namespace on import.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
@@ -62,9 +63,9 @@ _Last updated: 2026-10-12_
 
 | Check | Result |
 |---|---|
-| `pytest tests backend/app/tests` | 535 passed on 2026-10-12, after TASK-029 (2 warnings: pydantic `model_` namespace, Starlette's `httpx2` notice for `TestClient`) |
-| ruff lint + format check | clean (119 files, 2026-10-12) |
-| mypy (pyproject config, `strict = false`) | 0 errors, 93 files (2026-10-12) |
+| `pytest tests backend/app/tests` | 548 passed on 2026-10-13, after TASK-032 (1 warning: Starlette's `httpx2` notice for `TestClient`) |
+| ruff lint + format check | clean (120 files, 2026-10-13) |
+| mypy (pyproject config, `strict = false`) | 0 errors, 94 files (2026-10-13) |
 | `deploy-backend.yml` (run `38186253634`, automatic, `ee274d7`, TASK-029) | **success**: Space commit `0efce5f`, healthy `v2.0.0`, real caption HTTP 200 (956 ms inference); recorded as deployment `7003655557`. CI run `38186184538` (all 7 jobs, 535 passed on 3.10 and 3.11) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38182649703`, automatic, `ce809e1`, TASK-028) | **success**: Space commit `7aa2f75`, healthy `v2.0.0`, real caption HTTP 200 (879 ms inference); recorded as deployment `7003071374`. CI run `38182565648` (all 7 jobs, 509 passed on 3.10 and 3.11) and `no-ai-attribution` green |
 | `deploy-backend.yml` (run `38175703769`, automatic, `94da607`, TASK-027) | **success**: Space commit `1cd227e`, healthy `v2.0.0`, real caption HTTP 200 (838 ms inference); recorded as deployment `7001912793`. CI run `38175620699` (all 7 jobs) and `no-ai-attribution` green |
@@ -303,8 +304,6 @@ held-out comparison (`EVAL_METHODOLOGY.md` § 8.5).
 - `keras` 2.15.0 and `protobuf` 4.25.9 still have audit findings, none reachable from serving, both held back by the
   TF 2.15 pin (`SECURITY.md` § Dependency audit). The `click` 8.1.7 advisory was withdrawn on 2026-10-07.
 - Starlette 1.x prints a `TestClient` notice asking for `httpx2` instead of `httpx` (test-only, dev dependency).
-- Pydantic warning: `BackendSettings.model_version` (`backend/app/core/config.py`) collides with the protected
-  `model_` namespace (harmless; the response schemas already set `protected_namespaces=()`).
 
 ## Before coding, know this
 

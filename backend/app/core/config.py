@@ -94,6 +94,9 @@ class BackendSettings(BaseSettings):
         env_prefix="BACKEND_",
         case_sensitive=False,
         extra="ignore",
+        # ``model_version`` would otherwise warn about pydantic's ``model_``
+        # namespace on every import; ``settings_`` stays protected.
+        protected_namespaces=("settings_",),
     )
 
     @field_validator("config_path", "weights_path", "tokenizer_dir")
