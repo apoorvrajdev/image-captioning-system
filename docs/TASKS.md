@@ -1754,3 +1754,75 @@ Outcome:
 - `test_backend_settings.py`, 2 new: importing the settings in a fresh interpreter with `-W error::UserWarning`
   succeeds (it fails without the fix), and `BACKEND_MODEL_VERSION` still sets `model_version`.
 - Verification: full suite 548 passed, with 1 warning instead of 2; ruff and mypy clean.
+
+## Frontend features
+
+### TASK-033 — Add a "Try an example" sample-image gallery to Caption Studio            [status: in-progress]
+Area: frontend
+Goal: a visitor can caption an image in two clicks, without finding or uploading one of their own.
+Problem: the caption view only offers an upload zone. A recruiter on the live demo has to find a suitable image first.
+Source images: the 500 COCO 2017 images of the committed evaluation slice are on disk (`data/coco2017/train2017/`,
+gitignored), and each has committed predictions and reference captions in `results/`. They were held out from the
+CNN + Transformer's training (`EVAL_METHODOLOGY.md` § 8.5). COCO doesn't own its images: each is under its own Flickr
+licence.
+Licence review (2026-10-14, owner-approved):
+- Method: each slice image's licence was read from COCO's official `captions_train2017.json` (archive MD5
+  `f4bbac64…`, equal to the server's ETag). Candidates were then checked against their Flickr pages, which were saved
+  outside the repo.
+- Results: of the 500, 360 are NonCommercial or NoDerivs, 84 CC BY 2.0, 54 CC BY-SA 2.0, 2 "No known copyright
+  restrictions" (both show a person) and none US Government Work.
+- One image COCO records as CC BY 2.0 (COCO 279430) is now All Rights Reserved on Flickr, so it was rejected.
+- Approved: five CC BY 2.0 images whose COCO record and Flickr page agree. They are ordinary scenes with no person as
+  the subject:
+
+  | COCO id | Scene | Bytes | Credit (title, creator, source) |
+  |---|---|---|---|
+  | 418799 | kitten on a computer keyboard | 132,173 | "Mango HaX0ring", Slava, flickr.com/photos/slava/496607907 |
+  | 316059 | red fire hydrant on a grass verge | 168,999 | "07252008", pa1nt, flickr.com/photos/pa1nt/2707331770 |
+  | 215132 | living room | 112,466 | "Living room w/painted cable covers", Amy West, flickr.com/photos/amy_elizabeth_west/5067711955 |
+  | 422807 | four-propeller aircraft in a blue sky | 75,407 | "US Coast Guard Herc", Simon_sees, flickr.com/photos/39551170@N02/6815669873 |
+  | 302885 | platter of sliced fruit | 175,441 | "fruit platter", >littleyiye<, flickr.com/photos/little_yiye/3742500176 |
+
+Attribution requirements:
+- The page visibly credits each image: title, creator, source link, and CC BY 2.0 with its link.
+- The reference captions are COCO Consortium annotations under CC BY 4.0, credited the same way.
+- Nothing implies endorsement by a creator, COCO or the US Coast Guard, whose markings the aircraft carries.
+- The page doesn't present the hand-picked examples as typical accuracy.
+Acceptance criteria:
+- GIVEN the caption view THEN a "Try an example" gallery of the five approved images sits directly below the upload
+  area: 2 columns on phones, 3 on small screens, 5 on desktop. Each thumbnail is a button with a descriptive label
+  and visible keyboard focus. The upload area stays available, and the gallery stays visible after a choice.
+- GIVEN a visitor activates an example, by mouse or by Enter or Space, THEN:
+  - its image becomes the same `File` state an upload produces;
+  - the preview shows it and that example is marked selected (`aria-pressed`);
+  - Generate caption is enabled;
+  - the same type and size rules as uploads apply.
+- GIVEN Generate caption after choosing an example THEN the existing `captionImage` sends one `POST /v1/captions`
+  carrying that example's exact bytes. The card shows the model's caption.
+- GIVEN a generated caption for an example THEN a separate card labelled "Dataset reference" shows that image's first
+  stored slice reference, in COCO's original wording, credited to the COCO Consortium (CC BY 4.0). It is never shown
+  as the model's output.
+- GIVEN a second example, or an upload, after a first example THEN the new image replaces it, the selected mark moves
+  or clears, and a sample fetch still in flight can't overwrite the newer choice.
+- GIVEN a sample image that fails to load THEN an inline error, Generate stays disabled, and no request is sent.
+- GIVEN a caption in flight THEN the gallery is disabled, like the upload zone.
+- GIVEN the Phase 3 comparison view THEN the gallery isn't shown, and that view and its data are unchanged.
+- Every example records its provenance in the manifest: dataset and split, COCO image id and file name, SHA-256, the
+  Flickr title, creator and source URL, and the licence name and URL. The page shows the credits.
+- Assets are the five approved slice files, byte-identical to the reviewed copies (SHA-256 checked on copy), 664,486
+  bytes in total. They are served from the SPA's own origin, with no hotlinks and no new dependency.
+Owned files:
+- `frontend/public/samples/` (images) and `frontend/src/samples.js` (manifest);
+- `frontend/src/components/SampleGallery.jsx` and `DatasetReference.jsx` (new), `frontend/src/App.jsx`,
+  `frontend/src/components/UploadZone.jsx`;
+- `frontend/src/utils/imageValidation.js` (new), which shares upload rules with the gallery;
+- `frontend/e2e/support.js` (records caption request bodies) and `frontend/e2e/caption-flow.spec.js`;
+- `.claude/skills/frontend/SKILL.md`, this file, and `docs/MEMORY.md` at close.
+Out of scope:
+- backend, API contract, model, weights and inference changes; a new endpoint;
+- README edits: `README.md` is a deploy input, so editing it would rebuild the Space;
+- showing committed predictions as live output; a gallery framework or any new dependency; images beyond the five
+  approved ones.
+Verification: `cd frontend && npm run lint && npm run build && npm run test:e2e`; `npm audit --omit=dev` unchanged;
+pre-commit on the changed files. After the push: CI green, the frontend deploys through the existing Vercel
+integration, and `deploy-backend.yml` skips, since no image input changes. Then one example captioned on the live site.
