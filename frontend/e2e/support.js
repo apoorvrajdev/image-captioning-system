@@ -34,10 +34,19 @@ export const test = base.extend({
   // the bundle was built with. Setting `api.down` makes /healthz and
   // /v1/captions refuse the connection. Any other off-origin request is
   // aborted and fails the test, so nothing reaches a real backend.
+  // `api.captionBodies` holds each caption request's raw multipart body.
+  // `api.allowedFailedResources` lists URL suffixes whose failed load a test
+  // provokes on purpose (see consoleErrors).
   api: [
     async ({ page, baseURL }, use) => {
       const appOrigin = new URL(baseURL).origin;
-      const api = { down: false, calls: [], unexpected: [] };
+      const api = {
+        down: false,
+        calls: [],
+        unexpected: [],
+        captionBodies: [],
+        allowedFailedResources: [],
+      };
       await page.route(
         (url) => url.origin !== appOrigin,
         async (route) => {
@@ -48,6 +57,9 @@ export const test = base.extend({
             return route.abort("blockedbyclient");
           }
           api.calls.push(`${request.method()} ${endpoint}`);
+          if (endpoint === "/v1/captions") {
+            api.captionBodies.push(request.postDataBuffer());
+          }
           if (api.down) return route.abort("connectionrefused");
           return route.fulfill({
             json: endpoint === "/healthz" ? HEALTH : CAPTION,
@@ -61,10 +73,11 @@ export const test = base.extend({
     { auto: true },
   ],
 
-  // Fails the test on any console error or uncaught page error. The one
-  // exception: Chromium's network stack logs every refused request as a
-  // console error even when the app handles the failure, so while `api.down`
-  // is set that exact line is allowed for the two API URLs, and nothing else.
+  // Fails the test on any console error or uncaught page error. Two
+  // exceptions, because Chromium's network stack logs a failed load as a
+  // console error even when the app handles it: while `api.down` is set the
+  // refused line is allowed for the two API URLs, and a failed load is allowed
+  // for a URL a test lists in `api.allowedFailedResources`. Nothing else.
   consoleErrors: [
     async ({ page, api }, use) => {
       const errors = [];
@@ -77,7 +90,13 @@ export const test = base.extend({
           message.text() === REFUSED &&
           Boolean(url) &&
           apiPath(url) !== undefined;
-        if (!refusedApiCall) errors.push(`${message.text()} (${url})`);
+        const provokedFailure =
+          message.text().startsWith("Failed to load resource:") &&
+          Boolean(url) &&
+          api.allowedFailedResources.some((suffix) => url.endsWith(suffix));
+        if (!refusedApiCall && !provokedFailure) {
+          errors.push(`${message.text()} (${url})`);
+        }
       });
       await use(errors);
       expect(errors, "console errors and uncaught page errors").toEqual([]);

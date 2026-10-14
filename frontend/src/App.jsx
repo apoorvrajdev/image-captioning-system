@@ -1,12 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import UploadZone from "./components/UploadZone";
 import ImagePreview from "./components/ImagePreview";
 import CaptionResult from "./components/CaptionResult";
+import DatasetReference from "./components/DatasetReference";
 import ErrorBanner from "./components/ErrorBanner";
+import SampleGallery from "./components/SampleGallery";
 import Spinner from "./components/Spinner";
 import Phase3Dashboard from "./components/Phase3Dashboard";
+import { SAMPLES } from "./samples";
 import { captionImage } from "./services/api";
+import { validateImageFile } from "./utils/imageValidation";
+
+const SAMPLE_LOAD_ERROR =
+  "Couldn't load the example image. Try another, or upload your own.";
 
 const VIEWS = [
   { id: "caption", label: "Caption an image" },
@@ -19,6 +26,13 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [selectedSampleId, setSelectedSampleId] = useState(null);
+  const [pendingSampleId, setPendingSampleId] = useState(null);
+  // Bumped by every selection, so a sample fetch that finishes after a newer
+  // choice (another sample, an upload, or Remove) is dropped.
+  const selectionRef = useRef(0);
+
+  const selectedSample = SAMPLES.find(({ id }) => id === selectedSampleId);
 
   const previewUrl = useMemo(
     () => (file ? URL.createObjectURL(file) : null),
@@ -30,8 +44,13 @@ export default function App() {
     return () => URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
 
-  const handleFileSelected = (nextFile, validationError) => {
+  // The one path for every chosen image: uploads call it directly, examples
+  // after their fetch. `sampleId` is set only for an example.
+  const handleFileSelected = (nextFile, validationError, sampleId = null) => {
+    selectionRef.current += 1;
+    setPendingSampleId(null);
     setResult(null);
+    setSelectedSampleId(validationError ? null : sampleId);
     if (validationError) {
       setFile(null);
       setError(validationError);
@@ -41,7 +60,32 @@ export default function App() {
     setFile(nextFile);
   };
 
+  const handleSampleSelected = async (sample) => {
+    if (loading) return;
+    const token = ++selectionRef.current;
+    setPendingSampleId(sample.id);
+    let nextFile = null;
+    try {
+      const response = await fetch(sample.src);
+      const blob = response.ok ? await response.blob() : null;
+      if (blob?.type.startsWith("image/")) {
+        nextFile = new File([blob], sample.fileName, { type: blob.type });
+      }
+    } catch {
+      nextFile = null;
+    }
+    if (token !== selectionRef.current) return;
+    if (!nextFile) {
+      handleFileSelected(null, SAMPLE_LOAD_ERROR);
+      return;
+    }
+    handleFileSelected(nextFile, validateImageFile(nextFile), sample.id);
+  };
+
   const handleClear = () => {
+    selectionRef.current += 1;
+    setPendingSampleId(null);
+    setSelectedSampleId(null);
     setFile(null);
     setResult(null);
     setError(null);
@@ -132,6 +176,14 @@ export default function App() {
               )}
 
               <ErrorBanner message={error} onDismiss={() => setError(null)} />
+
+              <SampleGallery
+                samples={SAMPLES}
+                selectedId={selectedSampleId}
+                pendingId={pendingSampleId}
+                onSelect={handleSampleSelected}
+                disabled={loading}
+              />
             </div>
 
             <div className="lg:col-span-2 space-y-5">
@@ -183,11 +235,14 @@ export default function App() {
                 <p className="text-xs text-white/40 mt-3 leading-relaxed">
                   {file
                     ? "Click generate to send the image to the inference endpoint."
-                    : "Upload an image to enable generation."}
+                    : "Upload an image or pick an example to enable generation."}
                 </p>
               </div>
 
               {result && <CaptionResult result={result} />}
+              {result && selectedSample && (
+                <DatasetReference sample={selectedSample} />
+              )}
             </div>
           </div>
         </main>
