@@ -1851,3 +1851,16 @@ Outcome (local, 2026-10-14):
   at 1280×900. On phones, Generate sits below the gallery, which follows the existing column order.
 - Verification: `npm run lint` clean, `npm run build` passes, `npm run test:e2e` 23 passed, `npm audit --omit=dev` 0
   vulnerabilities, pre-commit passes on every changed file.
+Outcome (live, 2026-10-14):
+- Committed as `4d13625`, `63685a4`, `b838b5c` and `9a53351`, with the close-out `b089959`, and pushed as
+  `b48af41..b089959`.
+- CI run `38588869144`: all seven jobs passed, with 548 tests on Python 3.10 and 3.11 and Playwright 23/23. pip-audit
+  found 0 new findings and gitleaks no leaks.
+- Vercel production deployment `7069556687` completed.
+- `deploy-backend.yml` run `38589050068` skipped correctly: no image input had changed since `b48af41`, and the Space
+  was still on it.
+- Live check: on the production page, the kitten example reached the API byte for byte.
+  - HTTP 200 from `v2.0.0`, greedy decoding: "a cat is sitting on a keyboard of a computer", identical to the
+    committed prediction.
+  - The "Dataset reference" card appeared, with no browser console errors.
+  - Two requests were made: the first check's script couldn't read the request body, so it was rerun.
