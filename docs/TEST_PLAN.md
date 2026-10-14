@@ -102,6 +102,19 @@ error, and on any off-origin request outside those two endpoints.
 - A disallowed type or a >10 MB file is rejected inline with no request.
 - With the API unreachable, the badge goes offline and Generate shows "Cannot reach backend". In this case only,
   Chromium's own `net::ERR_CONNECTION_REFUSED` line for the two API URLs is allowed.
+- The "Try an example" gallery (TASK-033). `support.js` records each caption request's multipart body:
+  - an example sends its exact file bytes, file name and `image/jpeg`;
+  - its "Dataset reference" card appears only after the caption, with the COCO credit, and never holds the
+    generated caption;
+  - a second example replaces the first;
+  - an upload after an example clears the selection and sends the upload;
+  - a sample fetch held open can't overwrite a later upload or a later example. Both tests fail without the
+    stale-fetch guard;
+  - Enter and Space select;
+  - a sample that fails to load (404 on the fetch only) shows an error and sends nothing. That test alone allows
+    Chromium's failed-load line for that one URL;
+  - the gallery is hidden on the Phase 3 view;
+  - at 390 px it shows two columns without horizontal scrolling.
 
 **Phase 3 dashboard (`e2e/phase3-dashboard.spec.js`, TASK-018).** On "Phase 3 comparison":
 

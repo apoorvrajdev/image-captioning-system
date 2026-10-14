@@ -13,6 +13,7 @@ Backend contract source of truth: `backend/app/schemas/caption.py`.
 ## Expected behaviour
 - GIVEN no file WHEN the page loads THEN the upload zone is shown and Generate is disabled.
 - GIVEN a JPEG/PNG ≤ 10 MB (drag/drop, click, or keyboard) THEN a preview renders. Other types (WebP included, which the backend can't decode) or larger files → inline error, **no network call**.
+- GIVEN the caption view THEN "Try an example" (`components/SampleGallery.jsx`, data in `src/samples.js`, files in `public/samples/`) shows five CC BY 2.0 COCO images with visible credits. Choosing one fetches the local file and passes it through `utils/imageValidation.js` and `handleFileSelected`, exactly like an upload, so `captionImage` sends its bytes. A fetch overtaken by a newer choice is dropped. A failed load shows an error. After a caption, `DatasetReference.jsx` shows the COCO reference, labelled and credited, never as model output. New examples need a licence review first (TASK-033).
 - GIVEN Generate is clicked THEN a loading state shows until a `CaptionResponse` renders (caption, model version, decode strategy, latency, request ID, copy button) or `ErrorBanner` shows the `ApiError` message.
 - Error classes: `timeout` (60 s caption / 3 s health), `network` (unreachable or CORS), `http` (shows backend `detail`), `unknown`.
 - `StatusBadge` polls `/healthz` every 10 s and on window focus: `checking` → `online` / `offline`, and recovers by itself.

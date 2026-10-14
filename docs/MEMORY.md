@@ -55,6 +55,9 @@ _Last updated: 2026-10-12_
   TASK-030 is done (2026-10-13). WebP is no longer accepted: the API returns 415 and the SPA shows an inline error,
   because TF 2.15 can't decode it.
   TASK-032 is done (2026-10-13): `BackendSettings` no longer warns about pydantic's `model_` namespace on import.
+  TASK-033 is done (2026-10-14): the caption view has a "Try an example" gallery of five licence-reviewed CC BY 2.0
+  COCO slice images, with visible credits. An example goes through the same validation, file state and
+  `captionImage` request as an upload. A separate "Dataset reference" card shows its COCO caption.
 - **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
@@ -74,7 +77,8 @@ _Last updated: 2026-10-12_
 | Parity audit (`scripts/notebook_module_audit.py`) | 4/4 |
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
-| Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-07, after TASK-018) |
+| Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-14, after TASK-033) |
+| Frontend `npm run test:e2e` after TASK-033 | 23 passed locally (2026-10-14): caption flow 12, of which 9 cover the example gallery, and Phase 3 dashboard 11 |
 | Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
 | CI on `main` for `fbf55d8` (run `37820623531`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04`, 310 passed on 3.10 and 3.11 (TASK-022) |
 | `deploy-backend.yml` (run `37819590272`, automatic, `b21b97a`) | **success**: image change deployed, Space `RUNNING`, healthy, `v2.0.0`; recorded as deployment `6942786830` (Space commit `7d45a58`) |

@@ -1757,7 +1757,7 @@ Outcome:
 
 ## Frontend features
 
-### TASK-033 — Add a "Try an example" sample-image gallery to Caption Studio            [status: in-progress]
+### TASK-033 — Add a "Try an example" sample-image gallery to Caption Studio            [status: done] (2026-10-14)
 Area: frontend
 Goal: a visitor can caption an image in two clicks, without finding or uploading one of their own.
 Problem: the caption view only offers an upload zone. A recruiter on the live demo has to find a suitable image first.
@@ -1826,3 +1826,28 @@ Out of scope:
 Verification: `cd frontend && npm run lint && npm run build && npm run test:e2e`; `npm audit --omit=dev` unchanged;
 pre-commit on the changed files. After the push: CI green, the frontend deploys through the existing Vercel
 integration, and `deploy-backend.yml` skips, since no image input changes. Then one example captioned on the live site.
+Outcome (local, 2026-10-14):
+- Assets: the five approved files in `frontend/public/samples/` under their COCO names, 664,486 bytes. Each copy
+  matched the report's SHA-256, and each stored git blob is byte-identical to its source.
+- Manifest: `frontend/src/samples.js` holds, per image, the label, file, COCO id, SHA-256, Flickr title, creator and
+  source, and CC BY 2.0. It also holds the first stored slice reference in COCO's original wording, and
+  `REFERENCE_CAPTION_CREDIT` (COCO Consortium, CC BY 4.0).
+- `SampleGallery.jsx`:
+  - five native buttons with `aria-pressed`, `aria-busy` while loading, a `focus-visible` ring and a check mark when
+    selected, in a 2/3/5-column grid;
+  - visible credits (title, creator, source link, licence link) and a note that the examples are hand-picked;
+  - the credits text is about 6:1 contrast and the subtitle about 5:1, both above WCAG AA for small text.
+- `App.jsx`:
+  - choosing an example fetches the local file and checks that it is an image;
+  - the file then goes through `validateImageFile` and the existing `handleFileSelected`, so the preview, Generate
+    and `captionImage` are unchanged;
+  - a selection counter drops a fetch that a newer choice has overtaken, and a failed load shows an error;
+  - `DatasetReference.jsx` appears only after a caption, beside the generated one.
+- Upload rules moved to `utils/imageValidation.js`, shared by `UploadZone.jsx` and the examples.
+- No backend, API, model, dependency or README change.
+- Tests: 9 new Playwright tests in `caption-flow.spec.js` (23 in total). With the stale-fetch guard removed, both race
+  tests fail.
+- Screenshots of the preview build at 1280 px and 390 px were checked by eye. The gallery is visible without scrolling
+  at 1280×900. On phones, Generate sits below the gallery, which follows the existing column order.
+- Verification: `npm run lint` clean, `npm run build` passes, `npm run test:e2e` 23 passed, `npm audit --omit=dev` 0
+  vulnerabilities, pre-commit passes on every changed file.
