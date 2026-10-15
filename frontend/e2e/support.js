@@ -21,6 +21,22 @@ export const CAPTION = {
   latency_ms: 123.4,
   request_id: "e2e-request-1",
 };
+// What the mock answers for a beam request (TASK-034).
+export const BEAM_CAPTION = {
+  ...CAPTION,
+  caption: "a close up of a small test image",
+  decode_strategy: "beam",
+  latency_ms: 456.7,
+  request_id: "e2e-request-beam",
+};
+
+// The decode_strategy form field of a multipart body, or null when absent.
+export const strategyOf = (body) => {
+  const match = body
+    ?.toString("latin1")
+    .match(/name="decode_strategy"\r\n\r\n([^\r]*)\r\n/);
+  return match ? match[1] : null;
+};
 
 const API_PATHS = ["/healthz", "/v1/captions"];
 const REFUSED = "Failed to load resource: net::ERR_CONNECTION_REFUSED";
@@ -34,7 +50,9 @@ export const test = base.extend({
   // the bundle was built with. Setting `api.down` makes /healthz and
   // /v1/captions refuse the connection. Any other off-origin request is
   // aborted and fails the test, so nothing reaches a real backend.
-  // `api.captionBodies` holds each caption request's raw multipart body.
+  // `api.captionBodies` holds each caption request's raw multipart body. A
+  // caption request answers CAPTION, or BEAM_CAPTION when its body asks for
+  // beam; `api.failStrategy` makes that one strategy answer 503 instead.
   // `api.allowedFailedResources` lists URL suffixes whose failed load a test
   // provokes on purpose (see consoleErrors).
   api: [
@@ -45,6 +63,7 @@ export const test = base.extend({
         calls: [],
         unexpected: [],
         captionBodies: [],
+        failStrategy: null,
         allowedFailedResources: [],
       };
       await page.route(
@@ -57,12 +76,23 @@ export const test = base.extend({
             return route.abort("blockedbyclient");
           }
           api.calls.push(`${request.method()} ${endpoint}`);
+          let json = HEALTH;
           if (endpoint === "/v1/captions") {
-            api.captionBodies.push(request.postDataBuffer());
+            const body = request.postDataBuffer();
+            api.captionBodies.push(body);
+            const strategy = strategyOf(body);
+            if (api.failStrategy && strategy === api.failStrategy) {
+              return route.fulfill({
+                status: 503,
+                json: { detail: `mock refused ${strategy}` },
+                headers: { "access-control-allow-origin": "*" },
+              });
+            }
+            json = strategy === "beam" ? BEAM_CAPTION : CAPTION;
           }
           if (api.down) return route.abort("connectionrefused");
           return route.fulfill({
-            json: endpoint === "/healthz" ? HEALTH : CAPTION,
+            json,
             headers: { "access-control-allow-origin": "*" },
           });
         },

@@ -1,5 +1,12 @@
 import { readFileSync } from "node:fs";
-import { test, expect, PNG_1X1, CAPTION } from "./support.js";
+import {
+  test,
+  expect,
+  PNG_1X1,
+  CAPTION,
+  BEAM_CAPTION,
+  strategyOf,
+} from "./support.js";
 
 // TASK-007: the caption flow against a mocked API (TEST_PLAN.md, Frontend).
 
@@ -322,4 +329,122 @@ test("the gallery fits a 390 px viewport in two columns", async ({ page }) => {
     () => document.documentElement.scrollWidth - window.innerWidth,
   );
   expect(overflow).toBeLessThanOrEqual(0);
+});
+
+// TASK-034: choosing the decoder, and comparing both.
+
+const greedyRadio = (page) => page.getByRole("radio", { name: /Greedy/ });
+const beamRadio = (page) => page.getByRole("radio", { name: /Beam search/ });
+const generate = (page) =>
+  page.getByRole("button", { name: /Generat(e|ing) caption/ });
+const compare = (page) => page.getByRole("button", { name: "Compare both" });
+const comparison = (page) =>
+  page.getByRole("region", { name: "Greedy vs beam search" });
+
+test("greedy is the default and the chosen decoder is sent", async ({
+  page,
+  api,
+}) => {
+  await page.goto("/");
+  await expect(greedyRadio(page)).toBeChecked();
+  await page.locator('input[type="file"]').setInputFiles(png);
+
+  await generate(page).click();
+  await expect(page.getByText(CAPTION.caption)).toBeVisible();
+  expect(api.captionBodies.map(strategyOf)).toEqual(["greedy"]);
+
+  await page.locator("label", { hasText: "Beam search" }).click();
+  await expect(beamRadio(page)).toBeChecked();
+  await generate(page).click();
+  await expect(page.getByText(BEAM_CAPTION.caption)).toBeVisible();
+  await expect(page.getByText("beam", { exact: true })).toBeVisible();
+  expect(api.captionBodies.map(strategyOf)).toEqual(["greedy", "beam"]);
+});
+
+test("the decoder choice works from the keyboard and survives a new image", async ({
+  page,
+  api,
+}) => {
+  await page.goto("/");
+  await greedyRadio(page).focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(beamRadio(page)).toBeChecked();
+
+  await example(page, KITTEN).click();
+  await expect(page.getByRole("img", { name: KITTEN.file })).toBeVisible();
+  await expect(beamRadio(page)).toBeChecked();
+  await page.getByRole("button", { name: "Remove" }).click();
+  await page.locator('input[type="file"]').setInputFiles(png);
+  await expect(beamRadio(page)).toBeChecked();
+
+  await generate(page).click();
+  await expect(page.getByText(BEAM_CAPTION.caption)).toBeVisible();
+  expect(api.captionBodies.map(strategyOf)).toEqual(["beam"]);
+});
+
+test("compare both runs greedy then beam in turn and shows both", async ({
+  page,
+  api,
+}) => {
+  // Hold the first (greedy) answer to prove the beam request waits for it.
+  let releaseGreedy;
+  const greedyReleased = new Promise((resolve) => {
+    releaseGreedy = resolve;
+  });
+  const seen = [];
+  await page.route("**/v1/captions", async (route) => {
+    const strategy = strategyOf(route.request().postDataBuffer());
+    seen.push(strategy);
+    if (strategy === "greedy") await greedyReleased;
+    return route.fallback();
+  });
+
+  await page.goto("/");
+  await example(page, KITTEN).click();
+  await expect(page.getByRole("img", { name: KITTEN.file })).toBeVisible();
+  await compare(page).click();
+
+  await expect(compare(page)).toBeDisabled();
+  await expect(generate(page)).toBeDisabled();
+  await expect(comparison(page)).toContainText("Waiting…");
+  await expect.poll(() => seen).toEqual(["greedy"]);
+  expect(api.captionBodies).toEqual([]); // greedy is still held; beam hasn't started
+  releaseGreedy();
+
+  const greedySide = comparison(page).getByRole("group", { name: "Greedy" });
+  const beamSide = comparison(page).getByRole("group", {
+    name: "Beam search",
+  });
+  await expect(greedySide).toContainText(CAPTION.caption);
+  await expect(greedySide).toContainText(`${CAPTION.latency_ms.toFixed(1)} ms`);
+  await expect(beamSide).toContainText(BEAM_CAPTION.caption);
+  await expect(beamSide).toContainText(
+    `${BEAM_CAPTION.latency_ms.toFixed(1)} ms`,
+  );
+  expect(api.captionBodies.map(strategyOf)).toEqual(["greedy", "beam"]);
+  await expect(compare(page)).toBeEnabled();
+  await expect(page.getByText("Generated caption")).toBeHidden();
+  await expect(
+    page.getByRole("region", { name: "Dataset reference" }),
+  ).toBeVisible();
+});
+
+test("compare both shows one side's failure beside the other's caption", async ({
+  page,
+  api,
+}) => {
+  api.failStrategy = "beam";
+  api.allowedFailedResources.push("/v1/captions"); // the 503 logs a resource error
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles(png);
+  await compare(page).click();
+
+  const greedySide = comparison(page).getByRole("group", { name: "Greedy" });
+  const beamSide = comparison(page).getByRole("group", {
+    name: "Beam search",
+  });
+  await expect(greedySide).toContainText(CAPTION.caption);
+  await expect(beamSide.getByRole("alert")).toContainText("mock refused beam");
+  expect(api.captionBodies.map(strategyOf)).toEqual(["greedy", "beam"]);
+  await expect(compare(page)).toBeEnabled();
 });
