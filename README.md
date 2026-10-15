@@ -31,7 +31,8 @@
 A short technical demo of the Image Captioning System's live image captioning, model inference pipeline and research-to-production checks.
 
 
-https://github.com/user-attachments/assets/e978499a-9b45-469d-9caf-e1488be688fe
+https://github.com/user-attachments/assets/7d63c76a-019f-4616-a219-fa4043f0233c
+
 
 **▶ [Watch the 27-second demo]** · [Try the live app](https://image-captioning-system.vercel.app) · [How the demo was made](docs/demo/README.md)
 
