@@ -10,8 +10,8 @@
 4. **All commits must be authored solely by:**
    - Name: `apoorvrajdev`
    - Email: `apoorvrajmgr@gmail.com`
-5. **NEVER stage or commit changes on your own.** Only suggest commit messages — the user runs `git commit` themselves.
-6. **NEVER push to remote.** Only the user pushes.
+5. **Deliver approved tasks end to end.** Once the user has authorised a task in this personal repository, stage only that task's files, create its atomic Conventional Commits, push them normally to the intended remote and branch (`origin main`), then verify CI and run the established deployment workflow only when the task's approved scope requires it. When the effective permission configuration allows the operation, routine commits and ordinary pushes need no separate conversational confirmation. This covers the approved task only, never unrelated work.
+6. **Stop and ask before anything consequential.** Force pushes (including `--force-with-lease`), amends, rebases or any other history rewrite; destructive resets, `clean`, `restore`, `stash` or deletions; skipping hooks or bypassing validation; secrets, credentials or protected files; an unexpected remote, branch or non-fast-forward state; and deployment actions outside the task's approved scope. Unrelated staged, unstaged and untracked work stays untouched and out of task commits.
 7. **NEVER create branches, tags, or releases on your own.**
 
 ## Commit Message Format
@@ -54,10 +54,11 @@ lands as its own Conventional Commit.
   combined one. `feat(eval): add rescore script` and `test(eval): cover error
   paths` are two valid commits; rolling them together loses scope clarity.
 
-- **Always present the sequence, never execute it.** Per the existing rule that
-  Claude does not stage, commit, or push: output the full intended commit
-  sequence (each `git add <file>` + `git commit` pair) so the user can run
-  them. Order matters — within a multi-commit sequence, prefer:
+- **Land the sequence yourself, one commit at a time.** For an approved task
+  (rule 5), run each `git add <file>` + `git commit` pair in order, confirm
+  nothing unrelated is staged before each one, and stop on the first failure
+  so a rejected commit's files never leak into the next. Report the resulting
+  SHAs. Order matters — within a multi-commit sequence, prefer:
   schemas/types → implementation → tests → docs → CHANGELOG.
 
 - **No padding.** Do not split a single indivisible change across artificial
@@ -161,7 +162,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 - `models/v1.0.0/model.h5` is untracked. Production pulls weights from HF Hub (`BACKEND_WEIGHTS_HUB_*`).
 - When README prose and a config file disagree, the config file is right. Fix the README in the same task.
 - `make -n` exits 0 even when a printed command is broken. `tests/unit/test_makefile.py` is the real check that Make targets match the Dockerfile, compose files, and script CLIs.
-- `.claude/settings.json` denies edits to the frozen notebook, its hash, `models/**`, and `results/**`, and prompts before any `git commit`/`push`/`tag`. A denial there means the plan is wrong. Don't route around it via Bash.
+- `.claude/settings.json` denies edits to the frozen notebook, its hash, `models/**`, and `results/**`, and asks before `git tag`; the user-level settings deny force-push, hook bypass and bulk staging. A denial or prompt there means the plan is wrong. Don't route around it via Bash.
 
 ## Retrieval protocol
 
@@ -177,7 +178,7 @@ CI (`.github/workflows/ci.yml`) runs exactly: ruff lint + format check, mypy, py
 - One module at a time, with tests. Reuse existing abstractions; don't touch unrelated files; no new dependencies without saying why
 - Never weaken an assertion or delete a test to make it pass. Fix the root cause
 - Run `pytest` for touched areas before declaring a change done
-- After making changes, summarize what you did so the user can review and commit
+- After delivering, summarize what changed and what was committed and pushed (SHAs, CI result), plus anything left undone
 - If a change spans library + backend + frontend, list the affected files grouped by layer in the summary
 - Work from `docs/TASKS.md` one task at a time. Never implement a whole phase in one pass
 
@@ -193,7 +194,7 @@ No refactors while debugging. No loosened assertions, skipped tests, or widened 
 A task is done only when every check from its skill's DoD ran green **in this session**, with the output quoted as proof:
 the relevant tests, ruff lint + format, mypy (Python changes), parity audit + notebook freeze (any `src/captioning/` or `configs/` change),
 frontend lint + build + `npm run test:e2e` (any `frontend/` change), and the pre-commit hooks on the changed files. Then update `docs/MEMORY.md` (state) and `docs/TASKS.md` (status), add a `docs/DECISIONS.md` entry if a permanent decision was made,
-and end with the proposed commit sequence. If a check can't run, say so. That box is not ticked.
+then land the commit sequence (rule 5) and end with the commit SHAs, the push result and the CI outcome. If a check can't run, say so. That box is not ticked.
 
 ## Orchestration (multi-lane tasks)
 
