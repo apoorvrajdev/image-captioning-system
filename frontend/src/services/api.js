@@ -58,9 +58,14 @@ export const checkHealth = async () => {
   }
 };
 
-export const captionImage = async (imageFile) => {
+export const DECODE_STRATEGIES = ["greedy", "beam"];
+
+// `decodeStrategy` is the only place the request's decode_strategy field is
+// set. Omitted, the API decodes greedily, as it did before TASK-034.
+export const captionImage = async (imageFile, { decodeStrategy } = {}) => {
   const formData = new FormData();
   formData.append("image", imageFile);
+  if (decodeStrategy) formData.append("decode_strategy", decodeStrategy);
 
   let response;
   try {

@@ -2,14 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Header from "./components/Header";
 import UploadZone from "./components/UploadZone";
 import ImagePreview from "./components/ImagePreview";
+import CaptionComparison from "./components/CaptionComparison";
 import CaptionResult from "./components/CaptionResult";
 import DatasetReference from "./components/DatasetReference";
+import DecodeStrategyPicker from "./components/DecodeStrategyPicker";
 import ErrorBanner from "./components/ErrorBanner";
 import SampleGallery from "./components/SampleGallery";
 import Spinner from "./components/Spinner";
 import Phase3Dashboard from "./components/Phase3Dashboard";
 import { SAMPLES } from "./samples";
-import { captionImage } from "./services/api";
+import { DECODE_STRATEGIES, captionImage } from "./services/api";
 import { validateImageFile } from "./utils/imageValidation";
 
 const SAMPLE_LOAD_ERROR =
@@ -26,6 +28,9 @@ export default function App() {
   const [result, setResult] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
+  // The decoding choice outlives uploads and example picks on purpose.
+  const [decodeStrategy, setDecodeStrategy] = useState(DECODE_STRATEGIES[0]);
+  const [comparison, setComparison] = useState(null);
   const [selectedSampleId, setSelectedSampleId] = useState(null);
   const [pendingSampleId, setPendingSampleId] = useState(null);
   // Bumped by every selection, so a sample fetch that finishes after a newer
@@ -50,6 +55,7 @@ export default function App() {
     selectionRef.current += 1;
     setPendingSampleId(null);
     setResult(null);
+    setComparison(null);
     setSelectedSampleId(validationError ? null : sampleId);
     if (validationError) {
       setFile(null);
@@ -88,6 +94,7 @@ export default function App() {
     setSelectedSampleId(null);
     setFile(null);
     setResult(null);
+    setComparison(null);
     setError(null);
   };
 
@@ -96,14 +103,37 @@ export default function App() {
     setLoading(true);
     setError(null);
     setResult(null);
+    setComparison(null);
     try {
-      const data = await captionImage(file);
+      const data = await captionImage(file, { decodeStrategy });
       setResult(data);
     } catch (err) {
       setError(err?.message || "Caption generation failed.");
     } finally {
       setLoading(false);
     }
+  };
+
+  // Both decoders, one after the other, never two requests at once. Each side
+  // keeps its own result or error, so a failure on one still shows the other.
+  const handleCompare = async () => {
+    if (!file || loading) return;
+    setLoading(true);
+    setError(null);
+    setResult(null);
+    setComparison({});
+    for (const strategy of DECODE_STRATEGIES) {
+      let outcome;
+      try {
+        outcome = {
+          result: await captionImage(file, { decodeStrategy: strategy }),
+        };
+      } catch (err) {
+        outcome = { error: err?.message || "Caption generation failed." };
+      }
+      setComparison((previous) => ({ ...previous, [strategy]: outcome }));
+    }
+    setLoading(false);
   };
 
   return (
@@ -197,6 +227,12 @@ export default function App() {
                   )}
                 </div>
 
+                <DecodeStrategyPicker
+                  value={decodeStrategy}
+                  onChange={setDecodeStrategy}
+                  disabled={loading}
+                />
+
                 <button
                   type="button"
                   onClick={handleGenerate}
@@ -232,15 +268,25 @@ export default function App() {
                   )}
                 </button>
 
+                <button
+                  type="button"
+                  onClick={handleCompare}
+                  disabled={!file || loading}
+                  className="mt-2 w-full inline-flex items-center justify-center px-4 py-2.5 rounded-xl text-sm font-medium border border-white/10 text-white/80 transition-colors hover:border-violet-400/50 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-white/10"
+                >
+                  Compare both
+                </button>
+
                 <p className="text-xs text-white/40 mt-3 leading-relaxed">
                   {file
-                    ? "Click generate to send the image to the inference endpoint."
+                    ? "Generate uses the chosen decoder. Compare both runs greedy, then beam search, on the same image."
                     : "Upload an image or pick an example to enable generation."}
                 </p>
               </div>
 
               {result && <CaptionResult result={result} />}
-              {result && selectedSample && (
+              <CaptionComparison comparison={comparison} />
+              {(result || comparison) && selectedSample && (
                 <DatasetReference sample={selectedSample} />
               )}
             </div>
