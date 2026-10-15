@@ -1864,3 +1864,42 @@ Outcome (live, 2026-10-14):
     committed prediction.
   - The "Dataset reference" card appeared, with no browser console errors.
   - Two requests were made: the first check's script couldn't read the request body, so it was rerun.
+
+### TASK-034 — Let a request choose greedy or beam decoding, and compare them in the SPA            [status: in-progress]
+Area: inference-api · frontend
+Goal: a visitor can caption an image with either decoder the project evaluated, and see both captions side by side.
+Problem: `CaptionPredictor` has supported beam search since Phase 1b, and the committed evaluation scored it
+(CIDEr 0.826 vs greedy 0.789, BLEU-4 10.39 vs 10.57, METEOR 15.56 vs 15.45), but production only ever serves greedy.
+Beam settings: the committed run `results/stabilized-beam-w4-lp07-rp12` used width 4, length penalty 0.7 and
+repetition penalty 1.2 (`run_meta.json`). Its n-gram blocking isn't recorded there: the run used
+`configs/train/stabilized.yaml` (runbook Cell 7), whose `no_repeat_ngram_size` is 3, and 0 of its 500 predictions
+repeat a trigram against 14 of 500 for greedy. So `configs/base.yaml` now carries 4 / 0.7 / 1.2 / 3 for beam
+requests. Greedy, the default, is untouched.
+Acceptance criteria:
+- GIVEN no `decode_strategy` field, or an empty one, THEN the request behaves exactly as before: greedy, same caption.
+- GIVEN `decode_strategy=beam` THEN the same loaded model decodes with the evaluated beam settings and the response
+  says `beam`. GIVEN any other value THEN 422 naming the allowed values, before the image is read.
+- The strategy is a per-call argument through the service to `predict_tensor`; nothing on the predictor or service
+  changes, so two in-flight requests with different strategies can't interfere. Routes import no TensorFlow.
+- The response schema, the TASK-026 guard, TASK-027 admission, TASK-029 verification and notebook parity are unchanged.
+- SPA: a keyboard-accessible Greedy / Beam search choice that survives uploads and example picks, and sets the field
+  only in `services/api.js`. "Compare both" runs the two strategies one after the other for the same image, never
+  overlapping a running request, and shows both captions with their latencies. It ships only if production beam
+  latency measures about 4 s p50 or less; otherwise the selector ships alone.
+Owned files: `src/captioning/inference/predictor.py`, `configs/base.yaml`, `backend/app/services/predictor_service.py`,
+`backend/app/api/routes.py`, their tests, `tests/unit/test_predictor_decode_strategy.py`; then `frontend/src/services/api.js`,
+`frontend/src/App.jsx`, a selector component, `CaptionResult.jsx`, the E2E spec; the skills, this file, `MEMORY.md`.
+Out of scope: new decoders or knobs per request; retraining; attention or confidence views; response schema changes.
+Verification: focused tests, full pytest, ruff, mypy, parity audit, notebook freeze; frontend lint, build, E2E; the
+backend deploy and one live request per strategy; a small live beam latency sample before any comparison UI.
+Outcome so far (local, 2026-10-16):
+- `predict_tensor(tensor, decode_strategy=None)`: the argument overrides the instance default for that call only and
+  is validated against `DECODE_STRATEGIES`. The service forwards it with `functools.partial` and logs the strategy
+  used; the route validates the form field and echoes it.
+- Tests, 14 new: route (omitted, empty, greedy, beam, three unknown values refused before the image is read),
+  admission (two concurrent requests keep their own strategy, the default untouched), predictor (scripted bigram
+  decoder: greedy "a dog", beam "the dog", per-call override leaves the instance unchanged, unknown refused).
+- Real model, offline: greedy unchanged ("a cat is sitting on a keyboard of a computer", 845 ms locally); beam
+  returned "a close up of a cat laying on a keyboard" in about 1.3 s locally, identical to the committed beam
+  prediction for that image, which confirms the settings match the evaluated run.
+- Verification: backend 117 passed; parity audit 4/4; notebook hash unchanged; ruff and mypy clean.
