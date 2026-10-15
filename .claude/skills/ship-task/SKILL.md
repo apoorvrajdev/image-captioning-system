@@ -1,6 +1,6 @@
 ---
 name: ship-task
-description: Take one task from docs/TASKS.md (or a bug/feature request) from requirement to a verified, review-ready change with a proposed commit sequence. Use when the user says "implement TASK-xxx", "continue Phase N", "fix <issue>", or "do the next task".
+description: Take one task from docs/TASKS.md (or a bug/feature request) from requirement to a verified change, landed as atomic commits and pushed to `origin main`. Use when the user says "implement TASK-xxx", "continue Phase N", "fix <issue>", or "do the next task".
 ---
 
 # Ship a task
@@ -28,9 +28,13 @@ Input: a task id from `docs/TASKS.md`, or a described change. If the change is p
 8. **Record.** Update `docs/MEMORY.md` (state, recent changes), tick the task in `docs/TASKS.md`,
    add a `docs/DECISIONS.md` entry for any permanent decision. Rebuild the index if modules moved:
    `.venv/Scripts/python.exe .claude/context/build_index.py`.
-9. **Report.** Files changed (grouped by layer), what and why, the verification table,
-   open risks, then the commit sequence (one `git add <files>` + `git commit -m "<conventional>"`
-   pair per logical change, ordered schemas → implementation → tests → docs). **Don't run it.**
+9. **Deliver.** Per CLAUDE.md rule 5: snapshot owner WIP, then run the commit sequence (one
+   `git add <files>` + `git commit -m "<conventional>"` pair per logical change, ordered
+   schemas → implementation → tests → docs), checking that nothing unrelated is staged before
+   each commit and stopping on the first failure. Push with `git push origin main`, watch CI,
+   and confirm the backend deploy ran or skipped as the change warrants.
+10. **Report.** Files changed (grouped by layer), what and why, the verification table,
+    open risks, commit SHAs, push result, CI and deploy outcome, and anything left undone.
 
 ## Change-type flows (step 7)
 
@@ -43,5 +47,8 @@ Input: a task id from `docs/TASKS.md`, or a described change. If the change is p
 | `.github/**`, `Dockerfile`, deps, pre-commit | YAML parses → `SKIP=mypy pre-commit run --all-files` → full pytest → no gate removed or weakened (`deployment` skill) |
 | docs only | every claim checked against its source file; no AI/tool attribution in public docs |
 
-Hard stops: no commits, pushes, branches, tags, deploys, HF Hub uploads, retraining, or
-notebook edits. Those are the user's. No AI attribution anywhere in commits, code, or docs.
+Hard stops (CLAUDE.md rule 6): no force pushes, amends, rebases or other history rewrites; no
+destructive resets, `clean`, `restore`, `stash` or deletions; no hook bypass; no branches, tags,
+releases, manual deploys, HF Hub uploads, retraining, or notebook edits. Those are the user's.
+Unrelated staged, unstaged and untracked work stays out of every commit. No AI attribution
+anywhere in commits, code, or docs.
