@@ -76,6 +76,59 @@ def test_captions_rejects_webp_before_reading_it(
     assert fake_service.calls == []
 
 
+def test_captions_without_a_strategy_field_still_decodes_greedily(
+    client: TestClient, fake_service: FakePredictorService
+) -> None:
+    """Clients that don't send the field get exactly the old behaviour (TASK-034)."""
+    response = client.post("/v1/captions", files=_image_field(b"\xff\xd8stub"))
+    assert response.status_code == 200
+    assert response.json()["decode_strategy"] == "greedy"
+    assert fake_service.strategies == [None]
+
+
+@pytest.mark.parametrize("strategy", ["greedy", "beam"])
+def test_captions_passes_the_requested_strategy_through(
+    client: TestClient, fake_service: FakePredictorService, strategy: str
+) -> None:
+    response = client.post(
+        "/v1/captions",
+        files=_image_field(b"\xff\xd8stub"),
+        data={"decode_strategy": strategy},
+    )
+    assert response.status_code == 200
+    assert response.json()["decode_strategy"] == strategy
+    assert fake_service.strategies == [strategy]
+    assert fake_service.calls == [b"\xff\xd8stub"]
+
+
+def test_captions_treats_an_empty_strategy_field_as_omitted(
+    client: TestClient, fake_service: FakePredictorService
+) -> None:
+    """An empty form value is what a blank HTML control sends; it means the default."""
+    response = client.post(
+        "/v1/captions", files=_image_field(b"\xff\xd8stub"), data={"decode_strategy": ""}
+    )
+    assert response.status_code == 200
+    assert response.json()["decode_strategy"] == "greedy"
+    assert fake_service.strategies == [None]
+
+
+@pytest.mark.parametrize("strategy", ["sampling", "BEAM", "greedy "])
+def test_captions_rejects_an_unknown_strategy_before_reading_the_image(
+    client: TestClient, fake_service: FakePredictorService, strategy: str
+) -> None:
+    response = client.post(
+        "/v1/captions",
+        files=_image_field(b"\xff\xd8stub"),
+        data={"decode_strategy": strategy},
+    )
+    assert response.status_code == 422
+    detail = response.json()["detail"]
+    assert detail.startswith(f"Unsupported decode_strategy: {strategy!r}.")
+    assert "['greedy', 'beam']" in detail
+    assert fake_service.calls == []
+
+
 def test_captions_rejects_empty_upload(client: TestClient) -> None:
     response = client.post("/v1/captions", files=_image_field(b""))
     assert response.status_code == 400
