@@ -48,13 +48,15 @@ class GatedPredictor:
         self.running = 0
         self.peak = 0
         self.calls = 0
+        self.strategies: list[str | None] = []
         self._gate = threading.Event()
         self._lock = threading.Lock()
         self._entered, self._entries = anyio.create_memory_object_stream[None](math.inf)
 
-    def predict_tensor(self, tensor: object) -> str:
+    def predict_tensor(self, tensor: object, *, decode_strategy: str | None = None) -> str:
         with self._lock:
             self.calls += 1
+            self.strategies.append(decode_strategy)
             self.running += 1
             self.peak = max(self.peak, self.running)
         try:
@@ -126,6 +128,32 @@ async def _saturate_then_release(
     predictor.close_gate()
     assert service.inferences_in_flight == 0
     return captions
+
+
+def test_concurrent_requests_keep_their_own_decode_strategy() -> None:
+    """Two in-flight requests with different strategies never share a setting (TASK-034)."""
+
+    async def main() -> None:
+        predictor = GatedPredictor()
+        service = _service(predictor, slots=2)
+        results: dict[str, str] = {}
+
+        async def caption(strategy: str | None) -> None:
+            text, _ = await service.caption_image_bytes(IMAGE, decode_strategy=strategy)
+            results[str(strategy)] = text
+
+        with anyio.fail_after(HANG_GUARD_SECONDS):
+            async with anyio.create_task_group() as tg:
+                tg.start_soon(caption, "beam")
+                tg.start_soon(caption, None)
+                await predictor.wait_running(2)
+                assert predictor.running == 2
+                predictor.open_gate()
+        assert sorted(predictor.strategies, key=str) == [None, "beam"]
+        assert results == {"beam": "a gated caption", "None": "a gated caption"}
+        assert service.decode_strategy == "greedy"  # the predictor's default is untouched
+
+    anyio.run(main)
 
 
 def test_rejects_a_limit_below_one() -> None:

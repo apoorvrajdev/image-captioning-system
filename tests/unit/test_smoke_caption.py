@@ -268,7 +268,9 @@ class StandInPredictor:
     def __init__(self) -> None:
         self.images: list[bytes] = []
 
-    async def caption_image_bytes(self, image_bytes: bytes) -> tuple[str, float]:
+    async def caption_image_bytes(
+        self, image_bytes: bytes, *, decode_strategy: str | None = None
+    ) -> tuple[str, float]:
         self.images.append(image_bytes)
         return "a picture of a gradient", 3.5
 

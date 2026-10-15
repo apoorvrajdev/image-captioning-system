@@ -52,9 +52,13 @@ class FakePredictorService:
         self._raise = raise_decode_error
         self._check_dimensions = check_dimensions
         self.calls: list[bytes] = []
+        self.strategies: list[str | None] = []
 
-    async def caption_image_bytes(self, image_bytes: bytes) -> tuple[str, float]:
+    async def caption_image_bytes(
+        self, image_bytes: bytes, *, decode_strategy: str | None = None
+    ) -> tuple[str, float]:
         self.calls.append(image_bytes)
+        self.strategies.append(decode_strategy)
         if self._raise:
             raise ImageDecodeError("synthetic decode failure")
         if self._check_dimensions:

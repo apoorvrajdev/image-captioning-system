@@ -8,12 +8,16 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
 
 from app.core.config import BackendSettings
 from app.core.logging import current_request_id
 from app.schemas.caption import CaptionResponse, ErrorResponse, HealthResponse
-from app.services.predictor_service import PredictorBusyError, PredictorService
+from app.services.predictor_service import (
+    DECODE_STRATEGIES,
+    PredictorBusyError,
+    PredictorService,
+)
 from app.utils.image import ALLOWED_CONTENT_TYPES, ImageDecodeError, ImageTooLargeError
 from captioning.utils import get_logger
 
@@ -80,7 +84,10 @@ async def healthz(request: Request) -> HealthResponse:
             "description": "Image exceeds the upload size or pixel-dimension limit.",
         },
         415: {"model": ErrorResponse, "description": "Unsupported image content type."},
-        422: {"model": ErrorResponse, "description": "Image bytes could not be decoded."},
+        422: {
+            "model": ErrorResponse,
+            "description": "Image bytes could not be decoded, or `decode_strategy` is unknown.",
+        },
         503: {
             "model": ErrorResponse,
             "description": "Predictor not ready, or every inference slot is busy (with `Retry-After`).",
@@ -90,11 +97,26 @@ async def healthz(request: Request) -> HealthResponse:
 async def caption_image(
     image: UploadFile = File(
         ...,
-        description="Image file to caption. Allowed: JPEG, PNG, WebP, BMP.",
+        description="Image file to caption. Allowed: JPEG, PNG, BMP.",
+    ),
+    decode_strategy: str | None = Form(
+        None,
+        description=(
+            "Decoding strategy for this request: `greedy` (the default) or `beam`. "
+            "Beam search uses the server's configured width and penalties."
+        ),
     ),
     service: PredictorService = Depends(get_predictor_service),
 ) -> CaptionResponse:
     """Accept a multipart image upload and return a generated caption."""
+    if decode_strategy is not None and decode_strategy not in DECODE_STRATEGIES:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=(
+                f"Unsupported decode_strategy: {decode_strategy!r}. "
+                f"Allowed: {list(DECODE_STRATEGIES)}."
+            ),
+        )
     if image.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
             status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
@@ -119,7 +141,9 @@ async def caption_image(
         )
 
     try:
-        caption, latency_ms = await service.caption_image_bytes(payload)
+        caption, latency_ms = await service.caption_image_bytes(
+            payload, decode_strategy=decode_strategy
+        )
     except PredictorBusyError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -140,7 +164,7 @@ async def caption_image(
     return CaptionResponse(
         caption=caption,
         model_version=service.model_version,
-        decode_strategy=service.decode_strategy,
+        decode_strategy=decode_strategy or service.decode_strategy,
         latency_ms=round(latency_ms, 2),
         request_id=current_request_id(),
     )

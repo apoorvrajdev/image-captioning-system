@@ -21,14 +21,23 @@ existing ``CaptionPredictor`` abstraction.
 from __future__ import annotations
 
 import time
+from functools import partial
 
 from anyio import to_thread
 
 from app.utils.image import bytes_to_tensor
 from captioning.inference import CaptionPredictor
+from captioning.inference.predictor import DECODE_STRATEGIES
 from captioning.utils import get_logger
 
 log = get_logger(__name__)
+
+__all__ = [
+    "DECODE_STRATEGIES",
+    "MAX_CONCURRENT_INFERENCES",
+    "PredictorBusyError",
+    "PredictorService",
+]
 
 # Requests allowed to decode or predict at once. The Space runs on HF's
 # cpu-basic tier (2 vCPU), and TensorFlow already spreads one inference across
@@ -87,8 +96,13 @@ class PredictorService:
         """Requests holding a slot, including cancelled ones whose thread still runs."""
         return self._in_flight
 
-    async def caption_image_bytes(self, image_bytes: bytes) -> tuple[str, float]:
+    async def caption_image_bytes(
+        self, image_bytes: bytes, *, decode_strategy: str | None = None
+    ) -> tuple[str, float]:
         """Decode bytes, run inference, and return (caption, latency_ms).
+
+        ``decode_strategy`` applies to this call only; ``None`` means the
+        predictor's default. The route validates the value first.
 
         Both the decode and the predict are offloaded to a worker thread so
         the event loop stays responsive. Latency is measured around the
@@ -115,7 +129,9 @@ class PredictorService:
             tensor = await to_thread.run_sync(bytes_to_tensor, image_bytes)
 
             start = time.perf_counter()
-            caption: str = await to_thread.run_sync(self._predictor.predict_tensor, tensor)
+            caption: str = await to_thread.run_sync(
+                partial(self._predictor.predict_tensor, tensor, decode_strategy=decode_strategy)
+            )
             latency_ms = (time.perf_counter() - start) * 1000
         finally:
             self._in_flight -= 1
@@ -123,7 +139,7 @@ class PredictorService:
         log.info(
             "inference_completed",
             model_version=self._model_version,
-            decode_strategy=self.decode_strategy,
+            decode_strategy=decode_strategy or self.decode_strategy,
             latency_ms=round(latency_ms, 2),
         )
         return caption, latency_ms
