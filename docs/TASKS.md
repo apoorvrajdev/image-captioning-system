@@ -1903,3 +1903,27 @@ Outcome so far (local, 2026-10-16):
   returned "a close up of a cat laying on a keyboard" in about 1.3 s locally, identical to the committed beam
   prediction for that image, which confirms the settings match the evaluated run.
 - Verification: backend 117 passed; parity audit 4/4; notebook hash unchanged; ruff and mypy clean.
+Backend release (2026-10-16):
+- Committed as `2632eb2`, `87489ea`, `72d1587`, `2d418f1`, `0e8719e` and `bc5ab05`, pushed as `7582025..bc5ab05`.
+- CI run `38787615838`: all seven jobs passed, 563 tests on Python 3.10 and 3.11, parity audit 4/4.
+- Deploy run `38787805204` rebuilt the Space (7 image inputs changed): Space commit `2cfe37f`, healthy on `v2.0.0`,
+  greedy smoke test HTTP 200 (778 ms), recorded as deployment `7101289882`.
+- Live latency sample on the kitten example, one request at a time, after the deploy's own warm-up: greedy 843 ms
+  inference (wall 2.7 s from this machine, upload included); beam n=5, inference p50 1,412 ms, range 1,376–1,422 ms
+  (wall 3.0–3.5 s). `decode_strategy=sampling` got the 422. Five requests on one image from one network say little
+  about tails, but p50 is well under the 4 s gate, so "Compare both" ships.
+Outcome (frontend, local, 2026-10-16):
+- `services/api.js`: `captionImage(file, { decodeStrategy })` adds the field only when given; `DECODE_STRATEGIES`
+  lists the two values.
+- `DecodeStrategyPicker.jsx`: two native radios styled as a segmented control, with a focus ring, hints ("Fastest.
+  The paper's decoder." / "Width 4. Slower, higher CIDEr on our evaluation."), disabled while a request runs. The
+  choice is App state that uploads, example picks and Remove don't reset.
+- `CaptionComparison.jsx`: "Greedy vs beam search" with one side per strategy (caption, latency, model, or that
+  side's error), and a note giving the evaluation numbers and that one image proves nothing.
+- `App.jsx`: Generate sends the chosen strategy; Compare both runs greedy then beam with `await` between them, both
+  buttons, the gallery and the upload disabled meanwhile; a new image or Generate clears the comparison; the
+  dataset reference shows after either.
+- Tests, 4 new Playwright tests (27 in total): default and chosen strategy sent; keyboard choice surviving a new
+  image; sequential compare with the greedy answer held; a 503 on one side.
+- Checked by eye at 1280 px and 390 px.
+- Verification: lint clean, build passes, `npm run test:e2e` 27 passed, pre-commit on the changed files.

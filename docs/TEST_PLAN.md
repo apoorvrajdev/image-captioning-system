@@ -102,6 +102,13 @@ error, and on any off-origin request outside those two endpoints.
 - A disallowed type or a >10 MB file is rejected inline with no request.
 - With the API unreachable, the badge goes offline and Generate shows "Cannot reach backend". In this case only,
   Chromium's own `net::ERR_CONNECTION_REFUSED` line for the two API URLs is allowed.
+- Decoding choice and "Compare both" (TASK-034). The mock answers `BEAM_CAPTION` to a body asking for beam, and
+  `api.failStrategy` makes one strategy answer 503:
+  - greedy is checked by default and sent; choosing Beam search sends `beam` and the card shows it;
+  - ArrowRight on the greedy radio selects beam, and the choice survives an example pick and a fresh upload;
+  - Compare both sends greedy, then beam only after greedy has answered (the greedy answer is held to prove it),
+    disables both buttons meanwhile, then shows both captions with their latencies and the dataset reference;
+  - with beam refused (503), the greedy side shows its caption and the beam side its error.
 - The "Try an example" gallery (TASK-033). `support.js` records each caption request's multipart body:
   - an example sends its exact file bytes, file name and `image/jpeg`;
   - its "Dataset reference" card appears only after the caption, with the COCO credit, and never holds the
