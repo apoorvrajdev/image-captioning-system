@@ -1865,7 +1865,7 @@ Outcome (live, 2026-10-14):
   - The "Dataset reference" card appeared, with no browser console errors.
   - Two requests were made: the first check's script couldn't read the request body, so it was rerun.
 
-### TASK-034 — Let a request choose greedy or beam decoding, and compare them in the SPA            [status: in-progress]
+### TASK-034 — Let a request choose greedy or beam decoding, and compare them in the SPA            [status: done] (2026-10-16)
 Area: inference-api · frontend
 Goal: a visitor can caption an image with either decoder the project evaluated, and see both captions side by side.
 Problem: `CaptionPredictor` has supported beam search since Phase 1b, and the committed evaluation scored it
@@ -1927,3 +1927,15 @@ Outcome (frontend, local, 2026-10-16):
   image; sequential compare with the greedy answer held; a 503 on one side.
 - Checked by eye at 1280 px and 390 px.
 - Verification: lint clean, build passes, `npm run test:e2e` 27 passed, pre-commit on the changed files.
+Frontend release (2026-10-16):
+- Committed as `fd03728`, `412fb05` and `02699bf`, pushed as `bc5ab05..02699bf`.
+- CI run `38789639552`: all seven jobs passed, Playwright 27/27. Vercel production deployment `7101556245`
+  completed. `deploy-backend.yml` run `38789824434` skipped: no image input changed since `bc5ab05`.
+- Live check through the production page: the kitten example and "Compare both" sent one greedy and one beam
+  request. Greedy: "a cat is sitting on a keyboard of a computer", 917 ms. Beam: "a close up of a cat laying on a
+  keyboard", 1,401 ms. Both `v2.0.0`, no console errors; each matches the committed prediction for that image.
+Not verified:
+- Beam latency under concurrent load, or on more than one image. The sample is five sequential requests on one
+  image from one network.
+- The live check's script couldn't attribute response times to requests reliably, so the greedy-then-beam order on
+  the live site rests on the app's `await` and the held-response E2E test, not on that script.

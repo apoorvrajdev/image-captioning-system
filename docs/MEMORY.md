@@ -61,8 +61,8 @@ _Last updated: 2026-10-12_
   TASK-034 (2026-10-16): `POST /v1/captions` takes an optional `decode_strategy` (`greedy`, the default, or `beam`
   with the evaluated 4 / 0.7 / 1.2 / 3 settings), per call on the one loaded model. The backend half is deployed
   (Space `2cfe37f`); live beam inference is about 1.4 s p50 against 0.84 s for greedy. The SPA's Decoding choice
-  and "Compare both" are implemented and verified locally.
-- **Current task:** TASK-034's frontend half is committed and awaiting its push, CI and the Vercel deploy. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
+  and "Compare both" are live (Vercel deployment `7101556245`), checked with one real request per strategy.
+- **Current task:** none in progress. TASK-008 (backend deploy) is done: deployed and verified 2026-10-03.
   TASK-004 (model-version labelling) is done: `v2.0.0` verified live. TASK-006 (bounded upload read) is done and
   deployed. TASK-005 (Makefile repair) is done. TASK-007 (Playwright E2E) is done.
 
@@ -83,7 +83,8 @@ _Last updated: 2026-10-12_
 | Notebook SHA-256 freeze | OK |
 | `SKIP=mypy pre-commit run --all-files` (clean clone, LF) | all hooks pass |
 | Frontend `npm run lint` / `npm run build` | clean / builds (2026-10-14, after TASK-033) |
-| Frontend `npm run test:e2e` after TASK-034 | 27 passed locally (2026-10-16): caption flow 16, of which 9 cover the example gallery and 4 the decoding choice, and Phase 3 dashboard 11 |
+| Frontend `npm run test:e2e` after TASK-034 | 27 passed locally and in CI (2026-10-16): caption flow 16, of which 9 cover the example gallery and 4 the decoding choice, and Phase 3 dashboard 11 |
+| Frontend release (TASK-034, `02699bf`) | **live**: CI run `38789639552` green (all 7 jobs). Vercel production deployment `7101556245` completed. `deploy-backend.yml` run `38789824434` skipped, since no image input changed since `bc5ab05`. Live "Compare both" on the kitten example: greedy 917 ms, beam 1,401 ms, both captions matching the committed predictions |
 | Frontend release (TASK-033, `b089959`) | **live**: CI run `38588869144` green (all 7 jobs). Vercel production deployment `7069556687` completed. `deploy-backend.yml` run `38589050068` skipped, since no image input changed since `b48af41`. The live kitten example was captioned (HTTP 200, `v2.0.0`), matching the committed prediction |
 | Frontend `npm run test:e2e` (Playwright 1.63, Chromium, mocked API) | 14 passed locally and in CI (2026-10-07): caption flow 3, Phase 3 dashboard 11, zero console errors |
 | CI on `main` for `fbf55d8` (run `37820623531`, 2026-10-08) | green, all 6 jobs on `ubuntu-24.04`, 310 passed on 3.10 and 3.11 (TASK-022) |
