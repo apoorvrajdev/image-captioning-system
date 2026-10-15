@@ -17,7 +17,7 @@ TF's lazy graph-build cost (typically 2-5 seconds).
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 from captioning.config.schema import AppConfig
 from captioning.inference.beam import generate_caption_beam
@@ -29,6 +29,7 @@ from captioning.utils.logging import get_logger
 log = get_logger(__name__)
 
 DecodeStrategy = Literal["greedy", "beam"]
+DECODE_STRATEGIES: tuple[str, ...] = get_args(DecodeStrategy)
 
 
 class CaptionPredictor:
@@ -63,7 +64,7 @@ class CaptionPredictor:
         no_repeat_ngram_size: If > 0, blocks any token that would repeat an
             n-gram already in the partial caption.
         """
-        if decode_strategy not in {"greedy", "beam"}:
+        if decode_strategy not in DECODE_STRATEGIES:
             raise ValueError(f"decode_strategy must be 'greedy' or 'beam', got {decode_strategy!r}")
         if beam_width < 1:
             raise ValueError(f"beam_width must be >= 1, got {beam_width}")
@@ -145,9 +146,17 @@ class CaptionPredictor:
         _ = self.predict_tensor(dummy)
         log.info("predictor_warmed_up", decode_strategy=self.decode_strategy)
 
-    def predict_tensor(self, image_tensor) -> str:
-        """Generate a caption from an already-preprocessed image tensor."""
-        if self.decode_strategy == "beam":
+    def predict_tensor(self, image_tensor, *, decode_strategy: DecodeStrategy | None = None) -> str:
+        """Generate a caption from an already-preprocessed image tensor.
+
+        ``decode_strategy`` overrides the instance default for this call only,
+        so concurrent callers never share a mutable setting. Beam calls use
+        the instance's beam knobs.
+        """
+        strategy = decode_strategy or self.decode_strategy
+        if strategy not in DECODE_STRATEGIES:
+            raise ValueError(f"decode_strategy must be 'greedy' or 'beam', got {strategy!r}")
+        if strategy == "beam":
             return generate_caption_beam(
                 self.model,
                 self.tokenizer,
