@@ -31,7 +31,7 @@ A short technical demo of the Image Captioning System's live image captioning, m
 
 https://github.com/user-attachments/assets/7d63c76a-019f-4616-a219-fa4043f0233c
 
-
+**▶ Watch the 24-second demo**
 **▶ [Watch the 27-second demo]** · [Try the live app](https://image-captioning-system.vercel.app) · [How the demo was made](docs/demo/README.md)
 
 **No photo to hand?** Under **Try an example**, the live app offers five licensed COCO images (CC BY 2.0, credited in the app) that go through the same validation and API call as an upload. Pick **Greedy** or **Beam search** before captioning, or press **Compare both** to run the two decoders on the same image one after the other, each with its measured latency. A **Dataset reference** card shows the caption a person wrote for that image in COCO.
